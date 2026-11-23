@@ -39,8 +39,16 @@ The Wi-Fi network the Lecturer's device is on when the Session opens; a Check-in
 _Avoid_: Campus Wi-Fi, local network
 
 **Manual mark**:
-The Lecturer recording a Student as present without a Check-in.
+The Lecturer setting a Student's attendance for a Session directly, present or absent, at any time; it replaces whatever was recorded before.
 _Avoid_: Override, manual check-in
+
+**Check-in window**:
+The period during which a Session accepts Check-ins, opened and closed by the Lecturer (and closed automatically at midnight); it may be reopened. Manual marks work whether it is open or not.
+_Avoid_: Attendance period, registration window
+
+**Attendance sheet**:
+The per-Course record of who attended each Session: every Student on the Roster against every Session, each entry Present, Manual or Absent. Attendance belongs to the Roster entry, never to a phone.
+_Avoid_: Register, attendance list, spreadsheet
 
 ### Identity
 
