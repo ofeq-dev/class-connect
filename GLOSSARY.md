@@ -20,6 +20,10 @@ _Avoid_: Pupil, user, participant
 An ongoing class with its enrolled Students, run by a Lecturer across many Sessions.
 _Avoid_: Class, module
 
+**Roster**:
+The list of Students enrolled in a Course, imported by the Lecturer.
+_Avoid_: Class list, enrolment list, register
+
 **Session**:
 One meeting of a Course on a given date.
 _Avoid_: Class, lecture, meeting, lesson
@@ -37,3 +41,13 @@ _Avoid_: Campus Wi-Fi, local network
 **Manual mark**:
 The Lecturer recording a Student as present without a Check-in.
 _Avoid_: Override, manual check-in
+
+### Identity
+
+**Claim**:
+A Student taking ownership of their Roster entry, which binds them to the phone they claimed from.
+_Avoid_: Registration, sign-up, login
+
+**Claim reset**:
+The Lecturer releasing a Claim so the Student can claim again.
+_Avoid_: Unbind, unlink, account reset
