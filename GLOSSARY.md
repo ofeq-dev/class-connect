@@ -98,6 +98,26 @@ _Avoid_: Homework (as a count noun), task, exercise
 A Student's single hand-in for an Assignment, as pasted text or a PDF; it can be replaced until the due date, and one handed in after it is Late.
 _Avoid_: Answer, upload, attempt
 
+**Criterion**:
+One of the 3–5 things an Assignment's Submissions are judged on, such as a single question or a skill; each Submission reaches one of three levels on it: Not yet, Partly or Secure.
+_Avoid_: Rubric item, question (as the unit of judgement), mark
+
+**Review**:
+The judgement of one Submission: a level, evidence and feedback for every Criterion. Drafted automatically, it can be edited by the Lecturer and is seen by the Student only once released.
+_Avoid_: Grade, marking, feedback (as the whole)
+
+**Release**:
+The Lecturer publishing an Assignment's results all at once: every Student's Review and the class summary, which also opens Help requests and offers.
+_Avoid_: Publish, return, send out
+
+**Help request**:
+A Student asking, after Release, for a classmate's help with one Criterion of an Assignment where they reached Not yet or Partly; they do not know who might help.
+_Avoid_: Help ticket, plea
+
 **Helper**:
-A Student who has agreed, for a Course, to be suggested by name to classmates who need help; they can withdraw at any time.
+A Student who reached Secure on a Criterion and offered, after Release, to help a classmate with it; they do not know who might ask.
 _Avoid_: Tutor, mentor, buddy
+
+**Help match**:
+The pairing of a Help request with a Helper's offer on the same Criterion, made by the app in one pass when the match deadline passes or the Lecturer matches early; only then do the two learn each other's names.
+_Avoid_: Buddy pairing, peer assignment
