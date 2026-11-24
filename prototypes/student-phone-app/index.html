@@ -1,0 +1,648 @@
+<title>Student Phone Prototype</title>
+<!--
+  PROTOTYPE, throw away. Wayfinder ticket "Student phone app: Check-in, comment and poll"
+  (ofeq-dev/class-connect#11).
+
+  Question: what should the Student's phone screen look and feel like so that Check-in,
+  commenting and answering a Poll each take one or two taps?
+
+  Three structurally different variants of the same Student screen, switchable with the
+  pill at the bottom (or ← / →), stored in the URL hash: #a One page, #b Tabs, #c Prompt cards.
+  The Scenario panel plays the outside world: scanning the Session QR code, the network,
+  the Check-in window, and the Lecturer opening/closing Polls and moving Comments.
+  All state is in memory; reload resets it. Open the file in a browser; nothing to install.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap">
+<style>
+/* Layout: a phone-sized app beside a "Scenario" control desk on wide screens; on a phone the app fills the screen and the desk becomes a sheet. */
+:root {
+  --bg: #E9EDF1;        /* desk around the phone */
+  --surface: #F7F9FB;   /* app background */
+  --card: #FFFFFF;
+  --ink: #16202B;
+  --muted: #5A6776;
+  --line: #D8DEE6;
+  --accent: #2A4FC4;
+  --accent-ink: #FFFFFF;
+  --accent-soft: #E3E9FB;
+  --ok: #1D7349;
+  --ok-soft: #DDF1E6;
+  --warn: #8F5400;
+  --warn-soft: #FBEDD4;
+  --frame: #1A212B;
+  --pill: #16202B;
+  --pill-ink: #FFFFFF;
+  --font-display: "Space Grotesk", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0D1116; --surface: #131920; --card: #1B222B; --ink: #E7ECF1; --muted: #98A4B2; --line: #2B343F;
+  --accent: #8AA4FF; --accent-ink: #0D1116; --accent-soft: #212E57; --ok: #62D39C; --ok-soft: #153325;
+  --warn: #F1B75C; --warn-soft: #382A12; --frame: #000000; --pill: #E7ECF1; --pill-ink: #0D1116; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #0D1116; --surface: #131920; --card: #1B222B; --ink: #E7ECF1; --muted: #98A4B2; --line: #2B343F;
+  --accent: #8AA4FF; --accent-ink: #0D1116; --accent-soft: #212E57; --ok: #62D39C; --ok-soft: #153325;
+  --warn: #F1B75C; --warn-soft: #382A12; --frame: #000000; --pill: #E7ECF1; --pill-ink: #0D1116; color-scheme: dark }
+
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.45; }
+* { box-sizing: border-box; }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
+p { margin: 0; }
+.eyebrow { font-size: 11.5px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); font-weight: 600; }
+
+/* ---------- stage ---------- */
+#stage { min-height: 100%; display: flex; justify-content: center; align-items: flex-start; gap: 32px; padding: 28px 16px 96px; }
+.phone { width: 390px; height: min(800px, calc(100vh - 140px)); min-height: 620px; border: 10px solid var(--frame); border-radius: 44px; overflow: hidden; flex: none; box-shadow: 0 20px 50px rgb(0 0 0 / .18); }
+#app { height: 100%; display: flex; flex-direction: column; background: var(--surface); position: relative; overflow: hidden; }
+
+#panel { width: 320px; flex: none; display: flex; flex-direction: column; gap: 18px; font-size: 13.5px; }
+#panel h2 { font-size: 20px; }
+.p-note { color: var(--muted); }
+.p-group { display: flex; flex-direction: column; gap: 8px; }
+.p-group > .eyebrow { margin-bottom: 2px; }
+.p-btn { text-align: left; padding: 9px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); }
+.p-btn:hover { border-color: var(--accent); }
+.p-row { display: flex; flex-direction: column; gap: 4px; }
+.seg { display: flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--card); }
+.seg button { flex: 1; border: 0; background: none; padding: 7px 6px; font-size: 12.5px; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button.on { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
+#panel pre { margin: 6px 0 0; padding: 10px; background: var(--card); border: 1px solid var(--line); border-radius: 10px; font-size: 11px; line-height: 1.35; max-height: 300px; overflow: auto; white-space: pre-wrap; word-break: break-word; }
+.p-close { display: none; }
+
+/* ---------- variant switcher ---------- */
+#switcher { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(14px + env(safe-area-inset-bottom, 0px)); z-index: 50; display: flex; align-items: center; gap: 2px; background: var(--pill); color: var(--pill-ink); border-radius: 999px; padding: 4px; box-shadow: 0 8px 24px rgb(0 0 0 / .3); font-size: 13px; white-space: nowrap; }
+#switcher button { background: none; border: 0; color: inherit; padding: 6px 12px; border-radius: 999px; }
+#switcher button:hover { background: rgb(127 127 127 / .25); }
+#switcher .lbl-v { padding: 0 6px; font-weight: 600; min-width: 140px; text-align: center; }
+#switcher .scen { display: none; border-left: 1px solid rgb(127 127 127 / .4); border-radius: 0 999px 999px 0; }
+
+@media (max-width: 820px) {
+  #stage { padding: 0; display: block; height: 100%; min-height: 0; }
+  .phone { width: 100%; height: calc(100% - 62px - env(safe-area-inset-bottom, 0px)); min-height: 0; border: 0; border-radius: 0; box-shadow: none; }
+  #panel { position: fixed; inset: auto 0 0 0; width: auto; max-height: 82%; overflow-y: auto; background: var(--surface); border-top: 1px solid var(--line); border-radius: 18px 18px 0 0; padding: 18px 16px calc(80px + env(safe-area-inset-bottom, 0px)); z-index: 40; box-shadow: 0 -10px 40px rgb(0 0 0 / .25); transform: translateY(105%); transition: transform .25s ease; }
+  #panel.open { transform: none; }
+  .p-close { display: block; position: absolute; right: 12px; top: 12px; }
+  #switcher .scen { display: block; }
+  #switcher .lbl-v { min-width: 0; }
+}
+
+/* ---------- shared app pieces ---------- */
+.scroll { flex: 1; overflow-y: auto; padding: 18px 16px 20px; display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+.sess { display: flex; flex-direction: column; gap: 2px; }
+.sess-title { font-family: var(--font-display); font-size: 21px; font-weight: 600; line-height: 1.2; }
+.sess-time { color: var(--muted); font-size: 13.5px; font-variant-numeric: tabular-nums; }
+.h { font-size: 13px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); font-family: var(--font-body); font-weight: 600; margin-top: 8px; }
+.empty { color: var(--muted); font-size: 14px; }
+
+.btn { border: 0; border-radius: 12px; background: var(--accent); color: var(--accent-ink); font-weight: 600; padding: 10px 16px; }
+.btn-big { width: 100%; padding: 15px 16px; font-size: 16px; }
+.btn-huge { width: 100%; padding: 28px 16px; font-size: 22px; font-family: var(--font-display); border-radius: 20px; }
+.btn-ghost { background: none; color: var(--accent); }
+.link { border: 0; background: none; color: var(--accent); padding: 0; font-weight: 600; font-size: inherit; }
+
+/* Check-in status */
+.ci { display: flex; align-items: center; gap: 12px; border-radius: 14px; padding: 12px 14px; }
+.ci-text { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.ci-text span { font-size: 13.5px; }
+.ci-mark { flex: none; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: 15px; }
+.ci-ok { background: var(--ok-soft); color: var(--ok); }
+.ci-ok .ci-mark { background: var(--ok); color: var(--surface); }
+.ci-warn { background: var(--warn-soft); color: var(--warn); }
+.ci-warn .ci-mark { background: var(--warn); color: var(--surface); }
+.ci-idle { background: var(--card); border: 1px dashed var(--line); color: var(--ink); }
+.ci-idle .ci-mark { border: 2px solid var(--muted); color: var(--muted); }
+.ci-idle .ci-text span { color: var(--muted); }
+.ci .btn { padding: 8px 12px; background: var(--warn); color: var(--surface); }
+.ci-big { flex-direction: column; text-align: center; padding: 26px 18px; gap: 10px; }
+.ci-big .ci-mark { width: 56px; height: 56px; font-size: 28px; }
+.ci-big .ci-text b { font-family: var(--font-display); font-size: 22px; }
+.ci-big .ci-text span { font-size: 15px; }
+.ci-big .btn { width: 100%; padding: 13px; }
+
+/* Polls */
+.poll { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+.poll.fresh { animation: fresh 1.2s ease; }
+@keyframes fresh { from { box-shadow: 0 0 0 4px var(--accent); } to { box-shadow: 0 0 0 0 transparent; } }
+.poll-meta { font-size: 12.5px; color: var(--muted); }
+.live { color: var(--ok); font-weight: 700; }
+.poll-q { font-family: var(--font-display); font-size: 17.5px; font-weight: 600; line-height: 1.25; }
+.opts { display: flex; flex-direction: column; gap: 8px; }
+.opt { display: flex; align-items: center; gap: 10px; text-align: left; padding: 12px 14px; border-radius: 12px; border: 1.5px solid var(--line); background: var(--surface); font-weight: 500; }
+.opt .radio { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--muted); flex: none; }
+.opt.sel { border-color: var(--accent); background: var(--accent-soft); }
+.opt.sel .radio { border: 5px solid var(--accent); }
+.res { position: relative; display: flex; justify-content: space-between; gap: 8px; padding: 10px 12px; border-radius: 10px; background: var(--surface); overflow: hidden; font-variant-numeric: tabular-nums; }
+.res .bar { position: absolute; inset: 0 auto 0 0; background: var(--line); }
+.res.mine .bar { background: var(--accent-soft); }
+.res span, .res b { position: relative; }
+.res.mine span { font-weight: 600; }
+.poll-foot { font-size: 12.5px; color: var(--muted); }
+.poll-big { border: 0; background: none; padding: 0; gap: 16px; }
+.poll-big .poll-q { font-size: 26px; }
+.poll-big .opt { padding: 18px 16px; font-size: 17px; background: var(--card); }
+
+/* Comments */
+.cms { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.cm { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; }
+.cm-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.cm-meta, .cm-foot { font-size: 12.5px; color: var(--muted); }
+.chip { font-size: 11.5px; font-weight: 700; padding: 2px 8px; border-radius: 999px; letter-spacing: .02em; }
+.st-new { background: var(--accent-soft); color: var(--accent); }
+.st-pinned { background: var(--warn-soft); color: var(--warn); }
+.st-addressed { background: var(--ok-soft); color: var(--ok); }
+.st-ignored { background: var(--line); color: var(--muted); }
+
+.anon { border: 1.5px solid var(--line); background: var(--card); border-radius: 999px; padding: 6px 12px; font-size: 13px; font-weight: 600; white-space: nowrap; }
+.anon.on { border-color: var(--ink); background: var(--ink); color: var(--surface); }
+.sel { min-width: 0; flex: 1; border: 1.5px solid var(--line); background: var(--card); border-radius: 999px; padding: 6px 12px; font-size: 13px; font-weight: 600; }
+.send { border: 0; background: var(--accent); color: var(--accent-ink); font-weight: 700; border-radius: 12px; padding: 0 16px; }
+.send:disabled { opacity: .4; }
+
+/* Toast */
+.toast { position: absolute; left: 12px; right: 12px; bottom: 92px; z-index: 30; background: var(--ink); color: var(--surface); border-radius: 12px; padding: 11px 14px; display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 14px; animation: up .2s ease; }
+.toast .link { color: var(--accent-soft); }
+@keyframes up { from { transform: translateY(10px); opacity: 0; } }
+
+/* Claim flow */
+.flow { flex: 1; display: flex; flex-direction: column; gap: 14px; padding: 36px 20px 20px; overflow-y: auto; }
+.flow h2 { font-size: 28px; line-height: 1.15; }
+.flow p { color: var(--muted); }
+.flow form { display: flex; flex-direction: column; gap: 10px; margin-top: 6px; }
+.lbl { font-size: 13px; font-weight: 600; }
+.flow input { font-size: 24px; letter-spacing: .08em; font-variant-numeric: tabular-nums; padding: 12px 14px; border-radius: 12px; border: 1.5px solid var(--line); background: var(--card); width: 100%; }
+.err { color: var(--warn) !important; font-weight: 600; font-size: 14px; }
+.hint { font-size: 12.5px; }
+.flow .grow { flex: 1; }
+
+/* ---------- Variant A: One page ---------- */
+.va { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.composer { border-top: 1px solid var(--line); background: var(--card); padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 8px; }
+.comp-row { display: flex; gap: 8px; align-items: stretch; }
+.composer textarea { flex: 1; min-width: 0; resize: none; border: 1.5px solid var(--line); border-radius: 12px; padding: 10px 12px; background: var(--surface); min-height: 44px; }
+
+/* ---------- Variant B: Tabs ---------- */
+.vb { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.tabbar { display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid var(--line); background: var(--card); }
+.tab { border: 0; background: none; padding: 12px 4px 14px; font-size: 12.5px; font-weight: 600; color: var(--muted); position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.tab .ico { width: 22px; height: 22px; border-radius: 7px; border: 2px solid currentColor; }
+.tab.on { color: var(--accent); }
+.tab.on .ico { background: var(--accent-soft); }
+.badge { position: absolute; top: 6px; left: calc(50% + 6px); background: var(--warn); color: var(--surface); border-radius: 999px; font-size: 11px; min-width: 18px; padding: 0 5px; line-height: 18px; }
+.quick { display: grid; gap: 8px; }
+.qa { text-align: left; display: flex; flex-direction: column; border: 1px solid var(--line); background: var(--card); border-radius: 14px; padding: 14px; }
+.qa span { color: var(--muted); font-size: 13.5px; }
+.qa.hot { border-color: var(--accent); background: var(--accent-soft); }
+.b-form { display: flex; flex-direction: column; gap: 12px; }
+.topics { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: var(--card); }
+.trow { border: 0; background: none; text-align: left; padding: 13px 14px; display: flex; gap: 10px; align-items: center; }
+.trow + .trow { border-top: 1px solid var(--line); }
+.trow .radio { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--muted); flex: none; }
+.trow.on .radio { border: 5px solid var(--accent); }
+.trow.on { font-weight: 600; }
+.b-form textarea { resize: vertical; border: 1.5px solid var(--line); border-radius: 14px; padding: 12px; background: var(--card); }
+.switch-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; }
+.switch-row small { display: block; color: var(--muted); font-size: 13px; }
+.switch { width: 46px; height: 28px; border-radius: 999px; border: 0; background: var(--line); position: relative; flex: none; }
+.switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: var(--card); transition: left .15s; box-shadow: 0 1px 3px rgb(0 0 0 / .3); }
+.switch.on { background: var(--accent); }
+.switch.on::after { left: 21px; }
+
+/* ---------- Variant C: Prompt cards ---------- */
+.vc { flex: 1; display: flex; flex-direction: column; min-height: 0; position: relative; }
+.c-top { display: flex; justify-content: space-between; align-items: center; padding: 16px 18px 6px; gap: 8px; font-size: 13.5px; }
+.deck { flex: 1; min-height: 0; padding: 8px 18px; display: flex; }
+.card { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 18px; overflow-y: auto; animation: cardin .25s ease; }
+@keyframes cardin { from { transform: translateX(24px); opacity: 0; } }
+.card-kicker { font-size: 13px; color: var(--muted); font-weight: 600; }
+.card-q { font-size: 28px; line-height: 1.15; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.qchip { border: 1.5px solid var(--line); background: var(--card); border-radius: 999px; padding: 10px 14px; font-weight: 600; font-size: 14.5px; }
+.qchip:active { background: var(--accent-soft); border-color: var(--accent); }
+.c-form { display: flex; flex-direction: column; gap: 8px; }
+.c-form textarea { resize: none; border: 1.5px solid var(--line); border-radius: 14px; padding: 12px; background: var(--card); }
+.c-form .send { padding: 10px 18px; margin-left: auto; }
+.c-nav { display: flex; align-items: center; justify-content: space-between; padding: 10px 18px 16px; }
+.navbtn { width: 48px; height: 48px; border-radius: 50%; border: 1.5px solid var(--line); background: var(--card); font-size: 22px; line-height: 1; }
+.navbtn:disabled { opacity: .3; }
+.dots { display: flex; gap: 6px; }
+.dots span { width: 8px; height: 8px; border-radius: 50%; background: var(--line); }
+.dots span.on { background: var(--accent); width: 22px; border-radius: 4px; }
+.sheet { position: absolute; inset: 0; background: var(--surface); z-index: 20; display: flex; flex-direction: column; animation: up .2s ease; }
+.sheet-head { display: flex; justify-content: space-between; align-items: center; padding: 16px 16px 0; }
+
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+</style>
+
+<div id="stage">
+  <div class="phone"><div id="app"></div></div>
+  <aside id="panel" aria-label="Scenario"></aside>
+</div>
+<div id="switcher"></div>
+
+<script>
+const VARIANTS = [
+  { k: 'a', name: 'One page' },
+  { k: 'b', name: 'Tabs' },
+  { k: 'c', name: 'Prompt cards' },
+];
+const ROSTER = {
+  '318245671': { name: 'Noa Levi', claimed: false },
+  '204918337': { name: 'Amir Haddad', claimed: false },
+  '209553120': { name: 'Maya Cohen', claimed: true },
+};
+const CLOCK = { before: '10:09', during: '10:41', after: '11:52' };
+const QUICK = ['Too fast', 'Too slow', 'Can you repeat that?', 'An example would help', 'Can’t see the board', 'Lost me at the last slide'];
+const NEW_POLLS = [
+  { q: 'Ready for the exercise?', options: ['Yes', 'Need 5 more minutes', 'Not yet'] },
+  { q: 'Which part should we go over again?', options: ['Lifelines', 'Activation bars', 'alt / opt fragments', 'Return messages'] },
+  { q: 'How useful was today’s Session?', options: ['1', '2', '3', '4', '5'] },
+];
+
+function initial() {
+  return {
+    variant: 'a', tab: 'today', card: 0, hist: false, panelOpen: false,
+    device: { claimed: true, id: '318245671', name: 'Noa Levi' },
+    network: 'classroom', window: 'open', onScan: 'auto', phase: 'during',
+    checkin: null, checkinError: null, flow: null,
+    topics: [
+      { id: 's7', name: 'Session 7 · Sequence diagrams', session: true },
+      { id: 'gen', name: 'General' },
+      { id: 'a2', name: 'Assignment 2' },
+      { id: 'mid', name: 'Midterm' },
+      { id: 's6', name: 'Session 6 · Use cases', session: true, past: true },
+    ],
+    draft: { text: '', topic: 's7', anon: false },
+    comments: [
+      { id: 1, topic: 'gen', text: 'Could the slides go up before each Session?', anon: false, when: null, status: 'Addressed', at: 'Mon 16 Nov' },
+      { id: 2, topic: 'mid', text: 'Is the midterm open book?', anon: true, when: null, status: 'Pinned', at: 'Thu 19 Nov' },
+    ],
+    polls: [
+      { id: 1, topic: 's7', q: 'How is the pace so far?', options: ['Too slow', 'About right', 'Too fast'], status: 'open', mine: null, counts: [3, 14, 9], fresh: false },
+      { id: 2, topic: 's6', q: 'Which diagram should we practise next week?', options: ['Class', 'Sequence', 'State', 'Use case'], status: 'closed', mine: 1, counts: [6, 15, 4, 3] },
+    ],
+    toast: null, nextId: 10, nextPoll: 0,
+  };
+}
+let S = initial();
+
+const $app = document.getElementById('app');
+const $panel = document.getElementById('panel');
+const $switcher = document.getElementById('switcher');
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const topic = id => S.topics.find(t => t.id === id);
+const openPolls = () => S.polls.filter(p => p.status === 'open');
+const closedPolls = () => S.polls.filter(p => p.status === 'closed');
+const firstName = () => (S.device.name || '').split(' ')[0];
+const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
+
+let toastTimer;
+function toast(msg, undo) {
+  S.toast = { msg, undo };
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { S.toast = null; render(); }, 3200);
+}
+
+/* ---------- shared pieces ---------- */
+function sessionHead() {
+  return `<div class="sess"><div class="eyebrow">Software Engineering · Tue 24 Nov</div>
+    <div class="sess-title">Session 7 · Sequence diagrams</div>
+    <div class="sess-time">10:15–11:45 · Room 2.104</div></div>`;
+}
+
+function checkinBlock(size) {
+  let cls, mark, title, body, btn = '';
+  if (S.checkin) { cls = 'ok'; mark = '✓'; title = `Checked in at ${S.checkin.at}`; body = 'You’re on the attendance sheet for this Session.'; }
+  else if (S.checkinError === 'network') { cls = 'warn'; mark = '!'; title = 'Not checked in'; body = 'Connect to the classroom Wi-Fi and try again.'; btn = `<button type="button" class="btn" data-a="retry">Try again</button>`; }
+  else if (S.checkinError === 'closed') { cls = 'warn'; mark = '!'; title = 'Check-in is closed'; body = 'Ask the Lecturer to mark you present.'; }
+  else { cls = 'idle'; mark = ''; title = 'Not checked in yet'; body = 'Point your phone camera at the code on the board.'; }
+  return `<div class="ci ci-${cls} ci-${size}" role="status"><span class="ci-mark" aria-hidden="true">${mark}</span>
+    <div class="ci-text"><b>${title}</b><span>${body}</span></div>${btn}</div>`;
+}
+
+function pollBlock(p, opts = {}) {
+  const total = p.counts.reduce((a, b) => a + b, 0);
+  let html = `<div class="poll ${opts.big ? 'poll-big' : ''} ${p.fresh ? 'fresh' : ''}">
+    <div class="poll-meta">${p.status === 'open' ? '<span class="live">Open poll</span>' : 'Closed'} · ${esc(topic(p.topic).name)}</div>
+    <div class="poll-q">${esc(p.q)}</div><div class="opts">`;
+  p.options.forEach((o, i) => {
+    if (p.status === 'open') {
+      html += `<button type="button" class="opt ${p.mine === i ? 'sel' : ''}" data-a="vote" data-p="${p.id}" data-i="${i}" aria-pressed="${p.mine === i}"><span class="radio"></span>${esc(o)}</button>`;
+    } else {
+      const pct = total ? Math.round(p.counts[i] * 100 / total) : 0;
+      html += `<div class="res ${p.mine === i ? 'mine' : ''}"><div class="bar" style="width:${pct}%"></div><span>${esc(o)}${p.mine === i ? ' · your vote' : ''}</span><b>${pct}%</b></div>`;
+    }
+  });
+  html += '</div>';
+  html += p.status === 'open'
+    ? `<div class="poll-foot">${p.mine === null ? 'Tap an answer to vote.' : 'Vote saved. Tap another answer to change it.'} You’ll see results when the poll closes.</div>`
+    : `<div class="poll-foot">${plural(total, 'vote')}</div>`;
+  return html + '</div>';
+}
+
+function commentItem(c) {
+  return `<li class="cm"><div class="cm-top"><span class="chip st-${c.status.toLowerCase()}">${c.status}</span>
+    <span class="cm-meta">${esc(topic(c.topic).name)}${c.when ? ` · ${c.when} the Session` : ''} · ${c.at}</span></div>
+    <p>${esc(c.text)}</p>
+    <div class="cm-foot">${c.anon ? 'Sent anonymously' : 'Sent with your name'}${c.status === 'New' ? ` · <button type="button" class="link" data-a="del" data-c="${c.id}">Delete</button>` : ''}</div></li>`;
+}
+function commentList() {
+  const mine = [...S.comments].reverse();
+  return mine.length ? `<ul class="cms">${mine.map(commentItem).join('')}</ul>`
+    : '<p class="empty">Nothing sent yet. Only the Lecturer sees what you write.</p>';
+}
+const topicSelect = id => `<select id="${id}" class="sel" data-a="topic" aria-label="About">${S.topics.map(t => `<option value="${t.id}" ${S.draft.topic === t.id ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}</select>`;
+const anonToggle = () => `<button type="button" class="anon ${S.draft.anon ? 'on' : ''}" data-a="anon" aria-pressed="${S.draft.anon}">${S.draft.anon ? 'Anonymous' : 'As ' + esc(firstName())}</button>`;
+
+/* ---------- Claim flow + welcome (same in every variant) ---------- */
+function flowScreen() {
+  const f = S.flow;
+  if (f.step === 'id') return `<div class="flow"><div class="eyebrow">Software Engineering · Check-in</div>
+    <h2>Who are you?</h2><p>First time on this phone. Enter your student ID once and this phone will remember you for the Course.</p>
+    <form data-form="claim"><label class="lbl" for="claim-id">Student ID</label>
+      <input id="claim-id" inputmode="numeric" autocomplete="off" maxlength="9" placeholder="9 digits" value="${esc(f.input)}">
+      ${f.error ? `<p class="err">${f.error}</p>` : ''}
+      <button class="btn btn-big" type="submit">Continue</button></form>
+    <p class="hint">On the Roster: 318245671 (Noa Levi), 204918337 (Amir Haddad), 209553120 (Maya Cohen, already claimed elsewhere).</p></div>`;
+  if (f.step === 'confirm') return `<div class="flow"><div class="eyebrow">Student ID ${esc(f.id)}</div>
+    <h2>You are ${esc(ROSTER[f.id].name)}. Correct?</h2>
+    <p>This phone becomes yours for Software Engineering. If anything goes wrong, the Lecturer can reset it.</p><div class="grow"></div>
+    <button type="button" class="btn btn-big" data-a="claimYes">Yes, that’s me</button>
+    <button type="button" class="btn btn-big btn-ghost" data-a="claimNo">No, go back</button></div>`;
+  if (f.step === 'tap') return `<div class="flow">${sessionHead()}<div class="grow"></div>
+    <button type="button" class="btn btn-huge" data-a="tapCheckin">Check in</button>
+    <p class="hint">You scanned the code for this Session.</p><div class="grow"></div></div>`;
+}
+function welcome() {
+  return `<div class="flow"><div class="eyebrow">Class Connect</div><h2>Scan the code on the board</h2>
+    <p>Point your phone camera at the QR code the Lecturer shows. The first time, you’ll enter your student ID; after that, one scan checks you in.</p></div>`;
+}
+
+/* ---------- Variant A: One page ---------- */
+function VariantA() {
+  const op = openPolls(), cp = closedPolls();
+  return `<div class="va"><div class="scroll">
+    ${sessionHead()}
+    ${checkinBlock('strip')}
+    ${op.length ? `<h3 class="h">${op.length > 1 ? 'Open polls' : 'Open poll'}</h3>${op.map(p => pollBlock(p)).join('')}` : ''}
+    <h3 class="h">Your comments</h3>${commentList()}
+    ${cp.length ? `<h3 class="h">Poll results</h3>${cp.map(p => pollBlock(p)).join('')}` : ''}
+  </div>
+  <form class="composer" data-form="send">
+    <div class="comp-row">${topicSelect('a-topic')}${anonToggle()}</div>
+    <div class="comp-row"><textarea id="a-text" rows="1" placeholder="Message the Lecturer…">${esc(S.draft.text)}</textarea>
+      <button class="send" type="submit">Send</button></div>
+  </form></div>`;
+}
+
+/* ---------- Variant B: Tabs ---------- */
+function VariantB() {
+  const op = openPolls(), unvoted = op.filter(p => p.mine === null).length;
+  let body = '';
+  if (S.tab === 'today') {
+    body = `${sessionHead()}${checkinBlock('big')}<div class="quick">
+      ${op.length ? `<button type="button" class="qa ${unvoted ? 'hot' : ''}" data-a="tab" data-t="polls"><b>${plural(op.length, 'open poll')}</b><span>${unvoted ? 'Waiting for your vote' : 'You’ve voted'}</span></button>` : ''}
+      <button type="button" class="qa" data-a="tab" data-t="comment"><b>Message the Lecturer</b><span>With your name or anonymously</span></button></div>`;
+  } else if (S.tab === 'polls') {
+    const cp = closedPolls();
+    body = `<h2 class="sess-title">Polls</h2>${op.length ? op.map(p => pollBlock(p)).join('') : '<p class="empty">No open polls right now.</p>'}
+      ${cp.length ? `<h3 class="h">Results</h3>${cp.map(p => pollBlock(p)).join('')}` : ''}`;
+  } else if (S.tab === 'comment') {
+    body = `<h2 class="sess-title">Message the Lecturer</h2><form class="b-form" data-form="send">
+      <span class="lbl">About</span><div class="topics" role="radiogroup">${S.topics.filter(t => !t.past).map(t => `<button type="button" role="radio" aria-checked="${S.draft.topic === t.id}" class="trow ${S.draft.topic === t.id ? 'on' : ''}" data-a="settopic" data-t="${t.id}"><span class="radio"></span>${esc(t.name)}</button>`).join('')}</div>
+      <textarea id="b-text" rows="4" placeholder="What do you want to tell the Lecturer?" aria-label="Comment">${esc(S.draft.text)}</textarea>
+      <div class="switch-row"><span><b>Send anonymously</b><small>${S.draft.anon ? 'The Lecturer won’t see your name.' : `The Lecturer will see it’s from ${esc(S.device.name)}.`}</small></span>
+        <button type="button" class="switch ${S.draft.anon ? 'on' : ''}" data-a="anon" role="switch" aria-checked="${S.draft.anon}" aria-label="Send anonymously"></button></div>
+      <button class="btn btn-big" type="submit">Send to the Lecturer</button></form>`;
+  } else {
+    body = `<h2 class="sess-title">Your comments</h2><p class="empty">Only you and the Lecturer see these. You can delete one until the Lecturer reads it.</p>${commentList()}`;
+  }
+  const tabs = [['today', 'Today'], ['polls', 'Polls'], ['comment', 'Comment'], ['mine', 'Mine']];
+  return `<div class="vb"><div class="scroll">${body}</div><nav class="tabbar">${tabs.map(([k, l]) =>
+    `<button type="button" class="tab ${S.tab === k ? 'on' : ''}" data-a="tab" data-t="${k}"><span class="ico"></span>${l}${k === 'polls' && unvoted ? `<span class="badge">${unvoted}</span>` : ''}</button>`).join('')}</nav></div>`;
+}
+
+/* ---------- Variant C: Prompt cards ---------- */
+function cardsC() {
+  const cards = [{ k: 'checkin' }];
+  openPolls().forEach(p => cards.push({ k: 'poll', p }));
+  cards.push({ k: 'comment' });
+  return cards;
+}
+function VariantC() {
+  const cards = cardsC();
+  S.card = Math.min(S.card, cards.length - 1);
+  const c = cards[S.card];
+  let inner;
+  if (c.k === 'checkin') inner = `${sessionHead()}${checkinBlock('big')}`;
+  else if (c.k === 'poll') inner = pollBlock(c.p, { big: true });
+  else inner = `<div class="card-kicker">${esc(topic(S.draft.topic).name)}</div><h2 class="card-q">Anything for the Lecturer?</h2>
+    <div class="chips">${QUICK.map(q => `<button type="button" class="qchip" data-a="quick" data-q="${esc(q)}">${esc(q)}</button>`).join('')}</div>
+    <form class="c-form" data-form="send"><textarea id="c-text" rows="2" placeholder="Or write your own…" aria-label="Comment">${esc(S.draft.text)}</textarea>
+      <div class="comp-row">${anonToggle()}<button class="send" type="submit">Send</button></div></form>`;
+  const hist = S.hist ? `<div class="sheet"><div class="sheet-head"><h2 class="sess-title">Your comments &amp; results</h2><button type="button" class="link" data-a="hist">Done</button></div>
+    <div class="scroll"><h3 class="h">Comments</h3>${commentList()}${closedPolls().length ? `<h3 class="h">Poll results</h3>${closedPolls().map(p => pollBlock(p)).join('')}` : ''}</div></div>` : '';
+  return `<div class="vc"><div class="c-top"><span class="eyebrow">${S.card + 1} of ${cards.length}</span><button type="button" class="link" data-a="hist">Your comments &amp; results</button></div>
+    <div class="deck"><article class="card" data-key="${c.k}${c.p ? c.p.id : ''}">${inner}</article></div>
+    <div class="c-nav"><button type="button" class="navbtn" data-a="prev" ${S.card === 0 ? 'disabled' : ''} aria-label="Previous">‹</button>
+      <div class="dots">${cards.map((_, i) => `<span class="${i === S.card ? 'on' : ''}"></span>`).join('')}</div>
+      <button type="button" class="navbtn" data-a="next" ${S.card === cards.length - 1 ? 'disabled' : ''} aria-label="Next">›</button></div>${hist}</div>`;
+}
+
+const RENDER = { a: VariantA, b: VariantB, c: VariantC };
+
+/* ---------- actions ---------- */
+function attemptCheckin() {
+  S.flow = null;
+  if (S.network !== 'classroom') { S.checkinError = 'network'; return; }
+  if (S.window !== 'open') { S.checkinError = 'closed'; return; }
+  S.checkinError = null;
+  if (!S.checkin) S.checkin = { at: CLOCK[S.phase] };
+  toast(`Checked in at ${S.checkin.at}`);
+}
+function scan() {
+  S.card = 0; S.tab = 'today'; S.hist = false;
+  if (!S.device.claimed) { S.flow = { step: 'id', input: '' }; return; }
+  if (S.checkin) { toast('You’re already checked in.'); return; }
+  if (S.onScan === 'tap') S.flow = { step: 'tap' }; else attemptCheckin();
+}
+function sendComment(text) {
+  text = (text ?? S.draft.text).trim();
+  if (!text) return;
+  const t = topic(S.draft.topic);
+  const c = { id: S.nextId++, topic: t.id, text, anon: S.draft.anon, when: t.id === 's7' ? S.phase : (t.session ? 'after' : null), status: 'New', at: CLOCK[S.phase] };
+  S.comments.push(c);
+  toast(`Sent ${c.anon ? 'anonymously' : 'with your name'}`, c.id);
+}
+function act(a, d) {
+  switch (a) {
+    case 'vote': {
+      const p = S.polls.find(x => x.id === +d.p), i = +d.i;
+      if (p.status !== 'open') break;
+      if (p.mine !== null) p.counts[p.mine]--;
+      p.counts[i]++; p.mine = i; p.fresh = false;
+      if (S.variant === 'c') {
+        const at = S.card;
+        setTimeout(() => { if (S.variant === 'c' && S.card === at) { S.card++; render(); } }, 650);
+      }
+      break;
+    }
+    case 'retry': attemptCheckin(); break;
+    case 'tapCheckin': attemptCheckin(); break;
+    case 'claimYes': {
+      const r = ROSTER[S.flow.id]; r.claimed = true;
+      S.device = { claimed: true, id: S.flow.id, name: r.name };
+      if (S.onScan === 'tap') S.flow = { step: 'tap' }; else attemptCheckin();
+      break;
+    }
+    case 'claimNo': S.flow = { step: 'id', input: '' }; break;
+    case 'anon': S.draft.anon = !S.draft.anon; break;
+    case 'settopic': S.draft.topic = d.t; break;
+    case 'tab': S.tab = d.t; break;
+    case 'del': S.comments = S.comments.filter(c => c.id !== +d.c); S.toast = null; break;
+    case 'undo': S.comments = S.comments.filter(c => c.id !== +d.c); S.toast = null; break;
+    case 'quick': sendComment(d.q); break;
+    case 'prev': S.card = Math.max(0, S.card - 1); break;
+    case 'next': S.card++; break;
+    case 'hist': S.hist = !S.hist; break;
+    /* scenario */
+    case 'scanFirst':
+      if (S.device.claimed && ROSTER[S.device.id]) ROSTER[S.device.id].claimed = false;
+      S.device = { claimed: false }; S.checkin = null; S.checkinError = null; scan(); break;
+    case 'scanClaimed':
+      if (!S.device.claimed) { S.device = { claimed: true, id: '318245671', name: 'Noa Levi' }; ROSTER['318245671'].claimed = true; }
+      scan(); break;
+    case 'openApp': S.flow = null; S.checkinError = null; break;
+    case 'set': S[d.k] = d.v; break;
+    case 'lecOpen': {
+      const t = NEW_POLLS[S.nextPoll++ % NEW_POLLS.length];
+      const p = { id: S.nextId++, topic: 's7', q: t.q, options: [...t.options], status: 'open', mine: null, counts: t.options.map(() => Math.floor(Math.random() * 6)), fresh: true };
+      S.polls.forEach(x => x.fresh = false);
+      S.polls.push(p);
+      if (S.variant === 'c' && !S.flow) { S.card = cardsC().findIndex(c => c.p === p); S.hist = false; }
+      if (S.variant === 'b' && S.tab !== 'polls') toast(`New poll: ${p.q}`);
+      break;
+    }
+    case 'lecClose': S.polls.forEach(p => { if (p.status === 'open') { p.status = 'closed'; p.fresh = false; } }); toast('A poll closed. Results are in.'); break;
+    case 'lecStatus': {
+      const c = [...S.comments].reverse().find(x => x.status === 'New');
+      if (c) c.status = d.v; else toast('No New comments to move.');
+      break;
+    }
+    case 'reset': {
+      const v = S.variant; S = initial(); S.variant = v;
+      Object.values(ROSTER).forEach(r => r.claimed = false); ROSTER['209553120'].claimed = true; ROSTER['318245671'].claimed = true;
+      break;
+    }
+    case 'panel': S.panelOpen = !S.panelOpen; break;
+    case 'vprev': case 'vnext': {
+      const i = VARIANTS.findIndex(v => v.k === S.variant);
+      setVariant(VARIANTS[(i + (a === 'vnext' ? 1 : -1) + VARIANTS.length) % VARIANTS.length].k);
+      return;
+    }
+  }
+  render();
+}
+function claimSubmit() {
+  const id = S.flow.input.replace(/\D/g, '');
+  const r = ROSTER[id];
+  if (!r) S.flow.error = `We can’t find ${esc(id || 'that ID')} on the Roster. Check the number, or ask the Lecturer to add you.`;
+  else if (r.claimed) S.flow.error = 'This student ID is already in use on another phone. Ask the Lecturer to reset it.';
+  else S.flow = { step: 'confirm', id };
+  render();
+}
+
+/* ---------- panel + switcher ---------- */
+function seg(k, opts) {
+  return `<div class="seg">${opts.map(([v, l]) => `<button type="button" class="${S[k] === v ? 'on' : ''}" data-a="set" data-k="${k}" data-v="${v}">${l}</button>`).join('')}</div>`;
+}
+function renderPanel() {
+  $panel.classList.toggle('open', S.panelOpen);
+  const dump = {
+    variant: S.variant, device: S.device, network: S.network, checkinWindow: S.window, onScan: S.onScan, clock: `${S.phase} (${CLOCK[S.phase]})`,
+    checkin: S.checkin, checkinError: S.checkinError, flow: S.flow, draft: S.draft,
+    polls: S.polls.map(p => ({ q: p.q, status: p.status, myVote: p.mine === null ? null : p.options[p.mine], counts: p.counts.join('/') })),
+    comments: S.comments.map(c => ({ topic: c.topic, status: c.status, anon: c.anon, when: c.when, text: c.text })),
+  };
+  $panel.innerHTML = `<button type="button" class="link p-close" data-a="panel">Close</button>
+    <div><h2>Scenario</h2><p class="p-note">Plays the classroom around the Student’s phone. Throwaway prototype; reload resets it.</p></div>
+    <div class="p-group"><span class="eyebrow">Arrive</span>
+      <button type="button" class="p-btn" data-a="scanFirst">Scan the QR code · first time on this phone</button>
+      <button type="button" class="p-btn" data-a="scanClaimed">Scan the QR code · phone already claimed</button>
+      <button type="button" class="p-btn" data-a="openApp">Open the app without scanning</button></div>
+    <div class="p-group"><span class="eyebrow">Conditions</span>
+      <div class="p-row">Network${seg('network', [['classroom', 'Classroom Wi-Fi'], ['mobile', 'Mobile data']])}</div>
+      <div class="p-row">Check-in window${seg('window', [['open', 'Open'], ['closed', 'Closed']])}</div>
+      <div class="p-row">After a scan${seg('onScan', [['auto', 'Check in at once'], ['tap', 'Show a Check in button']])}</div>
+      <div class="p-row">Clock${seg('phase', [['before', 'Before'], ['during', 'During'], ['after', 'After']])}</div></div>
+    <div class="p-group"><span class="eyebrow">The Lecturer</span>
+      <button type="button" class="p-btn" data-a="lecOpen">Opens a poll</button>
+      <button type="button" class="p-btn" data-a="lecClose">Closes the open polls</button>
+      <button type="button" class="p-btn" data-a="lecStatus" data-v="Addressed">Marks the newest New comment Addressed</button>
+      <button type="button" class="p-btn" data-a="lecStatus" data-v="Pinned">Pins the newest New comment</button></div>
+    <button type="button" class="p-btn" data-a="reset">Reset everything</button>
+    <details open><summary class="eyebrow">State</summary><pre>${esc(JSON.stringify(dump, null, 1))}</pre></details>`;
+}
+function renderSwitcher() {
+  const v = VARIANTS.find(x => x.k === S.variant);
+  $switcher.innerHTML = `<button type="button" data-a="vprev" aria-label="Previous variant">←</button>
+    <span class="lbl-v">${v.k.toUpperCase()} · ${v.name}</span>
+    <button type="button" data-a="vnext" aria-label="Next variant">→</button>
+    <button type="button" class="scen" data-a="panel">Scenario</button>`;
+}
+function render() {
+  const sc = $app.querySelector('.scroll');
+  const keep = sc ? sc.scrollTop : 0;
+  const focusId = document.activeElement && document.activeElement.id;
+  let html = S.flow ? flowScreen() : (!S.device.claimed ? welcome() : RENDER[S.variant]());
+  if (S.toast) html += `<div class="toast" role="status"><span>${esc(S.toast.msg)}</span>${S.toast.undo ? `<button type="button" class="link" data-a="undo" data-c="${S.toast.undo}">Undo</button>` : ''}</div>`;
+  $app.innerHTML = html;
+  const sc2 = $app.querySelector('.scroll');
+  if (sc2) sc2.scrollTop = keep;
+  if (focusId) { const el = document.getElementById(focusId); if (el) el.focus(); }
+  renderPanel(); renderSwitcher();
+}
+function setVariant(k) {
+  S.variant = k; S.card = 0; S.hist = false;
+  if (location.hash !== '#' + k) location.hash = k;
+  render();
+}
+
+/* ---------- events ---------- */
+document.addEventListener('click', e => {
+  const el = e.target.closest('[data-a]');
+  if (!el || el.tagName === 'SELECT') return;
+  act(el.dataset.a, el.dataset);
+});
+document.addEventListener('change', e => {
+  if (e.target.dataset.a === 'topic') { S.draft.topic = e.target.value; render(); }
+});
+document.addEventListener('input', e => {
+  if (/-text$/.test(e.target.id)) S.draft.text = e.target.value;
+  if (e.target.id === 'claim-id' && S.flow) S.flow.input = e.target.value;
+});
+document.addEventListener('submit', e => {
+  e.preventDefault();
+  if (e.target.dataset.form === 'claim') return claimSubmit();
+  if (e.target.dataset.form === 'send') { const had = S.draft.text.trim(); sendComment(); if (had) S.draft.text = ''; render(); }
+});
+document.addEventListener('keydown', e => {
+  if (e.target.closest('input, textarea, select, [contenteditable]')) return;
+  if (e.key === 'ArrowRight') act('vnext', {});
+  if (e.key === 'ArrowLeft') act('vprev', {});
+});
+window.addEventListener('hashchange', () => {
+  const k = location.hash.slice(1);
+  if (RENDER[k] && k !== S.variant) setVariant(k);
+});
+ROSTER['318245671'].claimed = true;
+const start = location.hash.slice(1);
+if (RENDER[start]) S.variant = start;
+render();
+</script>
