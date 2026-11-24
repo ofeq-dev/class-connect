@@ -31,12 +31,20 @@ _Avoid_: Class, lecture, meeting, lesson
 ### Attendance
 
 **Check-in**:
-A Student's act of recording that they are present at a Session, by scanning the Session's QR code while on the classroom network.
+A Student's act of recording that they are present at a Session, by scanning the Session's QR code. From the Classroom network it counts at once; from any other network it is Pending.
 _Avoid_: Sign-in, registration, attendance mark
 
 **Classroom network**:
-The Wi-Fi network the Lecturer's device is on when the Session opens; a Check-in counts only from the same network.
+A network a Session accepts Check-ins from: the one the Lecturer's device is on when the Check-in window opens, plus any network approved for the Session.
 _Avoid_: Campus Wi-Fi, local network
+
+**Pending check-in**:
+A Check-in from a network that is not yet a Classroom network, waiting for that network to be approved; if the Check-in window closes first, the Student counts as Absent.
+_Avoid_: Unverified check-in, refused check-in
+
+**Network approval**:
+Making a network a Classroom network for a Session, either by the Lecturer with one tap or automatically once enough Students have checked in from it; every Pending check-in from that network then counts.
+_Avoid_: Whitelisting, IP approval
 
 **Manual mark**:
 The Lecturer setting a Student's attendance for a Session directly, present or absent, at any time; it replaces whatever was recorded before.
