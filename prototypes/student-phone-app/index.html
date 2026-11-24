@@ -6,15 +6,16 @@
   Question: what should the Student's phone screen look and feel like so that Check-in,
   commenting and answering a Poll each take one or two taps?
 
-  Three structurally different variants of the same Student screen, switchable with the
-  pill at the bottom (or ← / →), stored in the URL hash: #a One page, #b Tabs, #c Prompt cards.
+  Round 1 (commit 7f82c48) compared three structures: One page, Tabs, Prompt cards. Tabs won.
+  Round 2: the Tabs structure in four visual identities, switchable with the pill at the
+  bottom (or ← / →), stored in the URL hash: #b baseline, #d Ticket, #e Binder, #f Night dock.
   The Scenario panel plays the outside world: scanning the Session QR code, the network,
   the Check-in window, and the Lecturer opening/closing Polls and moving Comments.
   All state is in memory; reload resets it. Open the file in a browser; nothing to install.
 -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=Archivo:wdth,wght@62..125,400..900&family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=Manrope:wght@400..800&family=Unbounded:wght@500..700&display=swap">
 <style>
 /* Layout: a phone-sized app beside a "Scenario" control desk on wide screens; on a phone the app fills the screen and the desk becomes a sheet. */
 :root {
@@ -59,7 +60,7 @@ p { margin: 0; }
 /* ---------- stage ---------- */
 #stage { min-height: 100%; display: flex; justify-content: center; align-items: flex-start; gap: 32px; padding: 28px 16px 96px; }
 .phone { width: 390px; height: min(800px, calc(100vh - 140px)); min-height: 620px; border: 10px solid var(--frame); border-radius: 44px; overflow: hidden; flex: none; box-shadow: 0 20px 50px rgb(0 0 0 / .18); }
-#app { height: 100%; display: flex; flex-direction: column; background: var(--surface); position: relative; overflow: hidden; }
+#app { height: 100%; display: flex; flex-direction: column; background: var(--surface); color: var(--ink); position: relative; overflow: hidden; }
 
 #panel { width: 320px; flex: none; display: flex; flex-direction: column; gap: 18px; font-size: 13.5px; }
 #panel h2 { font-size: 20px; }
@@ -237,6 +238,147 @@ p { margin: 0; }
 .sheet { position: absolute; inset: 0; background: var(--surface); z-index: 20; display: flex; flex-direction: column; animation: up .2s ease; }
 .sheet-head { display: flex; justify-content: space-between; align-items: center; padding: 16px 16px 0; }
 
+/* ---------- shared tab bits ---------- */
+.m + .m::before { content: " · "; }
+.ico svg { display: none; width: 22px; height: 22px; }
+
+/* ===== Skin D: Ticket. The Session is a transit ticket; Check-in stamps it. ===== */
+#app.sk-d { --surface: #E8EBF2; --card: #FFFFFF; --ink: #1B1F3B; --muted: #5F6683; --line: #C9CEDB; --accent: #2547D0; --accent-ink: #FFFFFF; --accent-soft: #E1E7FB; --ok: #2547D0; --ok-soft: #E1E7FB; --warn: #B4530B; --warn-soft: #FBEADB;
+  --font-display: "Archivo", "Arial Narrow", system-ui, sans-serif; --font-body: "Archivo", system-ui, sans-serif; color-scheme: light; font-family: var(--font-body); }
+.sk-d h2, .sk-d .poll-q, .sk-d .sess-title, .sk-d .h { font-stretch: 72%; font-weight: 800; letter-spacing: 0; }
+.sk-d .sess-title { font-size: 28px; }
+.sk-d .h { text-transform: none; font-size: 18px; color: var(--ink); font-family: var(--font-display); }
+.sk-d .eyebrow { text-transform: none; letter-spacing: 0; font-size: 13px; }
+.sk-d .m + .m::before { content: " / "; color: var(--muted); }
+.tkt { display: flex; flex-direction: column; filter: drop-shadow(0 1px 0 var(--line)) drop-shadow(0 8px 14px rgb(27 31 59 / .08)); }
+.tkt-top { background: var(--card); border-radius: 14px 14px 0 0; padding: 16px 18px 12px; display: grid; grid-template-columns: auto 1fr; column-gap: 16px; row-gap: 12px; align-items: end; }
+.tkt-course { grid-column: 1 / -1; font-weight: 600; color: var(--muted); font-size: 14px; }
+.tkt-numwrap { display: flex; flex-direction: column; }
+.tkt-numlbl { font-size: 12px; color: var(--muted); }
+.tkt-num { font-size: 88px; line-height: .8; font-weight: 900; font-stretch: 62%; color: var(--accent); font-variant-numeric: tabular-nums; }
+.tkt-title { font-size: 30px; line-height: 1; }
+.tkt-grid { grid-column: 1 / -1; margin: 0; display: grid; grid-template-columns: repeat(3, auto); justify-content: start; gap: 22px; }
+.tkt-grid div { display: flex; flex-direction: column; }
+.tkt-grid dt { font-size: 12px; color: var(--muted); }
+.tkt-grid dd { margin: 0; font-weight: 700; font-variant-numeric: tabular-nums; font-size: 15px; }
+.tkt-perf { height: 24px; position: relative; background: radial-gradient(circle at 0 50%, var(--surface) 11px, transparent 11.5px), radial-gradient(circle at 100% 50%, var(--surface) 11px, transparent 11.5px), var(--card); }
+.tkt-perf::after { content: ""; position: absolute; left: 20px; right: 20px; top: 50%; border-top: 2px dashed var(--line); }
+.tkt-stub { background: var(--card); border-radius: 0 0 14px 14px; padding: 8px 18px 20px; display: flex; align-items: center; gap: 18px; flex-wrap: wrap; min-height: 110px; }
+.tkt-stub p { flex: 1; min-width: 150px; color: var(--muted); font-size: 14.5px; }
+.tkt-stub p b { color: var(--ink); }
+.tkt-warn p b { color: var(--warn); }
+.tkt-stub .btn { background: var(--warn); color: #FFFFFF; }
+.stamp { display: inline-flex; flex-direction: column; align-items: center; color: var(--accent); border: 3px solid currentColor; outline: 1.5px solid currentColor; outline-offset: 3px; border-radius: 6px; padding: 6px 12px 5px; margin: 6px; transform: rotate(-7deg); font-stretch: 72%; font-weight: 800; font-size: 15px; line-height: 1; }
+.stamp span { font-size: 36px; font-weight: 900; font-variant-numeric: tabular-nums; margin-top: 2px; }
+.stamp.fresh { animation: stamp .5s cubic-bezier(.2, 1.5, .4, 1); }
+@keyframes stamp { from { transform: rotate(-7deg) scale(1.9); opacity: 0; } }
+.sk-d .qa, .sk-d .poll, .sk-d .cm, .sk-d .topics, .sk-d .switch-row { border: 0; border-radius: 10px; }
+.sk-d .qa b { font-stretch: 80%; font-size: 17px; }
+.sk-d .qa.hot { background: var(--ink); color: #FFFFFF; }
+.sk-d .qa.hot span { color: #B9BFD8; }
+.sk-d .opt { border-radius: 8px; background: var(--surface); border-color: transparent; }
+.sk-d .opt.sel { background: var(--accent); color: var(--accent-ink); }
+.sk-d .opt.sel .radio { border-color: var(--accent-ink); }
+.sk-d .btn { border-radius: 8px; }
+.sk-d .tabbar { background: var(--ink); border: 0; }
+.sk-d .tab { color: #9CA2C0; font-family: var(--font-display); font-stretch: 72%; font-weight: 700; font-size: 16px; gap: 7px; }
+.sk-d .tab .ico { width: 11px; height: 11px; border: 0; border-radius: 50%; box-shadow: inset 0 0 0 2px #4C5378; }
+.sk-d .tab.on { color: #FFFFFF; }
+.sk-d .tab.on .ico { background: var(--surface); box-shadow: none; }
+.sk-d .badge { left: calc(50% + 10px); top: 8px; background: #F0A13A; color: var(--ink); }
+
+/* ===== Skin E: Binder. Ring-binder dividers hang off the page; each section has its own highlighter. ===== */
+#app.sk-e { --surface: #FFFFFF; --card: #FFFFFF; --ink: #20272E; --muted: #59626D; --line: #D3DAE2; --accent: #1F5FBF; --accent-ink: #FFFFFF; --accent-soft: #E4EDFB; --ok: #1B7546; --ok-soft: #E0F4E8; --warn: #9C4C00; --warn-soft: #FFEFD9; --desk: #C3CED9; --hl: #FFE14D;
+  --font-display: "Bricolage Grotesque", system-ui, sans-serif; --font-body: "Atkinson Hyperlegible", system-ui, sans-serif; color-scheme: light; font-family: var(--font-body); font-size: 16px; }
+.sk-e .vb { background: var(--desk); }
+.sk-e .vb[data-tab="polls"] { --hl: #FF9DC4; }
+.sk-e .vb[data-tab="comment"] { --hl: #8BE6B0; }
+.sk-e .vb[data-tab="mine"] { --hl: #A3CDFF; }
+.sk-e .scroll { background-color: var(--surface); background-image: repeating-linear-gradient(to bottom, transparent 0 31px, #E9EEF4 31px 32px); background-attachment: local; border-bottom: 7px solid var(--hl); padding-top: 24px; }
+.sk-e .hl, .sk-e .opt.sel .ot { background-image: linear-gradient(100deg, transparent .1em, var(--hl) .3em, var(--hl) calc(100% - .3em), transparent calc(100% - .1em)); background-size: 100% 72%; background-position: 0 85%; background-repeat: no-repeat; padding: 0 .3em; margin: 0 -.3em; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+.sk-e h2 { font-weight: 800; letter-spacing: -.02em; }
+.sk-e .sess-title { font-size: 30px; }
+.sk-e .poll-q { font-weight: 700; font-size: 19px; }
+.sk-e .h { text-transform: none; letter-spacing: 0; font-family: var(--font-display); font-size: 19px; color: var(--ink); font-weight: 700; }
+.sk-e .eyebrow { text-transform: none; letter-spacing: 0; font-size: 14px; }
+.sk-e .m + .m::before { content: ", "; }
+.bd-course { color: var(--muted); }
+.bd-title { font-size: 36px; line-height: 1; }
+.bd-when { color: var(--muted); }
+.bd-check { display: flex; gap: 14px; align-items: flex-start; padding: 12px 0 6px; }
+.bd-box { flex: none; width: 42px; height: 42px; border: 2.5px solid var(--ink); border-radius: 6px; display: grid; place-items: center; font-size: 32px; font-weight: 700; line-height: 1; transform: rotate(-2deg); }
+.bd-check div { display: flex; flex-direction: column; gap: 4px; }
+.bd-check b { font-family: var(--font-display); font-size: 23px; align-self: flex-start; }
+.bd-check span { color: var(--muted); }
+.bd-warn b { color: var(--warn); }
+.bd-warn .bd-box { border-color: var(--warn); }
+.sk-e .poll, .sk-e .cm, .sk-e .qa, .sk-e .topics, .sk-e .switch-row { border: 1.5px solid var(--line); border-radius: 4px; }
+.sk-e .qa.hot { border-color: var(--ink); background: var(--card); }
+.sk-e .qa.hot b { background: var(--hl); padding: 0 .2em; margin: 0 -.2em; align-self: flex-start; }
+.sk-e .opt { border-radius: 4px; background: var(--card); }
+.sk-e .opt.sel { border-color: var(--ink); background: var(--card); }
+.sk-e .opt.sel .radio { border-color: var(--ink); }
+.sk-e .res.mine .bar { background: var(--hl); }
+.sk-e .btn { background: var(--ink); color: #FFFFFF; border-radius: 6px; }
+.sk-e .switch.on { background: var(--ink); }
+.sk-e .trow.on .radio { border-color: var(--ink); }
+.sk-e .tabbar { display: flex; align-items: flex-start; gap: 6px; padding: 0 12px 12px; background: var(--desk); border: 0; }
+.sk-e .tab { flex: 1; flex-direction: row; justify-content: center; color: var(--ink); background: var(--tc); border-radius: 0 0 12px 12px; padding: 9px 4px 10px; font-family: var(--font-display); font-weight: 700; font-size: 14.5px; box-shadow: inset 0 8px 7px -7px rgb(0 0 0 / .35); }
+.sk-e .tab:nth-child(1) { --tc: #FFE14D; }
+.sk-e .tab:nth-child(2) { --tc: #FF9DC4; }
+.sk-e .tab:nth-child(3) { --tc: #8BE6B0; }
+.sk-e .tab:nth-child(4) { --tc: #A3CDFF; }
+.sk-e .tab.on { padding-bottom: 22px; box-shadow: none; color: var(--ink); }
+.sk-e .tab .ico { display: none; }
+.sk-e .badge { position: static; background: var(--ink); color: #FFFFFF; }
+
+/* ===== Skin F: Night dock. Dark, soft, thumb-sized; a floating dock that grows the active tab. ===== */
+#app.sk-f { --surface: #1D1330; --card: #2A1D42; --ink: #F7F1FF; --muted: #B8A9D1; --line: #433460; --accent: #FFB38A; --accent-ink: #2A1638; --accent-soft: #6B3F4A; --ok: #86E8C9; --ok-soft: #1F3B3D; --warn: #FFD27A; --warn-soft: #3E3220;
+  --font-display: "Unbounded", system-ui, sans-serif; --font-body: "Manrope", system-ui, sans-serif; color-scheme: dark; font-family: var(--font-body); }
+.sk-f h2, .sk-f .poll-q { font-weight: 600; letter-spacing: -.01em; }
+.sk-f .sess-title { font-size: 22px; }
+.sk-f .h { text-transform: none; letter-spacing: 0; font-family: var(--font-display); font-size: 15px; color: var(--muted); font-weight: 500; }
+.sk-f .eyebrow { text-transform: none; letter-spacing: 0; font-size: 13px; }
+.sk-f .poll-meta { display: flex; gap: 10px; flex-wrap: wrap; }
+.sk-f .m + .m::before { content: none; }
+.sk-f .poll, .sk-f .cm, .sk-f .qa, .sk-f .topics, .sk-f .switch-row { border: 0; border-radius: 22px; background: var(--card); }
+.sk-f .poll { padding: 18px; }
+.sk-f .qa { padding: 16px 18px; }
+.sk-f .qa.hot { background: var(--accent); color: var(--accent-ink); }
+.sk-f .qa.hot span { color: var(--accent-ink); }
+.sk-f .opt { border-radius: 999px; border: 0; background: var(--line); padding: 14px 18px; }
+.sk-f .opt .radio { display: none; }
+.sk-f .opt.sel { background: var(--accent); color: var(--accent-ink); font-weight: 700; }
+.sk-f .res { border-radius: 999px; background: var(--line); }
+.sk-f .res .bar { background: #5A4780; }
+.sk-f .res.mine .bar { background: var(--accent-soft); }
+.sk-f .btn, .sk-f .send { border-radius: 999px; }
+.sk-f .b-form textarea { border-radius: 20px; border: 0; background: var(--card); }
+.nd-hello { font-family: var(--font-display); font-size: 15px; color: var(--muted); }
+.nd-hero { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; padding: 14px 0 8px; }
+.nd-say { font-family: var(--font-display); font-size: 17px; color: var(--ok); }
+.nd-time { font-family: var(--font-display); font-weight: 700; font-size: 88px; line-height: 1; letter-spacing: -.04em; color: var(--ok); font-variant-numeric: tabular-nums; }
+.nd-time.fresh { animation: glow 1.4s ease-out; }
+@keyframes glow { from { text-shadow: 0 0 40px var(--ok); transform: scale(.9); } }
+.nd-sub { color: var(--muted); }
+.nd-ring { width: min(230px, 72%); aspect-ratio: 1; border-radius: 50%; border: 3px dashed var(--line); display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 6px; padding: 26px; }
+.nd-ring b { font-family: var(--font-display); font-size: 16px; font-weight: 600; line-height: 1.25; }
+.nd-ring span { color: var(--muted); font-size: 13.5px; }
+.nd-warn { border: 3px solid var(--warn); }
+.nd-warn b { color: var(--warn); }
+.nd-hero .btn { margin-top: 10px; background: var(--warn); color: var(--accent-ink); }
+.nd-sess { display: flex; flex-direction: column; background: var(--card); border-radius: 22px; padding: 14px 18px; }
+.nd-sess b { font-family: var(--font-display); font-weight: 600; }
+.nd-sess span { color: var(--muted); font-size: 14px; }
+.sk-f .tabbar { display: flex; gap: 4px; margin: 0 14px 14px; padding: 6px; border: 0; border-radius: 30px; background: var(--card); box-shadow: 0 12px 30px rgb(0 0 0 / .45); }
+.sk-f .tab { flex: 0 0 52px; flex-direction: row; justify-content: center; gap: 8px; padding: 12px 0; border-radius: 24px; color: var(--muted); transition: flex-basis .2s ease, background-color .2s ease; }
+.sk-f .tab .tl { display: none; }
+.sk-f .tab.on { flex: 1 1 auto; background: var(--accent); color: var(--accent-ink); }
+.sk-f .tab.on .tl { display: inline; font-size: 14px; font-weight: 700; }
+.sk-f .tab .ico, .sk-f .tab.on .ico { border: 0; background: none; width: 22px; height: 22px; border-radius: 0; }
+.sk-f .ico svg { display: block; }
+.sk-f .badge { top: 4px; left: auto; right: 2px; background: var(--accent); color: var(--accent-ink); }
+
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 </style>
 
@@ -248,9 +390,10 @@ p { margin: 0; }
 
 <script>
 const VARIANTS = [
-  { k: 'a', name: 'One page' },
-  { k: 'b', name: 'Tabs' },
-  { k: 'c', name: 'Prompt cards' },
+  { k: 'b', name: 'Tabs baseline' },
+  { k: 'd', name: 'Ticket' },
+  { k: 'e', name: 'Binder' },
+  { k: 'f', name: 'Night dock' },
 ];
 const ROSTER = {
   '318245671': { name: 'Noa Levi', claimed: false },
@@ -267,16 +410,16 @@ const NEW_POLLS = [
 
 function initial() {
   return {
-    variant: 'a', tab: 'today', card: 0, hist: false, panelOpen: false,
+    variant: 'b', tab: 'today', card: 0, hist: false, panelOpen: false,
     device: { claimed: true, id: '318245671', name: 'Noa Levi' },
     network: 'classroom', window: 'open', onScan: 'auto', phase: 'during',
     checkin: null, checkinError: null, flow: null,
     topics: [
-      { id: 's7', name: 'Session 7 · Sequence diagrams', session: true },
+      { id: 's7', name: 'Session 7: Sequence diagrams', session: true },
       { id: 'gen', name: 'General' },
       { id: 'a2', name: 'Assignment 2' },
       { id: 'mid', name: 'Midterm' },
-      { id: 's6', name: 'Session 6 · Use cases', session: true, past: true },
+      { id: 's6', name: 'Session 6: Use cases', session: true, past: true },
     ],
     draft: { text: '', topic: 's7', anon: false },
     comments: [
@@ -329,11 +472,11 @@ function checkinBlock(size) {
 function pollBlock(p, opts = {}) {
   const total = p.counts.reduce((a, b) => a + b, 0);
   let html = `<div class="poll ${opts.big ? 'poll-big' : ''} ${p.fresh ? 'fresh' : ''}">
-    <div class="poll-meta">${p.status === 'open' ? '<span class="live">Open poll</span>' : 'Closed'} · ${esc(topic(p.topic).name)}</div>
+    <div class="poll-meta"><span class="m">${p.status === 'open' ? '<span class="live">Open poll</span>' : 'Closed'}</span><span class="m">${esc(topic(p.topic).name)}</span></div>
     <div class="poll-q">${esc(p.q)}</div><div class="opts">`;
   p.options.forEach((o, i) => {
     if (p.status === 'open') {
-      html += `<button type="button" class="opt ${p.mine === i ? 'sel' : ''}" data-a="vote" data-p="${p.id}" data-i="${i}" aria-pressed="${p.mine === i}"><span class="radio"></span>${esc(o)}</button>`;
+      html += `<button type="button" class="opt ${p.mine === i ? 'sel' : ''}" data-a="vote" data-p="${p.id}" data-i="${i}" aria-pressed="${p.mine === i}"><span class="radio"></span><span class="ot">${esc(o)}</span></button>`;
     } else {
       const pct = total ? Math.round(p.counts[i] * 100 / total) : 0;
       html += `<div class="res ${p.mine === i ? 'mine' : ''}"><div class="bar" style="width:${pct}%"></div><span>${esc(o)}${p.mine === i ? ' · your vote' : ''}</span><b>${pct}%</b></div>`;
@@ -348,7 +491,7 @@ function pollBlock(p, opts = {}) {
 
 function commentItem(c) {
   return `<li class="cm"><div class="cm-top"><span class="chip st-${c.status.toLowerCase()}">${c.status}</span>
-    <span class="cm-meta">${esc(topic(c.topic).name)}${c.when ? ` · ${c.when} the Session` : ''} · ${c.at}</span></div>
+    <span class="cm-meta"><span class="m">${esc(topic(c.topic).name)}</span>${c.when ? `<span class="m">${c.when} the Session</span>` : ''}<span class="m">${c.at}</span></span></div>
     <p>${esc(c.text)}</p>
     <div class="cm-foot">${c.anon ? 'Sent anonymously' : 'Sent with your name'}${c.status === 'New' ? ` · <button type="button" class="link" data-a="del" data-c="${c.id}">Delete</button>` : ''}</div></li>`;
 }
@@ -384,78 +527,81 @@ function welcome() {
     <p>Point your phone camera at the QR code the Lecturer shows. The first time, you’ll enter your student ID; after that, one scan checks you in.</p></div>`;
 }
 
-/* ---------- Variant A: One page ---------- */
-function VariantA() {
-  const op = openPolls(), cp = closedPolls();
-  return `<div class="va"><div class="scroll">
-    ${sessionHead()}
-    ${checkinBlock('strip')}
-    ${op.length ? `<h3 class="h">${op.length > 1 ? 'Open polls' : 'Open poll'}</h3>${op.map(p => pollBlock(p)).join('')}` : ''}
-    <h3 class="h">Your comments</h3>${commentList()}
-    ${cp.length ? `<h3 class="h">Poll results</h3>${cp.map(p => pollBlock(p)).join('')}` : ''}
-  </div>
-  <form class="composer" data-form="send">
-    <div class="comp-row">${topicSelect('a-topic')}${anonToggle()}</div>
-    <div class="comp-row"><textarea id="a-text" rows="1" placeholder="Message the Lecturer…">${esc(S.draft.text)}</textarea>
-      <button class="send" type="submit">Send</button></div>
-  </form></div>`;
+/* ---------- Tabs: one structure, four skins (b baseline, d Ticket, e Binder, f Night dock) ---------- */
+const TABS = [['today', 'Today'], ['polls', 'Polls'], ['comment', 'Comment'], ['mine', 'Mine']];
+const svg = d => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+const ICON = {
+  today: svg('<rect x="3.5" y="5" width="17" height="15" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/>'),
+  polls: svg('<path d="M5 20V11M12 20V4M19 20v-6"/>'),
+  comment: svg('<path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v8a2.5 2.5 0 0 1-2.5 2.5H10l-5 4v-4.2A2.5 2.5 0 0 1 4 14.5z"/>'),
+  mine: svg('<path d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01"/>'),
+};
+const checkState = () => S.checkin ? 'ok' : S.checkinError ? 'warn' : 'idle';
+function quickActions(op, unvoted) {
+  return `<div class="quick">
+    ${op.length ? `<button type="button" class="qa ${unvoted ? 'hot' : ''}" data-a="tab" data-t="polls"><b>${plural(op.length, 'open poll')}</b><span>${unvoted ? 'Waiting for your vote' : 'You’ve voted'}</span></button>` : ''}
+    <button type="button" class="qa" data-a="tab" data-t="comment"><b>Message the Lecturer</b><span>With your name or anonymously</span></button></div>`;
 }
-
-/* ---------- Variant B: Tabs ---------- */
-function VariantB() {
+function checkCopy() {
+  if (S.checkin) return { line: `Checked in at ${S.checkin.at}`, sub: 'You’re on the attendance sheet for this Session.' };
+  if (S.checkinError === 'network') return { line: 'Not checked in', sub: 'Connect to the classroom Wi-Fi and try again.', retry: true };
+  if (S.checkinError === 'closed') return { line: 'Check-in is closed', sub: 'Ask the Lecturer to mark you present.' };
+  return { line: 'Not checked in yet', sub: 'Scan the code on the board with your phone camera.' };
+}
+const retryBtn = cls => `<button type="button" class="btn ${cls || ''}" data-a="retry">Try again</button>`;
+function ticketToday(op, u) {
+  const st = checkState(), c = checkCopy();
+  const stub = st === 'ok'
+    ? `<div class="stamp ${S.checkin.fresh ? 'fresh' : ''}">Checked in<span>${S.checkin.at}</span></div><p>${c.sub}</p>`
+    : `<p><b>${c.line}.</b> ${c.sub}</p>${c.retry ? retryBtn() : ''}`;
+  return `<article class="tkt"><div class="tkt-top"><span class="tkt-course">Software Engineering</span>
+      <div class="tkt-numwrap"><span class="tkt-numlbl">Session</span><span class="tkt-num">07</span></div>
+      <h2 class="tkt-title">Sequence diagrams</h2>
+      <dl class="tkt-grid"><div><dt>Date</dt><dd>Tue 24 Nov</dd></div><div><dt>Time</dt><dd>10:15–11:45</dd></div><div><dt>Room</dt><dd>2.104</dd></div></dl></div>
+    <div class="tkt-perf" aria-hidden="true"></div><div class="tkt-stub tkt-${st}">${stub}</div></article>${quickActions(op, u)}`;
+}
+function binderToday(op, u) {
+  const st = checkState(), c = checkCopy();
+  return `<p class="bd-course">Software Engineering</p><h2 class="bd-title">Session 7<br>Sequence diagrams</h2>
+    <p class="bd-when">Tuesday 24 November, 10:15 to 11:45, room 2.104</p>
+    <div class="bd-check bd-${st}"><span class="bd-box" aria-hidden="true">${st === 'ok' ? '✓' : ''}</span><div><b class="${st === 'ok' ? 'hl' : ''}">${c.line}</b><span>${c.sub}</span></div></div>
+    ${c.retry ? retryBtn('btn-big') : ''}${quickActions(op, u)}`;
+}
+function dockToday(op, u) {
+  const st = checkState(), c = checkCopy();
+  const hero = st === 'ok'
+    ? `<p class="nd-say">You’re checked in</p><div class="nd-time ${S.checkin.fresh ? 'fresh' : ''}">${S.checkin.at}</div><p class="nd-sub">${c.sub}</p>`
+    : `<div class="nd-ring ${st === 'warn' ? 'nd-warn' : ''}"><b>${st === 'idle' ? 'Scan the code on the board' : c.line}</b><span>${st === 'idle' ? 'Use your phone camera. One scan checks you in.' : c.sub}</span></div>${c.retry ? retryBtn('btn-big') : ''}`;
+  return `<p class="nd-hello">Hi ${esc(firstName())}</p><div class="nd-hero">${hero}</div>
+    <div class="nd-sess"><b>Sequence diagrams</b><span>Session 7, 10:15–11:45, room 2.104</span></div>${quickActions(op, u)}`;
+}
+const TODAY = {
+  b: (op, u) => `${sessionHead()}${checkinBlock('big')}${quickActions(op, u)}`,
+  d: ticketToday, e: binderToday, f: dockToday,
+};
+function Tabs() {
   const op = openPolls(), unvoted = op.filter(p => p.mine === null).length;
   let body = '';
   if (S.tab === 'today') {
-    body = `${sessionHead()}${checkinBlock('big')}<div class="quick">
-      ${op.length ? `<button type="button" class="qa ${unvoted ? 'hot' : ''}" data-a="tab" data-t="polls"><b>${plural(op.length, 'open poll')}</b><span>${unvoted ? 'Waiting for your vote' : 'You’ve voted'}</span></button>` : ''}
-      <button type="button" class="qa" data-a="tab" data-t="comment"><b>Message the Lecturer</b><span>With your name or anonymously</span></button></div>`;
+    body = TODAY[S.variant](op, unvoted);
   } else if (S.tab === 'polls') {
     const cp = closedPolls();
-    body = `<h2 class="sess-title">Polls</h2>${op.length ? op.map(p => pollBlock(p)).join('') : '<p class="empty">No open polls right now.</p>'}
+    body = `<h2 class="sess-title"><span class="hl">Polls</span></h2>${op.length ? op.map(p => pollBlock(p)).join('') : '<p class="empty">No open polls right now.</p>'}
       ${cp.length ? `<h3 class="h">Results</h3>${cp.map(p => pollBlock(p)).join('')}` : ''}`;
   } else if (S.tab === 'comment') {
-    body = `<h2 class="sess-title">Message the Lecturer</h2><form class="b-form" data-form="send">
+    body = `<h2 class="sess-title"><span class="hl">Message the Lecturer</span></h2><form class="b-form" data-form="send">
       <span class="lbl">About</span><div class="topics" role="radiogroup">${S.topics.filter(t => !t.past).map(t => `<button type="button" role="radio" aria-checked="${S.draft.topic === t.id}" class="trow ${S.draft.topic === t.id ? 'on' : ''}" data-a="settopic" data-t="${t.id}"><span class="radio"></span>${esc(t.name)}</button>`).join('')}</div>
       <textarea id="b-text" rows="4" placeholder="What do you want to tell the Lecturer?" aria-label="Comment">${esc(S.draft.text)}</textarea>
       <div class="switch-row"><span><b>Send anonymously</b><small>${S.draft.anon ? 'The Lecturer won’t see your name.' : `The Lecturer will see it’s from ${esc(S.device.name)}.`}</small></span>
         <button type="button" class="switch ${S.draft.anon ? 'on' : ''}" data-a="anon" role="switch" aria-checked="${S.draft.anon}" aria-label="Send anonymously"></button></div>
       <button class="btn btn-big" type="submit">Send to the Lecturer</button></form>`;
   } else {
-    body = `<h2 class="sess-title">Your comments</h2><p class="empty">Only you and the Lecturer see these. You can delete one until the Lecturer reads it.</p>${commentList()}`;
+    body = `<h2 class="sess-title"><span class="hl">Your comments</span></h2><p class="empty">Only you and the Lecturer see these. You can delete one until the Lecturer reads it.</p>${commentList()}`;
   }
-  const tabs = [['today', 'Today'], ['polls', 'Polls'], ['comment', 'Comment'], ['mine', 'Mine']];
-  return `<div class="vb"><div class="scroll">${body}</div><nav class="tabbar">${tabs.map(([k, l]) =>
-    `<button type="button" class="tab ${S.tab === k ? 'on' : ''}" data-a="tab" data-t="${k}"><span class="ico"></span>${l}${k === 'polls' && unvoted ? `<span class="badge">${unvoted}</span>` : ''}</button>`).join('')}</nav></div>`;
+  return `<div class="vb" data-tab="${S.tab}"><div class="scroll">${body}</div><nav class="tabbar">${TABS.map(([k, l]) =>
+    `<button type="button" class="tab ${S.tab === k ? 'on' : ''}" data-a="tab" data-t="${k}" aria-current="${S.tab === k ? 'page' : 'false'}"><span class="ico">${ICON[k]}</span><span class="tl">${l}</span>${k === 'polls' && unvoted ? `<span class="badge">${unvoted}</span>` : ''}</button>`).join('')}</nav></div>`;
 }
-
-/* ---------- Variant C: Prompt cards ---------- */
-function cardsC() {
-  const cards = [{ k: 'checkin' }];
-  openPolls().forEach(p => cards.push({ k: 'poll', p }));
-  cards.push({ k: 'comment' });
-  return cards;
-}
-function VariantC() {
-  const cards = cardsC();
-  S.card = Math.min(S.card, cards.length - 1);
-  const c = cards[S.card];
-  let inner;
-  if (c.k === 'checkin') inner = `${sessionHead()}${checkinBlock('big')}`;
-  else if (c.k === 'poll') inner = pollBlock(c.p, { big: true });
-  else inner = `<div class="card-kicker">${esc(topic(S.draft.topic).name)}</div><h2 class="card-q">Anything for the Lecturer?</h2>
-    <div class="chips">${QUICK.map(q => `<button type="button" class="qchip" data-a="quick" data-q="${esc(q)}">${esc(q)}</button>`).join('')}</div>
-    <form class="c-form" data-form="send"><textarea id="c-text" rows="2" placeholder="Or write your own…" aria-label="Comment">${esc(S.draft.text)}</textarea>
-      <div class="comp-row">${anonToggle()}<button class="send" type="submit">Send</button></div></form>`;
-  const hist = S.hist ? `<div class="sheet"><div class="sheet-head"><h2 class="sess-title">Your comments &amp; results</h2><button type="button" class="link" data-a="hist">Done</button></div>
-    <div class="scroll"><h3 class="h">Comments</h3>${commentList()}${closedPolls().length ? `<h3 class="h">Poll results</h3>${closedPolls().map(p => pollBlock(p)).join('')}` : ''}</div></div>` : '';
-  return `<div class="vc"><div class="c-top"><span class="eyebrow">${S.card + 1} of ${cards.length}</span><button type="button" class="link" data-a="hist">Your comments &amp; results</button></div>
-    <div class="deck"><article class="card" data-key="${c.k}${c.p ? c.p.id : ''}">${inner}</article></div>
-    <div class="c-nav"><button type="button" class="navbtn" data-a="prev" ${S.card === 0 ? 'disabled' : ''} aria-label="Previous">‹</button>
-      <div class="dots">${cards.map((_, i) => `<span class="${i === S.card ? 'on' : ''}"></span>`).join('')}</div>
-      <button type="button" class="navbtn" data-a="next" ${S.card === cards.length - 1 ? 'disabled' : ''} aria-label="Next">›</button></div>${hist}</div>`;
-}
-
-const RENDER = { a: VariantA, b: VariantB, c: VariantC };
+const RENDER = { b: Tabs, d: Tabs, e: Tabs, f: Tabs };
 
 /* ---------- actions ---------- */
 function attemptCheckin() {
@@ -463,7 +609,7 @@ function attemptCheckin() {
   if (S.network !== 'classroom') { S.checkinError = 'network'; return; }
   if (S.window !== 'open') { S.checkinError = 'closed'; return; }
   S.checkinError = null;
-  if (!S.checkin) S.checkin = { at: CLOCK[S.phase] };
+  if (!S.checkin) S.checkin = { at: CLOCK[S.phase], fresh: true };
   toast(`Checked in at ${S.checkin.at}`);
 }
 function scan() {
@@ -487,10 +633,6 @@ function act(a, d) {
       if (p.status !== 'open') break;
       if (p.mine !== null) p.counts[p.mine]--;
       p.counts[i]++; p.mine = i; p.fresh = false;
-      if (S.variant === 'c') {
-        const at = S.card;
-        setTimeout(() => { if (S.variant === 'c' && S.card === at) { S.card++; render(); } }, 650);
-      }
       break;
     }
     case 'retry': attemptCheckin(); break;
@@ -525,8 +667,7 @@ function act(a, d) {
       const p = { id: S.nextId++, topic: 's7', q: t.q, options: [...t.options], status: 'open', mine: null, counts: t.options.map(() => Math.floor(Math.random() * 6)), fresh: true };
       S.polls.forEach(x => x.fresh = false);
       S.polls.push(p);
-      if (S.variant === 'c' && !S.flow) { S.card = cardsC().findIndex(c => c.p === p); S.hist = false; }
-      if (S.variant === 'b' && S.tab !== 'polls') toast(`New poll: ${p.q}`);
+      if (S.tab !== 'polls') toast(`New poll: ${p.q}`);
       break;
     }
     case 'lecClose': S.polls.forEach(p => { if (p.status === 'open') { p.status = 'closed'; p.fresh = false; } }); toast('A poll closed. Results are in.'); break;
@@ -602,7 +743,9 @@ function render() {
   const focusId = document.activeElement && document.activeElement.id;
   let html = S.flow ? flowScreen() : (!S.device.claimed ? welcome() : RENDER[S.variant]());
   if (S.toast) html += `<div class="toast" role="status"><span>${esc(S.toast.msg)}</span>${S.toast.undo ? `<button type="button" class="link" data-a="undo" data-c="${S.toast.undo}">Undo</button>` : ''}</div>`;
+  $app.className = 'sk-' + S.variant;
   $app.innerHTML = html;
+  if (S.checkin) S.checkin.fresh = false;
   const sc2 = $app.querySelector('.scroll');
   if (sc2) sc2.scrollTop = keep;
   if (focusId) { const el = document.getElementById(focusId); if (el) el.focus(); }
