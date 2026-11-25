@@ -20,3 +20,18 @@ Resolved in [System architecture and components](https://github.com/ofeq-dev/cla
 The Lecturer's own addresses are still captured when the window opens: both IPv4 and IPv6, reported by the Lecturer's browser via `api4.ipify.org` / `api6.ipify.org` (see ADR 0003). We changed this because the Lecturer may not be on the Students' network (a laptop on Ethernet, Students on Wi-Fi), and a crowd of Students from one block is good evidence that they are in the room together.
 
 New consequence: a group of Students elsewhere on one network could get their block approved automatically. That is unlikely at the threshold, and the Lecturer can remove the network and Manual mark.
+
+_Superseded in part by the next amendment: there is no automatic approval and no remembered networks._
+
+## Amendment: manual approval for one Session only (2026-11-25)
+
+Resolved in [Keep mobile-carrier blocks from becoming Classroom networks](https://github.com/ofeq-dev/class-connect/issues/16), after [Measure the classroom Wi-Fi public IPs](https://github.com/ofeq-dev/class-connect/issues/12). That measurement found:
+- The campus Wi-Fi (`Ariel-University`) sends traffic out through a pool of addresses inside one `/24`, and has no IPv6.
+- Mobile data comes out of carrier-grade NAT shared by subscribers across the country (Partner, `2.54.0.0/16`).
+
+So a block can stand for "in this room" only on the day someone sees it there:
+- **The block rule stays `/24` IPv4 (and `/64` IPv6).** There is no carrier detection.
+- **No automatic approval.** A crowd of Students on mobile data in the room could share one carrier `/24`, and approving it would let in anyone on that carrier.
+- **Network approval is manual and lasts for one Session.** It is not remembered for the Course, so the next Session starts again from the Lecturer's own block.
+
+Consequence: if the Lecturer opens the Check-in window over mobile data or a hotspot, their carrier `/24` becomes the reference for that Session. Accepted: the Lecturer opens the window on the classroom Wi-Fi.

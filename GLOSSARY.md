@@ -43,7 +43,7 @@ A Check-in from a network that is not yet a Classroom network, waiting for that 
 _Avoid_: Unverified check-in, refused check-in
 
 **Network approval**:
-Making a network a Classroom network for a Session, either by the Lecturer with one tap or automatically once enough Students have checked in from it; every Pending check-in from that network then counts.
+The Lecturer making a network a Classroom network for one Session, with one tap; every Pending check-in from that network then counts. It is never remembered for later Sessions.
 _Avoid_: Whitelisting, IP approval
 
 **Manual mark**:

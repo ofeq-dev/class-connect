@@ -30,9 +30,6 @@ classDiagram
       +readSession(idOrQrCode) Session
       +updateSession(session, changes)
       +deleteSession(session)
-      +knownNetworks(course) Block[] ‡
-      +addKnownNetwork(course, block, by) ‡
-      +removeKnownNetwork(course, block) ‡
     }
     class Attendance {
       <<module>>
@@ -121,7 +118,7 @@ classDiagram
   Routes --> Homework
   Routes --> LiveEvents : subscribe per page
 
-  Attendance --> Course : sessions, known networks
+  Attendance --> Course : Sessions
   Feedback --> Course : Roster, Sessions
   Feedback --> Attendance : isPresent for presence notes
   Summaries --> Course : Sessions, translation languages
@@ -177,7 +174,6 @@ classDiagram
     lecturer_id
     name
     translation_languages
-    auto_approve_threshold = 10
   }
   class roster_entry {
     <<table>>
@@ -197,18 +193,9 @@ classDiagram
     end
     qr_code
   }
-  class known_network {
-    <<table>>
-    id
-    course_id
-    block
-    approved_at
-    approved_by : lecturer or auto
-  }
   lecturer "1" --> "*" course
   course "1" --> "*" roster_entry
   course "1" --> "*" session
-  course "1" --> "*" known_network
 ```
 
 The Lecturer's password hash lives in server config, not in `lecturer`. A Claim reset clears `device_token_hash` and `claimed_at`; it never touches attendance.
@@ -243,7 +230,14 @@ classDiagram
     device_token_hash
     at
   }
+  class approved_network {
+    <<table>>
+    session_id
+    block
+    approved_at
+  }
   session "1" --> "*" check_in_window : one row per opening
+  session "1" --> "*" approved_network : this Session only
   session "1" --> "*" attendance
   roster_entry "1" --> "*" attendance : at most one per Session
 ```

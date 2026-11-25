@@ -42,7 +42,6 @@ Interface: `importRoster`, `claim`, `resetClaim`, `whoIs(token)`, and Session cr
   - Only the device token's hash is stored. `whoIs` resolves the raw token and returns nothing for an unknown or reset token.
 - **Claim reset**: it releases the binding at once, so the old token stops resolving and a new claim succeeds. It doesn't touch attendance history (Attendance owns attendance; checked by an Attendance test that uses Course).
 - **Sessions**: each Session gets a unique QR code, `/s/<code>`. Its start and end times are stored, and deleting it removes the Session. A Session Topic is created alongside it (checked with Feedback).
-- **Known networks**: they are listed per Course, and the Lecturer can remove one.
 
 ### Attendance
 
@@ -53,16 +52,15 @@ Interface: `openWindow(session, {ipv4, ipv6})`, `closeWindow`, `checkIn → Pres
   - An address one block away gives Pending.
   - IPv4 is only compared with the Lecturer's IPv4, and IPv6 only with their IPv6. A window opened with only one address family still works.
   - IPv4-mapped IPv6 addresses (`::ffff:a.b.c.d`) are treated as IPv4.
-- **Known networks**: a Check-in from a block the Course approved earlier gives Present in a later Session.
 - **Check-in window**:
   - A Check-in is refused when the window isn't open.
   - Reopening the window keeps earlier Check-ins and records the Lecturer's new addresses.
   - At midnight on the fake Clock the window reads as closed, with no job or timer needed.
 - **Pending check-ins and Network approval**:
-  - Approving a block turns every Pending check-in from it into Present and remembers the block for the Course.
-  - Once N Students (the per-Course threshold, default 10) check in from one block, it is approved automatically. N − 1 isn't enough.
+  - Approving a block turns every Pending check-in from it into Present, and later Check-ins from it in the same Session give Present.
+  - Approval doesn't carry over: a Check-in from that block in a later Session gives Pending.
+  - No number of Pending check-ins from one block approves it; only the Lecturer does.
   - When the window closes, Pending check-ins still unapproved read as Absent.
-  - Removing a known network stops future matches, but past Present marks stay.
 - **Manual marks**:
   - A Manual mark works whether the window is open or closed. The latest action wins, both ways (a Manual absent over a Check-in, and a Check-in over a Manual absent while the window is open).
   - Each Check-in record logs the Roster entry, the IP, the block and the device token.
@@ -200,7 +198,7 @@ The demo runs live in class on classmates' phones, and there is no fallback host
 3. **One real-LLM dry run** the day before class, with the OpenRouter adapter. Summarise the ~5-minute Transcript clip, and run a small review run, to check that the fallback list and timeouts hold against today's free models. Make the 90-minute Session summary before class as planned.
 4. **On the day:** switch back to the real adapter, check the `llm_usage` count shown in the console, and confirm the nightly backup ran.
 
-The block-match rule in the rehearsal depends on the real classroom network, measured in [Measure the classroom Wi-Fi public IPs](https://github.com/ofeq-dev/class-connect/issues/12). Until then, the rehearsal uses the home network as the Classroom network.
+The block-match rule in the rehearsal depends on the real classroom network, measured in [Measure the classroom Wi-Fi public IPs](https://github.com/ofeq-dev/class-connect/issues/12): on `Ariel-University`, phones and laptops leave through different addresses in one `/24`, so the rule holds. The rehearsal at home uses the home network as the Classroom network. Before the demo, the Lecturer opens the window on the classroom Wi-Fi, not on mobile data.
 
 ## Summary of coverage
 

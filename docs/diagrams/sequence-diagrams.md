@@ -11,7 +11,7 @@ Conventions in every diagram:
 
 ## 1. Claim, then Check-in
 
-Covers the Check-in window opening, a first-time phone claiming its Roster entry and checking in in one flow, a Pending check-in, and Network approval by tap or by threshold.
+Covers the Check-in window opening, a first-time phone claiming its Roster entry and checking in in one flow, a Pending check-in, and Network approval by the Lecturer's tap for this Session.
 
 ```mermaid
 sequenceDiagram
@@ -59,12 +59,11 @@ sequenceDiagram
   R->>C: whoIs(token)
   C-->>R: rosterEntry (cookie refreshed)
   R->>A: checkIn(session, rosterEntry, CF-Connecting-IP, deviceToken)
-  A->>C: knownNetworks(course) ‡
-  C-->>A: approved blocks
+  A->>A: read approved_network rows for this Session
   alt window closed (by Lecturer or past midnight)
     A-->>R: refused
     R-->>S: "Check-in is closed"
-  else IP in Lecturer's /24 or /64, or in a known network
+  else IP in Lecturer's /24 or /64, or in a block approved for this Session
     A->>A: upsert attendance = Present, with ip, block, token
     A->>E: publish(course, lecturer, attendance.changed)
     A-->>R: Present
@@ -74,16 +73,13 @@ sequenceDiagram
     A->>E: publish(course, lecturer, attendance.changed)
     A-->>R: Pending
     R-->>S: "Checked in — waiting for your Lecturer to confirm"
-    opt Pending check-ins from this block reach the Course threshold (default 10)
-      A->>A: approveNetwork(session, block) — automatic
-    end
   end
 
-  Note over L,E: Network approval by one tap (or the automatic call above)
+  Note over L,E: Network approval by one tap, for this Session only
   E-->>L: attendance.changed → refetch, Pending grouped by block
   L->>R: POST approve network {block}
   R->>A: approveNetwork(session, block)
-  A->>C: addKnownNetwork(course, block, lecturer) ‡
+  A->>A: insert approved_network (session, block)
   A->>A: that block's Pending rows for this Session → Present
   A->>E: publish(course, lecturer, attendance.changed)
   A->>E: publish(course, student, attendance.changed)
