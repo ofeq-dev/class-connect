@@ -4,152 +4,132 @@
   Poll control, Roster" (ofeq-dev/class-connect#17).
 
   Question: what should the Lecturer's screens look and feel like during and around a Session?
-  Round 1: three structures, one per device the Lecturer might hold during a Session,
-  switchable with the pill at the bottom (or ← / →), stored in the URL hash:
-    #a Desk console      laptop in front of the Lecturer; everything on one screen;
-                         "Show on projector" hands the projector a public view.
-    #b Pocket            phone only; the Student app's tab structure, for the Lecturer.
-    #c Stage + remote    the projector shows a public "stage"; the phone is a private remote
-                         with a "needs you now" feed.
-  Two open questions are toggles in the Scenario panel, so they can be judged on any variant:
-    Look: Binder (carried over from the Student app) or Plain.
-    Quick reactions in the inbox: grouped with counts, or one by one.
-  The Scenario panel plays the Students: Check-ins from the classroom or other networks,
-  Comments, quick reactions, votes, and the clock (which fires scheduled Polls).
-  All state is in memory; reload resets it. Open the file in a browser; nothing to install.
-  Light only, like the Student prototype.
+  Round 1 (commit bf73d34) compared Desk console, Pocket and Stage + remote, Binder vs Plain.
+  Desk console and Binder won, with notes: too crowded, hard to read at a glance, attendance and
+  polls always expanded, Roster too prominent, pinned Comments should sit on top, actions should
+  be icons, no IP addresses unless a diagnostic flag is on, saved polls may be incomplete.
+  Round 2: a calmer teaching console in two arrangements, switchable with the pill at the
+  bottom (or ← / →), stored in the URL hash:
+    #d Calm columns   three glance cards; details open in place.
+    #e Inbox + rail   Comments take the page; attendance and the current poll sit in a rail;
+                      details open in a side drawer.
+  Roster, the attendance sheet download and Diagnostics live in the ⋯ menu.
+  The Scenario panel plays the Students and the clock. All state is in memory; reload resets it.
 -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,500..800&display=swap">
 <style>
 :root {
-  --desk: #DCE2E9; --surface: #F7F9FB; --card: #FFFFFF; --ink: #16202B; --muted: #5A6776; --line: #D8DEE6;
-  --accent: #2A4FC4; --accent-ink: #FFFFFF; --accent-soft: #E3E9FB;
-  --ok: #1D7349; --ok-soft: #DDF1E6; --warn: #8F5400; --warn-soft: #FBEDD4; --bad: #A3271C; --bad-soft: #FBE3E0;
-  --frame: #1A212B; --pill: #16202B; --pill-ink: #FFFFFF;
-  --font-display: "Inter", system-ui, sans-serif; --font-body: "Inter", system-ui, sans-serif;
-  --r: 12px;
-  --hl-att: var(--accent-soft); --hl-poll: var(--accent-soft); --hl-cm: var(--accent-soft); --hl-ros: var(--accent-soft);
-  color-scheme: light;
-}
-body.look-binder {
-  --desk: #C3CED9; --surface: #FFFFFF; --ink: #20272E; --muted: #59626D; --line: #D3DAE2;
-  --accent: #20272E; --accent-ink: #FFFFFF; --accent-soft: #EEF1F4;
-  --font-display: "Bricolage Grotesque", system-ui, sans-serif; --font-body: "Atkinson Hyperlegible", system-ui, sans-serif;
-  --r: 4px;
+  --desk: #C3CED9; --surface: #FFFFFF; --card: #FFFFFF; --ink: #20272E; --muted: #59626D; --line: #D3DAE2; --soft: #F3F5F8;
+  --ok: #1B7546; --ok-soft: #E0F4E8; --warn: #9C4C00; --warn-soft: #FFEFD9; --bad: #A3271C; --bad-soft: #FBE3E0;
   --hl-att: #FFE14D; --hl-poll: #FF9DC4; --hl-cm: #8BE6B0; --hl-ros: #A3CDFF;
+  --font-display: "Bricolage Grotesque", system-ui, sans-serif; --font-body: "Atkinson Hyperlegible", system-ui, sans-serif;
+  --pill: #16202B; --pill-ink: #FFFFFF;
+  color-scheme: light;
 }
 html, body { height: 100%; margin: 0; }
 body { background: var(--desk); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.45; }
 * { box-sizing: border-box; }
 button, input, select, textarea { font: inherit; color: inherit; }
 button { cursor: pointer; }
-:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button:disabled { cursor: default; opacity: .4; }
+:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 h1, h2, h3 { font-family: var(--font-display); margin: 0; text-wrap: balance; }
 p { margin: 0; }
 .muted { color: var(--muted); }
 .small { font-size: 13px; }
 .num { font-variant-numeric: tabular-nums; }
+.row { display: flex; align-items: center; gap: 8px; }
+.row.wrap { flex-wrap: wrap; }
+.grow { flex: 1; min-width: 0; }
+.hl { padding: 0 .25em; margin: 0 -.25em; background-image: linear-gradient(100deg, transparent .1em, var(--hl) .3em, var(--hl) calc(100% - .3em), transparent calc(100% - .1em)); background-size: 100% 70%; background-position: 0 85%; background-repeat: no-repeat; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
 
-/* highlighter: real highlighter in Binder, nothing in Plain */
-.hl { padding: 0 .25em; margin: 0 -.25em; }
-.look-binder .hl { background-image: linear-gradient(100deg, transparent .1em, var(--hl) .3em, var(--hl) calc(100% - .3em), transparent calc(100% - .1em)); background-size: 100% 70%; background-position: 0 85%; background-repeat: no-repeat; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
-
-/* section = one area (attendance / polls / inbox / roster) */
-.sec { --hl: var(--hl-att); background: var(--surface); display: flex; flex-direction: column; gap: 12px; padding: 16px; min-height: 0; }
+.sec { --hl: var(--hl-att); background: var(--surface); background-image: repeating-linear-gradient(to bottom, transparent 0 31px, #EEF2F6 31px 32px); background-attachment: local; border: 1.5px solid var(--line); border-radius: 4px; border-bottom: 7px solid var(--hl); padding: 16px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .sec[data-s="poll"] { --hl: var(--hl-poll); }
 .sec[data-s="cm"] { --hl: var(--hl-cm); }
 .sec[data-s="ros"] { --hl: var(--hl-ros); }
-.look-binder .sec { background-image: repeating-linear-gradient(to bottom, transparent 0 31px, #E9EEF4 31px 32px); background-attachment: local; }
-.sec-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
-.sec-head h2 { font-size: 22px; font-weight: 800; letter-spacing: -.01em; }
-.look-plain .sec-head h2 { font-size: 17px; font-weight: 700; }
-.sub { font-size: 15px; font-weight: 700; font-family: var(--font-display); margin-top: 6px; }
+.sec-head { display: flex; align-items: baseline; gap: 10px; }
+.sec-head h2 { font-size: 22px; font-weight: 800; letter-spacing: -.01em; flex: 1; }
 
-.btn { border: 0; border-radius: var(--r); background: var(--accent); color: var(--accent-ink); font-weight: 700; padding: 8px 14px; }
-.btn-ok { background: var(--ok); color: #fff; }
-.btn-line { background: var(--card); color: var(--ink); border: 1.5px solid var(--line); font-weight: 600; }
+.btn { border: 0; border-radius: 4px; background: var(--ink); color: #fff; font-weight: 700; padding: 8px 14px; }
+.btn-ok { background: var(--ok); }
+.btn-line { background: var(--card); color: var(--ink); border: 1.5px solid var(--line); font-weight: 700; }
 .btn-line:hover { border-color: var(--ink); }
 .btn-sm { padding: 4px 10px; font-size: 13px; }
-.btn-big { padding: 12px 16px; font-size: 16px; width: 100%; }
-.link { border: 0; background: none; padding: 0; color: var(--accent); font-weight: 700; text-decoration: underline; text-underline-offset: 2px; font-size: inherit; }
-.look-plain .link { text-decoration: none; }
-.card { background: var(--card); border: 1.5px solid var(--line); border-radius: var(--r); padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.link { border: 0; background: none; padding: 0; color: var(--ink); font-weight: 700; text-decoration: underline; text-underline-offset: 2px; font-size: inherit; }
+.card { background: var(--card); border: 1.5px solid var(--line); border-radius: 4px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
 .chip { display: inline-block; font-size: 12px; font-weight: 700; padding: 1px 8px; border-radius: 999px; white-space: nowrap; }
 .c-ok { background: var(--ok-soft); color: var(--ok); }
 .c-warn { background: var(--warn-soft); color: var(--warn); }
 .c-bad { background: var(--bad-soft); color: var(--bad); }
 .c-mute { background: var(--line); color: var(--muted); }
-.c-acc { background: var(--accent-soft); color: var(--accent); }
-.look-binder .c-acc { color: var(--ink); background: var(--hl-cm); }
-.row { display: flex; align-items: center; gap: 8px; }
-.row.wrap { flex-wrap: wrap; }
-.grow { flex: 1; min-width: 0; }
-.seg { display: inline-flex; border: 1.5px solid var(--line); border-radius: var(--r); overflow: hidden; background: var(--card); }
-.seg button { border: 0; background: none; padding: 5px 10px; font-size: 13px; font-weight: 600; }
+.seg { display: inline-flex; border: 1.5px solid var(--line); border-radius: 4px; overflow: hidden; background: var(--card); }
+.seg button { border: 0; background: none; padding: 5px 10px; font-size: 13px; font-weight: 700; }
 .seg button + button { border-left: 1.5px solid var(--line); }
-.seg button.on { background: var(--accent); color: var(--accent-ink); }
-.look-binder .seg button.on { background: var(--hl); color: var(--ink); }
-input[type=text], input[type=time], textarea, select { border: 1.5px solid var(--line); border-radius: var(--r); background: var(--card); padding: 7px 10px; }
-textarea { resize: vertical; width: 100%; }
+.seg button.on { background: var(--hl); }
+input[type=text], input[type=time], textarea, select { border: 1.5px solid var(--line); border-radius: 4px; background: var(--card); padding: 7px 10px; }
 .field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; font-weight: 700; }
 .field > span { color: var(--muted); }
+.diag { font-family: ui-monospace, monospace; font-size: 12px; color: var(--muted); background: var(--soft); border: 1px dashed var(--line); border-radius: 3px; padding: 0 4px; }
 
-/* ---------- attendance ---------- */
-.window { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; border-radius: var(--r); padding: 10px 12px; border: 1.5px solid var(--line); background: var(--card); }
-.window .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); flex: none; }
-.window.open .dot { background: var(--ok); box-shadow: 0 0 0 4px var(--ok-soft); }
-.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-.stat { display: flex; flex-direction: column; }
-.stat b { font-family: var(--font-display); font-size: 40px; line-height: 1; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
-.stat span { font-size: 13px; color: var(--muted); font-weight: 600; }
-.stat.pend b { color: var(--warn); }
-.pend-card { border-color: var(--warn); background: var(--warn-soft); }
-.look-binder .pend-card { background: var(--card); border-width: 2px; }
-.pend-card ul, .plist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
-.plist li { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-top: 1px solid var(--line); }
+/* icon buttons */
+.ib { width: 34px; height: 34px; display: inline-grid; place-items: center; border: 1.5px solid transparent; background: none; border-radius: 4px; color: var(--muted); flex: none; }
+.ib:hover { border-color: var(--line); color: var(--ink); background: var(--card); }
+.ib svg { width: 19px; height: 19px; }
+.ib.on { color: var(--ink); background: var(--hl); }
+.ib.ok:hover, .ib.ok.on { color: var(--ok); }
+.ib.ok.on { background: var(--ok-soft); }
+.ib.bad:hover, .ib.bad.on { color: var(--bad); }
+.ib.bad.on { background: var(--bad-soft); }
+.icons { display: flex; gap: 2px; flex: none; }
+
+/* glance */
+.glance { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.glance .big { font-family: var(--font-display); font-size: 52px; line-height: .95; font-weight: 800; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
+.glance .of { font-size: 18px; font-weight: 700; }
+.state { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); flex: none; }
+.dot.on { background: var(--ok); box-shadow: 0 0 0 4px var(--ok-soft); }
+.attn { border: 2px solid var(--warn); background: var(--warn-soft); }
+.more { align-self: flex-start; border: 0; background: none; padding: 2px 0; font-weight: 700; color: var(--muted); font-size: 14px; }
+.more:hover { color: var(--ink); }
+.plist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.plist li { display: flex; align-items: center; gap: 6px; padding: 3px 0; border-top: 1px solid var(--line); min-height: 40px; }
 .plist li:first-child { border-top: 0; }
-.pend-card li { display: flex; gap: 8px; align-items: center; padding: 3px 0; font-size: 14px; }
-details summary { cursor: pointer; font-weight: 700; font-size: 14px; }
-.ip { font-family: ui-monospace, monospace; font-size: 13px; }
+.plist .who { flex: 1; min-width: 0; }
+.plist .t { font-size: 12.5px; color: var(--muted); }
+.grp-title { font-weight: 700; font-size: 13px; color: var(--muted); margin-top: 4px; }
 
-/* ---------- inbox ---------- */
-.filters { display: flex; gap: 6px; flex-wrap: wrap; }
-.filters button { border: 1.5px solid var(--line); background: var(--card); border-radius: 999px; padding: 4px 12px; font-size: 13px; font-weight: 700; }
-.filters button.on { background: var(--ink); color: var(--surface); border-color: var(--ink); }
-.look-binder .filters button.on { background: var(--hl); color: var(--ink); border-color: var(--ink); }
-.cm { gap: 6px; }
-.cm-text { font-size: 15.5px; }
-.cm-meta { font-size: 12.5px; color: var(--muted); display: flex; gap: 4px 10px; flex-wrap: wrap; }
-.cm-acts { display: flex; gap: 6px; flex-wrap: wrap; }
-.grp { flex-direction: row; align-items: center; gap: 12px; }
-.grp-n { font-family: var(--font-display); font-size: 28px; font-weight: 800; line-height: 1; min-width: 44px; text-align: center; font-variant-numeric: tabular-nums; }
-.grp .cm-text { font-weight: 700; }
-.tally { display: flex; gap: 6px; flex-wrap: wrap; }
-.tally span { border: 1.5px solid var(--line); background: var(--card); border-radius: 999px; padding: 3px 10px; font-size: 13px; font-weight: 700; }
-.tally span b { font-variant-numeric: tabular-nums; }
+/* comments */
+.cm { flex-direction: row; gap: 10px; align-items: flex-start; padding: 10px 12px; }
+.cm .body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.cm-text { font-size: 16px; }
+.cm-meta { font-size: 12.5px; color: var(--muted); display: flex; gap: 2px 10px; flex-wrap: wrap; }
+.cm.pinned { border-color: var(--ink); box-shadow: inset 5px 0 0 var(--hl); padding-left: 16px; }
+.n { font-family: var(--font-display); font-size: 26px; font-weight: 800; line-height: 1; min-width: 40px; font-variant-numeric: tabular-nums; }
 .fresh { animation: fresh 1.4s ease; }
 @keyframes fresh { from { box-shadow: 0 0 0 4px var(--hl-cm); } to { box-shadow: 0 0 0 0 transparent; } }
+.label { font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
 
-/* ---------- polls ---------- */
+/* polls */
+.poll-q { font-family: var(--font-display); font-weight: 700; font-size: 18px; line-height: 1.25; }
 .bars { display: flex; flex-direction: column; gap: 5px; }
-.bar { position: relative; display: flex; justify-content: space-between; padding: 6px 10px; border-radius: var(--r); background: var(--surface); overflow: hidden; font-size: 14px; font-variant-numeric: tabular-nums; border: 1px solid var(--line); }
-.bar i { position: absolute; inset: 0 auto 0 0; background: var(--accent-soft); }
-.look-binder .bar i { background: var(--hl-poll); }
+.bar { position: relative; display: flex; justify-content: space-between; padding: 6px 10px; border-radius: 4px; background: var(--card); overflow: hidden; font-size: 14px; font-variant-numeric: tabular-nums; border: 1px solid var(--line); }
+.bar i { position: absolute; inset: 0 auto 0 0; background: var(--hl-poll); }
 .bar span, .bar b { position: relative; }
-.poll-q { font-family: var(--font-display); font-weight: 700; font-size: 17px; line-height: 1.25; }
-.optrow { display: flex; gap: 6px; }
+.prow { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-top: 1px solid var(--line); }
+.prow:first-child { border-top: 0; }
 
-/* ---------- roster ---------- */
-.rtable { width: 100%; border-collapse: collapse; font-size: 14px; background: var(--card); border: 1.5px solid var(--line); }
-.rtable th { text-align: left; font-size: 12px; color: var(--muted); font-weight: 700; padding: 6px 8px; border-bottom: 1.5px solid var(--line); }
-.rtable td { padding: 6px 8px; border-top: 1px solid var(--line); vertical-align: middle; }
-.rlist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; background: var(--card); border: 1.5px solid var(--line); border-radius: var(--r); }
-.rlist li { padding: 9px 12px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 4px; }
-.rlist li:first-child { border-top: 0; }
+/* header + menu */
+.top { display: flex; align-items: center; gap: 14px; background: var(--card); border: 1.5px solid var(--line); border-radius: 4px; padding: 10px 14px; position: relative; }
+.top .t { font-family: var(--font-display); font-weight: 800; font-size: 20px; }
+.menu { position: absolute; right: 10px; top: calc(100% + 6px); z-index: 30; background: var(--card); border: 1.5px solid var(--ink); border-radius: 4px; box-shadow: 0 12px 30px rgb(0 0 0 / .2); display: flex; flex-direction: column; min-width: 250px; padding: 6px; }
+.menu button { text-align: left; border: 0; background: none; padding: 8px 10px; border-radius: 3px; display: flex; justify-content: space-between; gap: 10px; }
+.menu button:hover { background: var(--soft); }
+.menu hr { border: 0; border-top: 1px solid var(--line); margin: 4px 0; width: 100%; }
 
-/* ---------- projector (public) ---------- */
+/* projector */
 .proj { background: #fff; color: #111; display: grid; grid-template-columns: auto 1fr; gap: 6%; align-items: center; padding: 5%; aspect-ratio: 16 / 9; width: 100%; font-family: var(--font-display); container-type: inline-size; }
 .proj .qr { width: 34cqw; aspect-ratio: 1; }
 .proj .qr svg { width: 100%; height: 100%; display: block; }
@@ -159,20 +139,39 @@ details summary { cursor: pointer; font-weight: 700; font-size: 14px; }
 .proj .p-say { font-size: 2.4cqw; }
 .proj .p-url { font-family: ui-monospace, monospace; font-size: 2cqw; color: #555; }
 .proj .col { display: flex; flex-direction: column; gap: 2.2cqw; }
+.proj .hl { --hl: var(--hl-att); }
 .proj.poll { grid-template-columns: 1fr; }
 .proj.poll .pq { font-size: 5cqw; font-weight: 800; line-height: 1.1; }
 .proj.poll .po { display: flex; flex-direction: column; gap: 1.4cqw; font-size: 2.8cqw; }
 .proj.poll .po div { position: relative; padding: 1cqw 2cqw; border: .3cqw solid #111; border-radius: 1cqw; display: flex; justify-content: space-between; overflow: hidden; }
 .proj.poll .po i { position: absolute; inset: 0 auto 0 0; background: var(--hl-poll); }
-.look-plain .proj.poll .po i { background: #C9D5FA; }
 .proj.poll .po span, .proj.poll .po b { position: relative; }
-.proj.blank { display: grid; place-items: center; grid-template-columns: 1fr; color: #999; font-size: 3cqw; }
-.proj .hl { --hl: var(--hl-att); }
+.overlay { position: fixed; inset: 0; z-index: 45; background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 20px; }
+.overlay .proj { max-width: min(1200px, (100vh - 120px) * 16 / 9); }
+.overlay .ctl { display: flex; gap: 8px; align-items: center; color: #ccc; font-size: 13px; }
+.overlay .seg { background: transparent; border-color: #555; }
+.overlay .seg button { color: #eee; }
+.overlay .seg button.on { background: var(--hl-att); color: #111; }
 
-/* ---------- stage + switcher + scenario ---------- */
-#stage { min-height: 100%; padding: 20px 16px 90px; transition: padding-right .2s; }
+/* layout */
+#stage { min-height: 100%; padding: 20px 16px 90px; }
 body.panel-open #stage { padding-right: 356px; }
-.phone { width: 390px; max-width: 100%; height: min(820px, calc(100vh - 120px)); min-height: 600px; border: 10px solid var(--frame); border-radius: 44px; overflow: hidden; flex: none; box-shadow: 0 20px 50px rgb(0 0 0 / .18); background: var(--surface); display: flex; flex-direction: column; position: relative; }
+.console { max-width: 1320px; margin: 0 auto; display: flex; flex-direction: column; gap: 10px; }
+.d-grid { display: grid; grid-template-columns: minmax(270px, 1fr) minmax(360px, 1.5fr) minmax(270px, 1fr); gap: 10px; align-items: start; }
+.e-grid { display: grid; grid-template-columns: 300px 1fr; gap: 10px; align-items: start; }
+.e-rail { display: flex; flex-direction: column; gap: 10px; position: sticky; top: 10px; }
+.e-rail .sec { cursor: default; }
+.drawer-bg { position: fixed; inset: 0; background: rgb(20 26 33 / .35); z-index: 35; }
+.drawer { position: fixed; top: 0; bottom: 0; left: 0; width: min(440px, 100%); z-index: 40; overflow-y: auto; border-radius: 0; border-left: 0; border-top: 0; animation: slide .2s ease; }
+@keyframes slide { from { transform: translateX(-30px); opacity: 0; } }
+@media (max-width: 1100px) { .d-grid { grid-template-columns: 1fr 1fr; } .d-grid > :nth-child(2) { grid-column: 1 / -1; order: -1; } }
+@media (max-width: 760px) { .d-grid, .e-grid { grid-template-columns: 1fr; } .e-rail { position: static; } }
+
+.rtable { width: 100%; border-collapse: collapse; font-size: 14px; background: var(--card); border: 1.5px solid var(--line); }
+.rtable th { text-align: left; font-size: 12px; color: var(--muted); font-weight: 700; padding: 6px 8px; border-bottom: 1.5px solid var(--line); }
+.rtable td { padding: 4px 8px; border-top: 1px solid var(--line); vertical-align: middle; }
+
+/* prototype chrome */
 #switcher { position: fixed; left: 50%; transform: translateX(-50%); bottom: 14px; z-index: 60; display: flex; align-items: center; gap: 2px; background: var(--pill); color: var(--pill-ink); border-radius: 999px; padding: 4px; box-shadow: 0 8px 24px rgb(0 0 0 / .3); font: 13px/1.4 Inter, system-ui, sans-serif; white-space: nowrap; }
 #switcher button { background: none; border: 0; color: inherit; padding: 6px 12px; border-radius: 999px; }
 #switcher button:hover { background: rgb(127 127 127 / .25); }
@@ -190,69 +189,8 @@ body.panel-open #panel { display: flex; }
 #panel .pseg button + button { border-left: 1px solid #D0D7E0; }
 #panel .pseg button.on { background: #16202B; color: #fff; font-weight: 600; }
 #panel pre { margin: 4px 0 0; padding: 8px; background: #fff; border: 1px solid #D0D7E0; border-radius: 8px; font-size: 10.5px; max-height: 260px; overflow: auto; white-space: pre-wrap; }
-
-.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: 70px; z-index: 55; background: var(--ink); color: var(--surface); border-radius: 12px; padding: 10px 14px; display: flex; gap: 14px; align-items: center; font-size: 14px; box-shadow: 0 8px 24px rgb(0 0 0 / .25); max-width: calc(100vw - 32px); }
+.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: 70px; z-index: 55; background: var(--ink); color: #fff; border-radius: 8px; padding: 10px 14px; display: flex; gap: 14px; align-items: center; font-size: 14px; box-shadow: 0 8px 24px rgb(0 0 0 / .25); max-width: calc(100vw - 32px); }
 .toast .link { color: var(--hl-cm); }
-.look-plain .toast .link { color: #A9BCF5; }
-
-/* ===== A: Desk console ===== */
-.va { max-width: 1400px; margin: 0 auto; display: flex; flex-direction: column; gap: 10px; }
-.a-top { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; background: var(--card); border: 1.5px solid var(--line); border-radius: var(--r); padding: 10px 14px; }
-.a-top .t { font-family: var(--font-display); font-weight: 800; font-size: 19px; }
-.a-nav { display: flex; gap: 4px; }
-.a-nav button { border: 0; background: none; padding: 6px 12px; border-radius: var(--r); font-weight: 700; color: var(--muted); }
-.a-nav button.on { background: var(--accent-soft); color: var(--ink); }
-.look-binder .a-nav button.on { background: var(--hl-ros); }
-.look-binder .a-nav button.on[data-v="live"] { background: var(--hl-att); }
-.a-grid { display: grid; grid-template-columns: minmax(280px, 1fr) minmax(320px, 1.25fr) minmax(280px, 1fr); gap: 10px; align-items: start; }
-.a-grid .sec, .va > .sec { border: 1.5px solid var(--line); border-radius: var(--r); }
-.look-binder .a-grid .sec { border-bottom: 7px solid var(--hl); }
-.a-proj { position: fixed; inset: 0; z-index: 45; background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 20px; }
-.a-proj .proj { max-width: min(1200px, (100vh - 120px) * 16 / 9); }
-.a-proj .ctl { display: flex; gap: 8px; align-items: center; color: #ccc; font-size: 13px; }
-@media (max-width: 1100px) { .a-grid { grid-template-columns: 1fr 1fr; } }
-@media (max-width: 760px) { .a-grid { grid-template-columns: 1fr; } }
-
-/* ===== B: Pocket ===== */
-.vb-wrap { display: flex; justify-content: center; }
-.vb-wrap .sec { flex: 1; overflow-y: auto; }
-.look-binder .vb-wrap .sec { border-bottom: 7px solid var(--hl); }
-.ph-top { padding: 12px 16px 8px; border-bottom: 1px solid var(--line); background: var(--card); }
-.ph-top b { font-family: var(--font-display); font-size: 16px; }
-.tabbar { display: flex; background: var(--card); border-top: 1px solid var(--line); }
-.tab { flex: 1; border: 0; background: none; padding: 10px 2px 14px; font-weight: 700; font-size: 13px; color: var(--muted); position: relative; }
-.tab.on { color: var(--accent); box-shadow: inset 0 3px 0 var(--accent); }
-.badge { display: inline-block; background: var(--warn); color: #fff; border-radius: 999px; font-size: 11px; min-width: 18px; padding: 0 5px; line-height: 18px; margin-left: 3px; }
-.look-binder .tabbar { background: var(--desk); border: 0; gap: 5px; padding: 0 10px 12px; }
-.look-binder .tab { color: var(--ink); background: var(--tc); border-radius: 0 0 12px 12px; padding: 8px 2px 9px; font-family: var(--font-display); box-shadow: inset 0 8px 7px -7px rgb(0 0 0 / .35); }
-.look-binder .tab:nth-child(1) { --tc: var(--hl-att); }
-.look-binder .tab:nth-child(2) { --tc: var(--hl-poll); }
-.look-binder .tab:nth-child(3) { --tc: var(--hl-cm); }
-.look-binder .tab:nth-child(4) { --tc: var(--hl-ros); }
-.look-binder .tab.on { padding-bottom: 20px; box-shadow: none; }
-.look-binder .badge { background: var(--ink); }
-
-/* ===== C: Stage + remote ===== */
-.vc { display: flex; gap: 28px; justify-content: center; align-items: flex-start; flex-wrap: wrap; }
-.vc-stage { flex: 1 1 560px; max-width: 900px; display: flex; flex-direction: column; gap: 8px; }
-.vc-stage .frame { border: 14px solid #111; border-radius: 6px; box-shadow: 0 20px 50px rgb(0 0 0 / .25); }
-.vc-stage .cap { font-size: 13px; color: var(--muted); }
-.vc .phone .sec { flex: 1; overflow-y: auto; }
-.now-h { display: flex; align-items: center; gap: 8px; }
-.now-h b { font-family: var(--font-display); font-size: 15px; }
-.screen-ctl { background: var(--ink); color: var(--surface); border-radius: var(--r); padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
-.screen-ctl .seg { border-color: #4a5563; background: transparent; }
-.screen-ctl .seg button { color: var(--surface); }
-.screen-ctl .seg button + button { border-left-color: #4a5563; }
-.screen-ctl .seg button.on { background: var(--surface); color: var(--ink); }
-.look-binder .screen-ctl .seg button.on { background: var(--hl-att); }
-.attn { border-left: 5px solid var(--hl); }
-.look-plain .attn { border-left-color: var(--accent); }
-.attn.warn { border-left-color: var(--warn); }
-.c-back { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--line); background: var(--card); }
-.c-nav { display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid var(--line); background: var(--card); }
-.c-nav button { border: 0; background: none; padding: 10px 4px 14px; font-weight: 700; font-size: 13px; }
-
 @media (max-width: 760px) { body.panel-open #stage { padding-right: 16px; } #panel { width: 100%; top: 30%; border-top: 1px solid #CBD3DC; border-left: 0; } #switcher .lbl-v { min-width: 0; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 </style>
@@ -264,20 +202,30 @@ body.panel-open #panel { display: flex; }
 
 <script>
 const VARIANTS = [
-  { k: 'a', name: 'Desk console' },
-  { k: 'b', name: 'Pocket' },
-  { k: 'c', name: 'Stage + remote' },
+  { k: 'd', name: 'Calm columns' },
+  { k: 'e', name: 'Inbox + rail' },
 ];
 const NAMES = ['Noa Levi', 'Amir Haddad', 'Maya Cohen', 'Yonatan Peretz', 'Shira Mizrahi', 'Omer Biton', 'Tamar Friedman', 'Daniel Azoulay', 'Lior Katz', 'Yael Shapiro', 'Itay Ben-David', 'Rotem Avraham', 'Nadav Golan', 'Hila Dahan', 'Eitan Malka', 'Adi Rosen', 'Guy Ohana', 'Michal Sasson', 'Ariel Vaknin', 'Neta Elbaz', 'Rami Khoury', 'Lina Mansour', 'Ido Segal', 'Talia Weiss', 'Yuval Harari', 'Dana Amar', 'Bar Levy', 'Sapir Hazan', 'Tom Barak', 'Mor Edri', 'Yarin Gabay', 'Ella Tal'];
-const QUICK = ['Too fast', 'Can you repeat that?', 'An example would help', 'Can’t see the board', 'Lost me at the last slide'];
+const QUICK = ['Too fast', 'Can you repeat that?'];
 const OFFNETS = ['37.142.18.0/24', '79.181.4.0/24', '147.235.9.0/24'];
 const CLASSROOM = '192.114.52.0/24';
 const TYPED = [
-  ['Is an alt fragment just an if/else?', false],
   ['The slides are too small to read from the back row', true],
   ['Can we get the diagram from slide 12 after class?', false],
   ['I don’t get why the return arrow is dashed', true],
+  ['Is an opt fragment the same as alt with one branch?', false],
 ];
+
+const svg = d => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+const I = {
+  pin: svg('<path d="M9 4h6l-1 6 3 3v2H7v-2l3-3z"/><path d="M12 15v6"/>'),
+  check: svg('<path d="M5 12.5l4.5 4.5L19 7"/>'),
+  ignore: svg('<path d="M6 6l12 12M18 6L6 18"/>'),
+  back: svg('<path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/>'),
+  more: svg('<circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/>'),
+  people: svg('<circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><path d="M16 4.5a3 3 0 0 1 0 6M21 20c0-2.6-1.6-4.8-4-5.6"/>'),
+};
+const ib = (icon, label, a, extra = '', cls = '') => `<button class="ib ${cls}" data-a="${a}" ${extra} title="${label}" aria-label="${label}">${I[icon]}</button>`;
 
 function initial() {
   const roster = NAMES.map((name, i) => ({ id: String(318245671 + i * 7919), name, claimed: ![26, 29, 31].includes(i), att: null }));
@@ -286,38 +234,35 @@ function initial() {
   roster[19].att = { kind: 'pending', at: 618, block: OFFNETS[0] };
   roster[20].att = { kind: 'pending', at: 621, block: OFFNETS[1] };
   roster[21].att = { kind: 'manual', at: 620 };
-  const cm = (o) => ({ topic: 's7', when: 'during', status: 'New', quick: false, ...o });
-  const comments = [
-    cm({ id: 1, who: null, text: 'Could the slides go up before each Session?', topic: 'gen', when: null, at: 'Mon 16 Nov', status: 'Addressed' }),
-    cm({ id: 2, who: null, text: 'Is the midterm open book?', topic: 'mid', when: null, at: 'Thu 19 Nov', status: 'Pinned' }),
-    cm({ id: 3, who: null, text: 'first!!', topic: 'gen', when: null, at: 'Thu 19 Nov', status: 'Ignored' }),
-    cm({ id: 4, who: 6, text: 'Will sequence diagrams be on the midterm?', when: 'before', at: '09:58' }),
-    cm({ id: 5, who: 2, text: 'Too fast', quick: true, at: '10:19' }),
-    cm({ id: 6, who: 5, text: 'Too fast', quick: true, at: '10:20' }),
-    cm({ id: 7, who: null, text: 'Too fast', quick: true, at: '10:21' }),
-    cm({ id: 8, who: 9, text: 'Can you repeat that?', quick: true, at: '10:21' }),
-    cm({ id: 9, who: 2, text: 'Is an alt fragment just an if/else?', at: '10:22' }),
-    cm({ id: 10, who: 11, text: 'Too fast', quick: true, at: '10:23' }),
-    cm({ id: 11, who: null, text: 'Can you repeat that?', quick: true, at: '10:23' }),
-  ];
+  const cm = o => ({ topic: 's7', when: 'during', status: 'New', pinned: false, quick: false, ...o });
   return {
-    variant: 'a', look: 'binder', grouping: 'grouped', panel: window.innerWidth > 1100,
+    variant: 'd', grouping: 'grouped', panel: window.innerWidth > 1100, diag: false, menu: false,
     clock: 624, window: 'open', windowAt: 610, approved: [],
-    roster, comments, nextId: 100, typedIdx: 1,
+    roster, nextId: 100, typedIdx: 0,
+    comments: [
+      cm({ id: 1, who: null, text: 'Could the slides go up before each Session?', topic: 'gen', when: null, at: 'Mon 16 Nov', status: 'Addressed' }),
+      cm({ id: 2, who: null, text: 'Is the midterm open book?', topic: 'mid', when: null, at: 'Thu 19 Nov', pinned: true }),
+      cm({ id: 3, who: null, text: 'first!!', topic: 'gen', when: null, at: 'Thu 19 Nov', status: 'Ignored' }),
+      cm({ id: 4, who: 6, text: 'Will sequence diagrams be on the midterm?', when: 'before', at: '09:58' }),
+      cm({ id: 5, who: 2, text: 'Too fast', quick: true, at: '10:19' }),
+      cm({ id: 6, who: 5, text: 'Too fast', quick: true, at: '10:20' }),
+      cm({ id: 7, who: null, text: 'Too fast', quick: true, at: '10:21' }),
+      cm({ id: 8, who: 9, text: 'Can you repeat that?', quick: true, at: '10:21' }),
+      cm({ id: 9, who: 2, text: 'Is an alt fragment just an if/else?', at: '10:22' }),
+      cm({ id: 10, who: 11, text: 'Too fast', quick: true, at: '10:23' }),
+      cm({ id: 11, who: null, text: 'Can you repeat that?', quick: true, at: '10:23' }),
+    ],
     topics: [{ id: 's7', name: 'Session 7' }, { id: 'gen', name: 'General' }, { id: 'a2', name: 'Assignment 2' }, { id: 'mid', name: 'Midterm' }],
     polls: [
       { id: 1, topic: 's7', q: 'How is the pace so far?', options: ['Too slow', 'About right', 'Too fast'], counts: [3, 11, 7], status: 'open', opensAt: 620, closesAt: null },
       { id: 2, topic: 's7', q: 'Ready for the exercise?', options: ['Yes', 'Need 5 more minutes', 'Not yet'], counts: [0, 0, 0], status: 'scheduled', opensAt: 650, closesAt: 655 },
       { id: 3, topic: 's7', q: 'Which diagram did you find hardest last week?', options: ['Class', 'Use case', 'Activity'], counts: [12, 5, 9], status: 'closed', opensAt: 606, closesAt: 611 },
+      { id: 4, topic: 's7', q: 'Exam format preference?', options: ['', '', ''], counts: [0, 0, 0], status: 'saved', opensAt: null, closesAt: null },
     ],
-    inbox: 'New', topicFilter: 'all', expanded: {}, fresh: null,
-    view: 'live',          // A: live | roster
-    projecting: false,     // A: projector overlay
-    screen: 'qr',          // what the projector shows: qr | poll | blank
-    tab: 'att',            // B
-    cview: 'now',          // C: now | inbox | polls | roster
-    pollForm: null, importBox: null, rosterQ: '',
-    toast: null,
+    showDone: false, expanded: {}, fresh: null,
+    attOpen: false, pollsOpen: false, drawer: null,
+    view: 'live', projecting: false, screen: 'qr', screenPoll: null,
+    pollForm: null, rosterQ: '', importBox: null, toast: null,
   };
 }
 let S = initial();
@@ -326,10 +271,12 @@ let S = initial();
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const fmt = m => `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`;
+const hhmm = m => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
 const plural = (n, w, ws) => `${n} ${n === 1 ? w : (ws || w + 's')}`;
 const first = n => n.split(' ')[0];
 const topicName = id => S.topics.find(t => t.id === id).name;
 const isPresent = r => r.att && (r.att.kind === 'present' || r.att.kind === 'manual');
+const diag = s => S.diag ? ` <span class="diag">${esc(s)}</span>` : '';
 function tally() {
   const present = S.roster.filter(isPresent).length;
   const pending = S.roster.filter(r => r.att && r.att.kind === 'pending').length;
@@ -340,11 +287,11 @@ function pendingBlocks() {
   S.roster.forEach(r => { if (r.att && r.att.kind === 'pending') (m[r.att.block] ||= []).push(r); });
   return Object.entries(m);
 }
-const newCount = () => S.comments.filter(c => c.status === 'New').length;
+const total = p => p.counts.reduce((a, b) => a + b, 0);
+const complete = p => p.q.trim() && p.options.filter(o => o.trim()).length >= 2;
 let toastTimer;
 function toast(msg, undo) { S.toast = { msg, undo }; clearTimeout(toastTimer); toastTimer = setTimeout(() => { S.toast = null; renderToast(); }, 4000); }
 
-/* fake QR: finder squares plus deterministic noise */
 const QR = (() => {
   const n = 29; let s = 7, cells = '';
   const rnd = () => (s = (s * 9301 + 49297) % 233280) / 233280;
@@ -356,236 +303,186 @@ const QR = (() => {
   return `<svg viewBox="-2 -2 ${n + 4} ${n + 4}" shape-rendering="crispEdges" aria-label="Session QR code"><rect x="-2" y="-2" width="${n + 4}" height="${n + 4}" fill="#fff"/><g fill="#111">${cells}${finder(0, 0)}${finder(n - 7, 0)}${finder(0, n - 7)}</g></svg>`;
 })();
 
-/* ================= shared areas ================= */
-function windowBar() {
-  return S.window === 'open'
-    ? `<div class="window open"><span class="dot"></span><div class="grow"><b>Check-in open</b> <span class="muted small">since ${fmt(S.windowAt)} · classroom network <span class="ip">${CLASSROOM}</span> (yours)</span></div><button class="btn btn-line btn-sm" data-a="closeWindow">Close Check-in</button></div>`
-    : `<div class="window"><span class="dot"></span><div class="grow"><b>Check-in closed</b> <span class="muted small">Manual marks still work</span></div><button class="btn btn-sm" data-a="openWindow">${S.windowAt ? 'Reopen' : 'Open Check-in'}</button></div>`;
+/* ================= attendance ================= */
+function markIcons(r) {
+  const p = isPresent(r), a = r.att && r.att.kind === 'absent';
+  return `<span class="icons">${ib('check', `Mark ${r.name} present`, 'mark', `data-id="${r.id}" data-v="manual"`, `ok ${p ? 'on' : ''}`)}${ib('ignore', `Mark ${r.name} absent`, 'mark', `data-id="${r.id}" data-v="absent"`, `bad ${a ? 'on' : ''}`)}</span>`;
 }
-function statsBlock() {
+function attGlance() {
   const t = tally();
-  return `<div class="stats"><div class="stat"><b class="hl">${t.present}</b><span>Present of ${t.total}</span></div>
-    <div class="stat pend"><b>${t.pending}</b><span>Pending</span></div><div class="stat"><b>${t.missing}</b><span>Not checked in</span></div></div>`;
+  return `<div class="glance"><span class="big"><span class="hl">${t.present}</span></span><span class="of">of ${t.total} present</span></div>
+    <div class="state">${S.window === 'open' ? `<span class="dot on"></span><span class="grow">Check-in open</span><button class="btn btn-line btn-sm" data-a="closeWindow">Close</button>` : `<span class="dot"></span><span class="grow">Check-in closed</span><button class="btn btn-sm" data-a="openWindow">Reopen</button>`}</div>
+    ${S.diag ? `<span class="small">Classroom network${diag(CLASSROOM)}</span>` : ''}`;
 }
-function pendingCards() {
-  return pendingBlocks().map(([block, rs]) => `<div class="card pend-card">
-      <div class="row wrap"><b class="grow">${plural(rs.length, 'Pending check-in')} from <span class="ip">${block}</span></b></div>
-      <ul>${rs.map(r => `<li><span class="grow">${esc(r.name)} <span class="muted small">${fmt(r.att.at)}</span></span><button class="btn btn-line btn-sm" data-a="mark" data-id="${r.id}" data-v="manual">Mark present</button></li>`).join('')}</ul>
-      <button class="btn btn-ok" data-a="approve" data-b="${block}">Approve this network for Session 7</button>
-      <span class="small muted">Counts everyone from it, now and until Check-in closes. Not remembered next Session.</span></div>`).join('');
+function pendingAttn() {
+  return pendingBlocks().map(([block, rs]) => `<div class="card attn">
+      <b>${rs.length === 1 ? `${esc(rs[0].name)} checked in` : `${rs.length} Students checked in`} from another network${diag(block)}</b>
+      ${rs.length > 1 ? `<span class="small">${rs.map(r => esc(first(r.name))).join(', ')}</span>` : ''}
+      <div class="row"><button class="btn btn-ok" data-a="approve" data-b="${block}">Approve network</button><span class="small muted">for this Session only</span></div></div>`).join('');
 }
-function missingList(limit) {
-  const rs = S.roster.filter(r => !r.att || r.att.kind === 'absent');
-  if (!rs.length) return '';
-  const shown = limit ? rs.slice(0, limit) : rs;
-  return `<details ${rs.length <= 12 ? 'open' : ''}><summary>Not checked in (${rs.length})</summary><ul class="plist">${shown.map(r => `<li><span class="grow">${esc(r.name)}${r.att && r.att.kind === 'absent' ? ' <span class="chip c-bad">Marked absent</span>' : ''}${r.lapsed ? ' <span class="chip c-mute">Pending lapsed</span>' : ''}${!r.claimed ? ' <span class="chip c-mute">No phone yet</span>' : ''}</span><button class="btn btn-line btn-sm" data-a="mark" data-id="${r.id}" data-v="manual">Mark present</button></li>`).join('')}</ul></details>`;
-}
-function presentList() {
-  const rs = S.roster.filter(isPresent).sort((a, b) => b.att.at - a.att.at);
-  return `<details><summary>Present (${rs.length})</summary><ul class="plist">${rs.map(r => `<li><span class="grow">${esc(r.name)} <span class="muted small">${fmt(r.att.at)}${r.att.kind === 'manual' ? ' · Manual mark' : r.att.via ? ' · approved network' : ''}</span></span><button class="btn btn-line btn-sm" data-a="mark" data-id="${r.id}" data-v="absent">Mark absent</button></li>`).join('')}</ul></details>`;
-}
-function attendanceArea(o = {}) {
-  return `<section class="sec" data-s="att"><div class="sec-head"><h2><span class="hl">Attendance</span></h2>${o.noProject ? '' : `<button class="link small" data-a="project">Show QR on projector</button>`}</div>
-    ${windowBar()}${statsBlock()}${pendingCards()}${missingList()}${presentList()}
-    <button class="link small" data-a="export" style="align-self:flex-start">Download attendance sheet (.xlsx)</button></section>`;
+function attDetail() {
+  const pend = S.roster.filter(r => r.att && r.att.kind === 'pending');
+  const miss = S.roster.filter(r => !r.att || r.att.kind === 'absent');
+  const pres = S.roster.filter(isPresent).sort((a, b) => b.att.at - a.att.at);
+  const li = (r, note) => `<li><span class="who">${esc(r.name)} ${note || ''}</span>${markIcons(r)}</li>`;
+  return `${pend.length ? `<div class="grp-title">Waiting for approval</div><ul class="plist">${pend.map(r => li(r, `<span class="t">${fmt(r.att.at)}</span>${diag(r.att.block)}`)).join('')}</ul>` : ''}
+    <div class="grp-title">Not here yet (${miss.length})</div><ul class="plist">${miss.map(r => li(r, `${r.lapsed ? '<span class="chip c-mute">didn’t get approved</span>' : ''}${!r.claimed ? '<span class="t">no phone yet</span>' : ''}`)).join('')}</ul>
+    <div class="grp-title">Present (${pres.length})</div><ul class="plist">${pres.map(r => li(r, `<span class="t">${fmt(r.att.at)}${r.att.kind === 'manual' ? ' · marked by you' : ''}</span>`)).join('')}</ul>`;
 }
 
-/* --- Comment inbox --- */
+/* ================= comments ================= */
+const who = c => c.who === null ? 'Anonymous' : S.roster[c.who].name;
 function inboxItems() {
-  let cs = S.comments.filter(c => c.status === S.inbox && (S.topicFilter === 'all' || c.topic === S.topicFilter)).slice().reverse();
+  const open = S.comments.filter(c => c.status === 'New');
+  const pinned = open.filter(c => c.pinned).reverse();
+  const rest = open.filter(c => !c.pinned).reverse();
+  return { pinned: pinned.map(c => ({ one: c })), rest: group(rest) };
+}
+function group(cs) {
   if (S.grouping !== 'grouped') return cs.map(c => ({ one: c }));
-  const out = [], groups = {};
+  const out = [], g = {};
   cs.forEach(c => {
     if (!c.quick) return out.push({ one: c });
     const k = c.topic + '|' + c.text;
-    if (!groups[k]) { groups[k] = { group: [], key: k }; out.push(groups[k]); }
-    groups[k].group.push(c);
+    if (!g[k]) { g[k] = { group: [], key: k }; out.push(g[k]); }
+    g[k].group.push(c);
   });
-  return out;
+  return out.map(x => x.group && x.group.length === 1 ? { one: x.group[0] } : x);
 }
-const who = c => c.who === null ? 'Anonymous' : S.roster[c.who].name;
-function presence(c) {
-  if (c.who === null || c.when !== 'during') return '';
-  return isPresent(S.roster[c.who]) ? '<span class="chip c-ok">checked in</span>' : '<span class="chip c-warn">not checked in</span>';
+function cmIcons(cs) {
+  const ids = `data-ids="${cs.map(c => c.id).join(',')}"`;
+  if (cs[0].status !== 'New') return `<span class="icons">${ib('back', 'Back to inbox', 'cstatus', `${ids} data-v="New"`)}</span>`;
+  const pinned = cs.every(c => c.pinned);
+  return `<span class="icons">${ib('pin', pinned ? 'Unpin' : 'Pin to top', 'cpin', ids, pinned ? 'on' : '')}${ib('check', 'Addressed', 'cstatus', `${ids} data-v="Addressed"`, 'ok')}${ib('ignore', 'Ignore', 'cstatus', `${ids} data-v="Ignored"`, 'bad')}</span>`;
 }
-function statusActs(ids) {
-  const d = `data-ids="${ids.join(',')}"`;
-  const b = (v, l) => `<button class="btn btn-line btn-sm" data-a="cstatus" data-v="${v}" ${d}>${l}</button>`;
-  if (S.inbox === 'New') return b('Pinned', 'Pin') + b('Addressed', 'Addressed') + b('Ignored', 'Ignore');
-  if (S.inbox === 'Pinned') return b('Addressed', 'Addressed') + b('New', 'Unpin');
-  return b('New', 'Back to New');
+function meta(c) {
+  const where = c.topic === 's7' ? (c.when === 'before' ? 'before the Session' : '') : topicName(c.topic);
+  return [`<b>${esc(who(c))}</b>`, where, c.at].filter(Boolean).map(s => `<span>${s}</span>`).join('');
 }
 function commentCard(c) {
-  return `<div class="card cm ${S.fresh === c.id ? 'fresh' : ''}"><div class="cm-text">${c.quick ? `<span class="chip c-acc">quick</span> ` : ''}${esc(c.text)}</div>
-    <div class="cm-meta"><span><b>${esc(who(c))}</b></span>${presence(c)}<span>${topicName(c.topic)}${c.when ? ` · ${c.when} the Session` : ''}</span><span>${c.at}</span></div>
-    <div class="cm-acts">${statusActs([c.id])}</div></div>`;
+  return `<div class="card cm ${c.pinned && c.status === 'New' ? 'pinned' : ''} ${S.fresh === c.id ? 'fresh' : ''}"><div class="body"><div class="cm-text">${esc(c.text)}</div><div class="cm-meta">${meta(c)}</div></div>${cmIcons([c])}</div>`;
 }
 function groupCard(g) {
-  const cs = g.group, named = cs.filter(c => c.who !== null), anon = cs.length - named.length;
-  const open = S.expanded[g.key];
-  const fresh = cs.some(c => c.id === S.fresh);
-  const people = named.map(c => first(S.roster[c.who].name)).concat(anon ? [plural(anon, 'anonymous', 'anonymous')] : []).join(', ');
-  return `<div class="card cm ${fresh ? 'fresh' : ''}"><div class="grp"><span class="grp-n"><span class="hl">×${cs.length}</span></span>
-      <div class="grow"><div class="cm-text">${esc(cs[0].text)}</div><div class="cm-meta"><span>${esc(people)}</span><span>${cs[cs.length - 1].at}–${cs[0].at}</span></div></div></div>
-    ${open ? `<ul class="plist small">${cs.map(c => `<li><span class="grow">${esc(who(c))} ${presence(c)}</span><span class="muted">${c.at}</span></li>`).join('')}</ul>` : ''}
-    <div class="cm-acts">${statusActs(cs.map(c => c.id))}<button class="link small" data-a="expand" data-k="${esc(g.key)}">${open ? 'Hide' : 'Who'}</button></div></div>`;
+  const cs = g.group, named = cs.filter(c => c.who !== null), anon = cs.length - named.length, open = S.expanded[g.key];
+  const people = named.map(c => first(S.roster[c.who].name)).concat(anon ? [`${anon} anonymous`] : []).join(', ');
+  return `<div class="card cm ${cs.some(c => c.id === S.fresh) ? 'fresh' : ''}"><span class="n"><span class="hl">×${cs.length}</span></span>
+    <div class="body"><div class="cm-text"><b>${esc(cs[0].text)}</b></div><div class="cm-meta"><span>${open ? esc(people) : ''}</span><span>${cs[cs.length - 1].at}–${cs[0].at}</span><button class="link small" data-a="expand" data-k="${esc(g.key)}">${open ? 'hide names' : 'who?'}</button></div></div>${cmIcons(cs)}</div>`;
 }
-function liveTally() {
-  const since = S.comments.filter(c => c.quick && c.status === 'New' && c.topic === 's7');
-  const m = {};
-  since.forEach(c => m[c.text] = (m[c.text] || 0) + 1);
-  const e = Object.entries(m).sort((a, b) => b[1] - a[1]);
-  return e.length ? `<div class="tally">${e.map(([t, n]) => `<span>${esc(t)} <b>×${n}</b></span>`).join('')}</div>` : '';
-}
-function inboxArea(o = {}) {
-  const counts = s => S.comments.filter(c => c.status === s).length;
-  const items = inboxItems();
-  return `<section class="sec" data-s="cm"><div class="sec-head"><h2><span class="hl">Comments</span></h2>
-      <select data-in="topicFilter" aria-label="Topic"><option value="all">All topics</option>${S.topics.map(t => `<option value="${t.id}" ${S.topicFilter === t.id ? 'selected' : ''}>${t.name}</option>`).join('')}</select></div>
-    ${o.tally ? liveTally() : ''}
-    <div class="filters">${['New', 'Pinned', 'Addressed', 'Ignored'].map(s => `<button class="${S.inbox === s ? 'on' : ''}" data-a="inbox" data-v="${s}">${s} ${counts(s)}</button>`).join('')}</div>
-    ${items.length ? items.slice(0, o.limit || 99).map(i => i.one ? commentCard(i.one) : groupCard(i)).join('') : `<p class="muted">Nothing ${S.inbox.toLowerCase()}.</p>`}
-    <p class="small muted">Only you see Comments. Students see the status of their own.</p></section>`;
+function commentsArea() {
+  const { pinned, rest } = inboxItems();
+  const done = S.comments.filter(c => c.status !== 'New').reverse();
+  const card = i => i.one ? commentCard(i.one) : groupCard(i);
+  return `<section class="sec" data-s="cm"><div class="sec-head"><h2><span class="hl">Comments</span></h2><span class="small muted">${pinned.length + rest.reduce((n, i) => n + (i.group ? i.group.length : 1), 0)} open</span></div>
+    ${pinned.map(card).join('')}
+    ${rest.length ? rest.map(card).join('') : (pinned.length ? '' : '<p class="muted">All caught up.</p>')}
+    <button class="more" data-a="toggle" data-k="showDone">${S.showDone ? '▾' : '▸'} Dealt with (${done.length})</button>
+    ${S.showDone ? done.map(c => `<div class="card cm"><div class="body"><div class="cm-text muted">${esc(c.text)}</div><div class="cm-meta">${meta(c)}<span>${c.status}</span></div></div>${cmIcons([c])}</div>`).join('') : ''}</section>`;
 }
 
-/* --- Poll control --- */
+/* ================= polls ================= */
 function bars(p) {
-  const t = p.counts.reduce((a, b) => a + b, 0);
+  const t = total(p);
   return `<div class="bars">${p.options.map((o, i) => { const pct = t ? Math.round(p.counts[i] * 100 / t) : 0; return `<div class="bar"><i style="width:${pct}%"></i><span>${esc(o)}</span><b>${p.counts[i]}</b></div>`; }).join('')}</div>`;
 }
-function pollCard(p) {
-  const t = p.counts.reduce((a, b) => a + b, 0);
-  let head, acts = '';
-  if (p.status === 'open') { head = `<span class="chip c-ok">Open</span> <span class="small muted">since ${fmt(p.opensAt)}${p.closesAt ? `, closes ${fmt(p.closesAt)}` : ''} · ${plural(t, 'vote')}</span>`; acts = `<button class="btn" data-a="pclose" data-id="${p.id}">Close and show results</button>`; }
-  else if (p.status === 'scheduled') { head = `<span class="chip c-warn">Scheduled</span> <span class="small muted">opens ${fmt(p.opensAt)}${p.closesAt ? `, closes ${fmt(p.closesAt)}` : ''}</span>`; acts = `<button class="btn btn-line btn-sm" data-a="popen" data-id="${p.id}">Open now</button><button class="btn btn-line btn-sm" data-a="pdel" data-id="${p.id}">Cancel</button>`; }
-  else if (p.status === 'saved') { head = `<span class="chip c-mute">Saved</span>`; acts = `<button class="btn btn-sm" data-a="popen" data-id="${p.id}">Open now</button>`; }
-  else { head = `<span class="chip c-mute">Closed</span> <span class="small muted">${fmt(p.closesAt)} · ${plural(t, 'vote')} · results shown to Students</span>`; acts = `<button class="btn btn-line btn-sm" data-a="popen" data-id="${p.id}">Reopen</button>`; }
-  const onScreen = S.screen === 'poll' && S.screenPoll === p.id;
-  return `<div class="card"><div>${head}</div><div class="poll-q">${esc(p.q)}</div>${p.status === 'open' || p.status === 'closed' ? bars(p) : `<div class="small muted">${p.options.map(esc).join(' · ')}</div>`}
-    <div class="row wrap">${acts}${p.status === 'open' || p.status === 'closed' ? `<button class="link small" data-a="pshow" data-id="${p.id}">${onScreen ? 'On projector' : 'Show on projector'}</button>` : ''}</div></div>`;
+function currentPoll() {
+  return S.polls.find(p => p.status === 'open')
+    || S.polls.filter(p => p.status === 'scheduled').sort((a, b) => a.opensAt - b.opensAt)[0]
+    || S.polls.filter(p => p.status === 'closed').sort((a, b) => b.closesAt - a.closesAt)[0];
+}
+function pollGlance() {
+  if (S.pollForm) return pollForm();
+  const p = currentPoll();
+  let h = '';
+  if (!p) h = '<p class="muted">No poll running.</p>';
+  else if (p.status === 'open') h = `<div class="state"><span class="dot on"></span><span class="grow">Open · ${plural(total(p), 'vote')}${p.closesAt ? ` · closes ${fmt(p.closesAt)}` : ''}</span></div><div class="poll-q">${esc(p.q)}</div>${bars(p)}
+    <div class="row"><button class="btn" data-a="pclose" data-id="${p.id}">Close and show results</button><button class="link small" data-a="pshow" data-id="${p.id}">Project</button></div>`;
+  else if (p.status === 'scheduled') h = `<div class="state"><span class="dot"></span><span class="grow">Next poll opens ${fmt(p.opensAt)}</span></div><div class="poll-q">${esc(p.q)}</div>
+    <div class="row"><button class="btn btn-line btn-sm" data-a="popen" data-id="${p.id}">Open now</button></div>`;
+  else h = `<div class="state"><span class="dot"></span><span class="grow">Last poll · closed ${fmt(p.closesAt)}</span></div><div class="poll-q">${esc(p.q)}</div>${bars(p)}`;
+  return h + `<button class="btn btn-line" data-a="pnew">+ New poll</button>`;
+}
+function pollList() {
+  const label = p => ({ open: '<span class="chip c-ok">Open</span>', scheduled: `<span class="chip c-warn">${fmt(p.opensAt)}</span>`, saved: `<span class="chip c-mute">${complete(p) ? 'Saved' : 'Draft'}</span>`, closed: '<span class="chip c-mute">Closed</span>' }[p.status]);
+  const acts = p => p.status === 'saved'
+    ? `<button class="link small" data-a="pedit" data-id="${p.id}">Edit</button>${complete(p) ? `<button class="btn btn-line btn-sm" data-a="popen" data-id="${p.id}">Open</button>` : ''}`
+    : p.status === 'closed' ? `<button class="link small" data-a="popen" data-id="${p.id}">Reopen</button>`
+    : p.status === 'scheduled' ? `<button class="link small" data-a="pedit" data-id="${p.id}">Edit</button>` : '';
+  return `<div>${S.polls.map(p => `<div class="prow">${label(p)}<span class="grow">${esc(p.q || 'Untitled poll')}${p.status === 'closed' ? ` <span class="small muted">${plural(total(p), 'vote')}</span>` : ''}</span>${acts(p)}</div>`).join('')}</div>`;
 }
 function pollForm() {
   const f = S.pollForm;
-  if (!f) return `<button class="btn btn-line" data-a="pnew">+ New poll</button>`;
   return `<form class="card" data-form="poll"><label class="field"><span>Question</span><input type="text" data-f="q" value="${esc(f.q)}" placeholder="Ready for the exercise?"></label>
-    <div class="field"><span>Answers (single choice)</span>${f.options.map((o, i) => `<div class="optrow"><input type="text" class="grow" data-f="o${i}" value="${esc(o)}" placeholder="Answer ${i + 1}"></div>`).join('')}${f.options.length < 6 ? `<button type="button" class="link small" data-a="padd" style="align-self:flex-start">+ answer</button>` : ''}</div>
-    <label class="field"><span>Topic</span><select data-f="topic">${S.topics.map(t => `<option value="${t.id}" ${f.topic === t.id ? 'selected' : ''}>${t.name}</option>`).join('')}</select></label>
-    <div class="field"><span>Opens</span><div class="row wrap"><span class="seg">${[['now', 'Now'], ['at', 'At'], ['later', 'Save for later']].map(([v, l]) => `<button type="button" class="${f.open === v ? 'on' : ''}" data-a="pf" data-k="open" data-v="${v}">${l}</button>`).join('')}</span>${f.open === 'at' ? `<input type="time" data-f="openAt" value="${f.openAt}">` : ''}</div></div>
-    ${f.open !== 'later' ? `<div class="field"><span>Closes</span><div class="row wrap"><span class="seg">${[['hand', 'When I close it'], ['after', 'After'], ['at', 'At']].map(([v, l]) => `<button type="button" class="${f.close === v ? 'on' : ''}" data-a="pf" data-k="close" data-v="${v}">${l}</button>`).join('')}</span>${f.close === 'after' ? `<select data-f="mins">${[1, 2, 3, 5, 10].map(m => `<option ${+f.mins === m ? 'selected' : ''}>${m}</option>`).join('')}</select> min` : ''}${f.close === 'at' ? `<input type="time" data-f="closeAt" value="${f.closeAt}">` : ''}</div></div>` : ''}
+    <div class="field"><span>Answers</span>${f.options.map((o, i) => `<input type="text" data-f="o${i}" value="${esc(o)}" placeholder="Answer ${i + 1}">`).join('')}${f.options.length < 6 ? `<button type="button" class="link small" data-a="padd" style="align-self:flex-start">+ answer</button>` : ''}</div>
+    <div class="field"><span>Opens</span><div class="row wrap"><span class="seg">${[['now', 'Now'], ['at', 'At'], ['later', 'Later']].map(([v, l]) => `<button type="button" class="${f.open === v ? 'on' : ''}" data-a="pf" data-k="open" data-v="${v}">${l}</button>`).join('')}</span>${f.open === 'at' ? `<input type="time" data-f="openAt" value="${f.openAt}">` : ''}</div></div>
+    ${f.open !== 'later' ? `<div class="field"><span>Closes</span><div class="row wrap"><span class="seg">${[['hand', 'When I close it'], ['after', 'After']].map(([v, l]) => `<button type="button" class="${f.close === v ? 'on' : ''}" data-a="pf" data-k="close" data-v="${v}">${l}</button>`).join('')}</span>${f.close === 'after' ? `<select data-f="mins">${[1, 2, 3, 5, 10].map(m => `<option ${+f.mins === m ? 'selected' : ''}>${m}</option>`).join('')}</select> min` : ''}</div></div>` : '<span class="small muted">Saved polls can be half-written; finish them later.</span>'}
     <div class="row"><button class="btn" type="submit">${f.open === 'now' ? 'Open poll' : f.open === 'at' ? 'Schedule' : 'Save'}</button><button type="button" class="link" data-a="pcancel">Cancel</button></div></form>`;
 }
-function pollsArea() {
-  const order = { open: 0, scheduled: 1, saved: 2, closed: 3 };
-  const ps = S.polls.slice().sort((a, b) => order[a.status] - order[b.status]);
-  return `<section class="sec" data-s="poll"><div class="sec-head"><h2><span class="hl">Polls</span></h2><span class="small muted">Session 7</span></div>
-    ${pollForm()}${ps.map(pollCard).join('')}<p class="small muted">Students never see live totals; results appear to them when a poll closes.</p></section>`;
-}
 
-/* --- Roster --- */
-function attChip(r) {
-  if (!r.att) return '<span class="chip c-mute">Not checked in</span>';
-  return { present: '<span class="chip c-ok">Present</span>', manual: '<span class="chip c-ok">Present · Manual</span>', pending: '<span class="chip c-warn">Pending</span>', absent: '<span class="chip c-bad">Absent · Manual</span>' }[r.att.kind];
-}
-function claimCell(r) {
-  return r.claimed ? `Claimed <button class="link small" data-a="reset" data-id="${r.id}">Reset claim</button>` : '<span class="muted">Not claimed</span>';
-}
-function importBox() {
-  const ib = S.importBox;
-  if (!ib) return '';
-  const rows = ib.text.split('\n').map(l => l.split(/[,\t]/).map(s => s.trim())).filter(r => r[0] && r[1]);
-  const fresh = rows.filter(r => !S.roster.some(x => x.id === r[0]));
-  return `<div class="card"><b>Import Students</b><span class="small muted">Paste from the faculty spreadsheet: student ID, name. One per line. Or choose an .xlsx / .csv file.</span>
-    <textarea rows="5" data-in="importText" placeholder="318245671, Noa Levi">${esc(ib.text)}</textarea>
-    <div class="row wrap"><button class="btn btn-line btn-sm" data-a="importFile">Choose file…</button><span class="small grow">${rows.length ? `${plural(rows.length, 'row')} read · ${plural(fresh.length, 'new Student')} · ${rows.length - fresh.length} already on the Roster` : ''}</span></div>
-    <div class="row"><button class="btn" data-a="importDo" ${fresh.length ? '' : 'disabled'}>Add ${plural(fresh.length, 'Student')}</button><button class="link" data-a="importCancel">Cancel</button></div></div>`;
-}
-function rosterArea(o = {}) {
+/* ================= roster (from the menu) ================= */
+function rosterView() {
   const q = S.rosterQ.toLowerCase();
   const rs = S.roster.filter(r => !q || r.name.toLowerCase().includes(q) || r.id.includes(q));
-  const claimed = S.roster.filter(r => r.claimed).length;
-  const rows = o.table
-    ? `<table class="rtable"><thead><tr><th>Name</th><th>Student ID</th><th>Phone</th><th>Session 7</th><th>Manual mark</th></tr></thead><tbody>${rs.map(r => `<tr><td>${esc(r.name)}</td><td class="num">${r.id}</td><td>${claimCell(r)}</td><td>${attChip(r)}</td><td><span class="row"><button class="btn btn-line btn-sm" data-a="mark" data-id="${r.id}" data-v="manual">Present</button><button class="btn btn-line btn-sm" data-a="mark" data-id="${r.id}" data-v="absent">Absent</button></span></td></tr>`).join('')}</tbody></table>`
-    : `<ul class="rlist">${rs.map(r => `<li><div class="row"><b class="grow">${esc(r.name)}</b>${attChip(r)}</div><div class="row small"><span class="muted num grow">${r.id}</span>${claimCell(r)}</div></li>`).join('')}</ul>`;
-  return `<section class="sec" data-s="ros"><div class="sec-head"><h2><span class="hl">Roster</span></h2><span class="small muted">${S.roster.length} Students · ${claimed} phones claimed</span></div>
+  const ib2 = S.importBox;
+  const rows = ib2 ? ib2.text.split('\n').map(l => l.split(/[,\t]/).map(s => s.trim())).filter(r => r[0] && r[1]) : [];
+  const fresh = rows.filter(r => !S.roster.some(x => x.id === r[0]));
+  return `<section class="sec" data-s="ros"><div class="sec-head"><h2><span class="hl">Roster</span></h2><button class="link" data-a="view" data-v="live">← Back to Session</button></div>
     <div class="row wrap"><input type="text" class="grow" data-in="rosterQ" value="${esc(S.rosterQ)}" placeholder="Find by name or ID" aria-label="Find"><button class="btn btn-line" data-a="importOpen">Import…</button></div>
-    ${importBox()}${rows}<p class="small muted">Reset claim lets the Student claim again from a new phone. Their attendance stays with their Roster entry.</p></section>`;
+    ${ib2 ? `<div class="card"><b>Import Students</b><span class="small muted">Paste student ID, name, one per line, or choose an .xlsx / .csv file.</span>
+      <textarea rows="4" data-in="importText">${esc(ib2.text)}</textarea>
+      <div class="row wrap"><button class="btn btn-line btn-sm" data-a="importFile">Choose file…</button><span class="small grow">${rows.length ? `${plural(fresh.length, 'new Student')}, ${rows.length - fresh.length} already on the Roster` : ''}</span></div>
+      <div class="row"><button class="btn" data-a="importDo" ${fresh.length ? '' : 'disabled'}>Add ${plural(fresh.length, 'Student')}</button><button class="link" data-a="importCancel">Cancel</button></div></div>` : ''}
+    <table class="rtable"><thead><tr><th>Name</th><th>Student ID</th><th>Phone</th>${S.diag ? '<th>Device</th>' : ''}</tr></thead><tbody>${rs.map(r => `<tr><td>${esc(r.name)}</td><td class="num">${r.id}</td><td>${r.claimed ? `Claimed · <button class="link small" data-a="reset" data-id="${r.id}">Reset claim</button>` : '<span class="muted">Not claimed</span>'}</td>${S.diag ? `<td><span class="diag">${r.claimed ? 'tok_' + r.id.slice(-5) : '—'}</span></td>` : ''}</tr>`).join('')}</tbody></table></section>`;
 }
 
-/* --- Projector (public) --- */
+/* ================= projector ================= */
 function projector() {
   const t = tally();
-  if (S.screen === 'blank') return `<div class="proj blank">Class Connect</div>`;
   if (S.screen === 'poll') {
     const p = S.polls.find(x => x.id === S.screenPoll);
     if (p) {
-      const n = p.counts.reduce((a, b) => a + b, 0);
+      const n = total(p);
       return `<div class="proj poll"><div class="col"><div class="p-course">Poll · open the Polls tab on your phone</div><div class="pq">${esc(p.q)}</div>
         <div class="po">${p.options.map((o, i) => { const pct = n ? Math.round(p.counts[i] * 100 / n) : 0; return p.status === 'closed' ? `<div><i style="width:${pct}%"></i><span>${esc(o)}</span><b>${pct}%</b></div>` : `<div><span>${esc(o)}</span></div>`; }).join('')}</div>
         <div class="p-say">${p.status === 'closed' ? `${plural(n, 'vote')} · closed` : `${plural(n, 'vote')} so far · results when it closes`}</div></div></div>`;
     }
   }
   return `<div class="proj"><div class="qr">${QR}</div><div class="col"><div class="p-course">Software Engineering · Session 7</div><h1>Sequence diagrams</h1>
-    ${S.window === 'open' ? `<div class="p-say">Scan with your phone camera to check in</div><div class="p-big"><span class="hl">${t.present}</span></div><div class="p-say">checked in</div>` : `<div class="p-say">Check-in is closed. Ask me if you need marking.</div>`}
-    <div class="p-url">cc.ofeq.dev</div></div></div>`;
-}
-function screenCtl() {
-  const open = S.polls.find(p => p.status === 'open') || S.polls.find(p => p.status === 'closed');
-  return `<div class="screen-ctl"><span class="small">On the projector</span><span class="seg">
-    <button class="${S.screen === 'qr' ? 'on' : ''}" data-a="screen" data-v="qr">QR + count</button>
-    <button class="${S.screen === 'poll' ? 'on' : ''}" data-a="screen" data-v="poll" ${open ? '' : 'disabled'}>Poll</button>
-    <button class="${S.screen === 'blank' ? 'on' : ''}" data-a="screen" data-v="blank">Blank</button></span></div>`;
+    ${S.window === 'open' ? `<div class="p-say">Scan with your phone camera to check in</div><div class="p-big"><span class="hl">${t.present}</span></div><div class="p-say">checked in</div>` : `<div class="p-say">Check-in is closed.</div>`}<div class="p-url">cc.ofeq.dev</div></div></div>`;
 }
 
-/* ================= variants ================= */
-const SESSION_LINE = `Software Engineering · Session 7 · Sequence diagrams · 10:15–11:45 · 2.104`;
-function VariantA() {
-  let html = `<div class="va"><header class="a-top"><div class="grow"><div class="t">Session 7 · Sequence diagrams</div><div class="small muted">Software Engineering · Tue 24 Nov · 10:15–11:45 · room 2.104 · now ${fmt(S.clock)}</div></div>
-    <nav class="a-nav"><button data-v="live" class="${S.view === 'live' ? 'on' : ''}" data-a="aview">Live</button><button data-v="roster" class="${S.view === 'roster' ? 'on' : ''}" data-a="aview">Roster</button></nav>
-    <button class="btn" data-a="project">Show on projector</button></header>`;
-  html += S.view === 'live'
-    ? `<div class="a-grid">${attendanceArea({ noProject: true })}${inboxArea({ tally: true })}${pollsArea()}</div>`
-    : rosterArea({ table: true });
-  html += '</div>';
-  if (S.projecting) html += `<div class="a-proj">${projector()}<div class="ctl">${screenCtl()}<button class="btn" data-a="unproject">Back to console (Esc)</button></div><div class="ctl">Your laptop shows this full screen; Comments and Pending names stay off it.</div></div>`;
-  return html;
+/* ================= shell + variants ================= */
+function header() {
+  return `<header class="top"><div class="grow"><div class="t">Session 7 · Sequence diagrams</div><div class="small muted">Software Engineering · 10:15–11:45 · now ${fmt(S.clock)}</div></div>
+    <button class="btn" data-a="project">Show on projector</button>${ib('more', 'More', 'toggle', 'data-k="menu"')}
+    ${S.menu ? `<div class="menu"><button data-a="view" data-v="roster">Roster <span class="muted">${S.roster.length}</span></button><button data-a="export">Download attendance sheet</button><hr><button data-a="toggle" data-k="diag">Diagnostics <span class="muted">${S.diag ? 'on' : 'off'}</span></button></div>` : ''}</header>`;
 }
-const BTABS = [['att', 'Attendance'], ['poll', 'Polls'], ['cm', 'Inbox'], ['ros', 'Roster']];
-function VariantB() {
-  const pend = tally().pending, nw = newCount(), live = S.polls.filter(p => p.status === 'open').length;
-  const badge = { att: pend, cm: nw, poll: live };
-  const body = { att: () => attendanceArea(), poll: pollsArea, cm: () => inboxArea({ tally: true }), ros: () => rosterArea() }[S.tab]();
-  return `<div class="vb-wrap"><div class="phone"><div class="ph-top"><b>Session 7 · Sequence diagrams</b><div class="small muted">10:15–11:45 · now ${fmt(S.clock)}</div></div>${body}
-    <nav class="tabbar">${BTABS.map(([k, l]) => `<button class="tab ${S.tab === k ? 'on' : ''}" data-a="btab" data-v="${k}">${l}${badge[k] ? `<span class="badge">${badge[k]}</span>` : ''}</button>`).join('')}</nav></div></div>`;
+function attSection(mode) {
+  const p = tally().pending;
+  const head = `<div class="sec-head"><h2><span class="hl">Attendance</span></h2></div>`;
+  if (mode === 'drawer') return `<section class="sec drawer" data-s="att"><div class="sec-head"><h2><span class="hl">Attendance</span></h2><button class="link" data-a="drawer" data-v="">Close</button></div>${attGlance()}${pendingAttn()}${attDetail()}<button class="link small" data-a="export" style="align-self:flex-start">Download attendance sheet</button></section>`;
+  if (mode === 'rail') return `<section class="sec" data-s="att">${head}${attGlance()}${pendingAttn()}<button class="more" data-a="drawer" data-v="att">${I.people.replace('<svg', '<svg width="16" height="16" style="vertical-align:-3px"')} Who’s here</button></section>`;
+  return `<section class="sec" data-s="att">${head}${attGlance()}${pendingAttn()}<button class="more" data-a="toggle" data-k="attOpen">${S.attOpen ? '▾ Hide list' : '▸ Who’s here'}</button>${S.attOpen ? attDetail() : ''}</section>`;
 }
-function nowFeed() {
-  const t = tally(), blocks = pendingBlocks();
-  const open = S.polls.filter(p => p.status === 'open'), next = S.polls.filter(p => p.status === 'scheduled').sort((a, b) => a.opensAt - b.opensAt)[0];
-  const newTyped = S.comments.filter(c => c.status === 'New' && !c.quick).slice().reverse();
-  let h = `<section class="sec" data-s="att">${screenCtl()}`;
-  h += `<div class="card attn"><div class="row"><b class="grow"><span class="hl">${t.present}</span> of ${t.total} present</b>${S.window === 'open' ? '<span class="chip c-ok">Check-in open</span>' : '<span class="chip c-mute">Check-in closed</span>'}</div>
-    <div class="row wrap small"><span class="muted grow">${t.missing} not checked in</span>${S.window === 'open' ? `<button class="btn btn-line btn-sm" data-a="closeWindow">Close Check-in</button>` : `<button class="btn btn-sm" data-a="openWindow">Reopen</button>`}<button class="link small" data-a="cv" data-v="roster">Mark someone</button></div></div>`;
-  blocks.forEach(([block, rs]) => {
-    h += `<div class="card attn warn"><b>${plural(rs.length, 'Pending check-in')}</b><span class="small">${rs.map(r => esc(r.name)).join(', ')} · from <span class="ip">${block}</span></span>
-      <button class="btn btn-ok" data-a="approve" data-b="${block}">Approve network for this Session</button></div>`;
-  });
-  open.forEach(p => {
-    h += `<div class="card attn" style="--hl:var(--hl-poll)"><div class="row"><span class="chip c-ok">Open poll</span><span class="small muted">${plural(p.counts.reduce((a, b) => a + b, 0), 'vote')}</span></div><div class="poll-q">${esc(p.q)}</div>${bars(p)}
-      <button class="btn" data-a="pclose" data-id="${p.id}">Close and show results</button></div>`;
-  });
-  if (!open.length && next) h += `<div class="card attn" style="--hl:var(--hl-poll)"><span class="small muted">Next poll opens ${fmt(next.opensAt)}</span><div class="poll-q">${esc(next.q)}</div><button class="btn btn-line btn-sm" data-a="popen" data-id="${next.id}">Open now</button></div>`;
-  const tl = liveTally();
-  h += `<div class="card attn" style="--hl:var(--hl-cm)"><div class="row"><b class="grow">Comments</b><button class="link small" data-a="cv" data-v="inbox">Inbox (${newCount()} new)</button></div>${tl || '<span class="small muted">No quick reactions yet.</span>'}
-    ${newTyped.slice(0, 3).map(c => `<div class="small"><b>${esc(who(c))}:</b> ${esc(c.text)}</div>`).join('')}</div>`;
-  return h + '</section>';
+function pollSection(mode) {
+  const n = S.polls.length;
+  if (mode === 'drawer') return `<section class="sec drawer" data-s="poll"><div class="sec-head"><h2><span class="hl">Polls</span></h2><button class="link" data-a="drawer" data-v="">Close</button></div>${S.pollForm ? pollForm() : '<button class="btn btn-line" data-a="pnew">+ New poll</button>'}${pollList()}</section>`;
+  const toggle = mode === 'rail' ? `<button class="more" data-a="drawer" data-v="polls">▸ All polls (${n})</button>` : `<button class="more" data-a="toggle" data-k="pollsOpen">${S.pollsOpen ? '▾' : '▸'} All polls (${n})</button>${S.pollsOpen ? pollList() : ''}`;
+  return `<section class="sec" data-s="poll"><div class="sec-head"><h2><span class="hl">Poll</span></h2></div>${pollGlance()}${toggle}</section>`;
 }
-function VariantC() {
-  const sub = { now: nowFeed, inbox: () => inboxArea(), polls: pollsArea, roster: () => rosterArea() }[S.cview]();
-  const title = { now: 'Now', inbox: 'Inbox', polls: 'Polls', roster: 'Roster' }[S.cview];
-  return `<div class="vc"><div class="vc-stage"><div class="frame">${projector()}</div><p class="cap">The projector (laptop on HDMI, full screen). Public: Students see this. Driven from the phone.</p></div>
-    <div class="phone">${S.cview === 'now' ? `<div class="ph-top"><b>Session 7 · now ${fmt(S.clock)}</b><div class="small muted">Remote · only you see this</div></div>` : `<div class="c-back"><button class="link" data-a="cv" data-v="now">← Now</button><b>${title}</b></div>`}
-      ${sub}<nav class="c-nav"><button data-a="cv" data-v="inbox">Inbox</button><button data-a="cv" data-v="polls">Polls</button><button data-a="cv" data-v="roster">Roster</button></nav></div></div>`;
+function VariantD() {
+  return `<div class="console">${header()}${S.view === 'roster' ? rosterView() : `<div class="d-grid">${attSection()}${commentsArea()}${pollSection()}</div>`}</div>`;
 }
-const RENDER = { a: VariantA, b: VariantB, c: VariantC };
+function VariantE() {
+  let h = `<div class="console">${header()}${S.view === 'roster' ? rosterView() : `<div class="e-grid"><div class="e-rail">${attSection('rail')}${pollSection('rail')}</div>${commentsArea()}</div>`}</div>`;
+  if (S.drawer) h += `<div class="drawer-bg" data-a="drawer" data-v=""></div>${S.drawer === 'att' ? attSection('drawer') : pollSection('drawer')}`;
+  return h;
+}
+const RENDER = { d: VariantD, e: VariantE };
+function overlay() {
+  if (!S.projecting) return '';
+  const hasPoll = S.polls.some(p => p.status === 'open' || p.status === 'closed');
+  return `<div class="overlay">${projector()}<div class="ctl"><span class="seg"><button class="${S.screen === 'qr' ? 'on' : ''}" data-a="screen" data-v="qr">QR + count</button><button class="${S.screen === 'poll' ? 'on' : ''}" data-a="screen" data-v="poll" ${hasPoll ? '' : 'disabled'}>Poll</button></span><button class="btn" data-a="unproject">Back to console (Esc)</button></div></div>`;
+}
 
 /* ================= actions ================= */
 const rosterById = id => S.roster.find(r => r.id === id);
@@ -593,7 +490,7 @@ function tickClock(mins) {
   for (let i = 0; i < mins; i++) {
     S.clock++;
     S.polls.forEach(p => {
-      if (p.status === 'scheduled' && p.opensAt <= S.clock) { p.status = 'open'; toast(`Scheduled poll opened: ${p.q}`); }
+      if (p.status === 'scheduled' && p.opensAt <= S.clock) { p.status = 'open'; if (p.dur) p.closesAt = S.clock + p.dur; toast(`Scheduled poll opened: ${p.q}`); }
       if (p.status === 'open' && p.closesAt && p.closesAt <= S.clock) { p.status = 'closed'; toast(`Poll closed: ${p.q}`); }
       if (p.status === 'open') { const n = 1 + Math.floor(Math.random() * 3); for (let k = 0; k < n; k++) p.counts[Math.floor(Math.random() * p.options.length)]++; }
     });
@@ -602,92 +499,97 @@ function tickClock(mins) {
 function studentCheckin(where) {
   const r = S.roster.find(x => !x.att && x.claimed);
   if (!r) return toast('Every claimed Student has checked in.');
-  if (S.window !== 'open') return toast(`${r.name} scanned; Check-in is closed, so their phone says “Ask the Lecturer to mark you present.”`);
+  if (S.window !== 'open') return toast(`${r.name} scanned, but Check-in is closed.`);
   if (where === 'classroom') { r.att = { kind: 'present', at: S.clock }; return; }
   const block = OFFNETS[S.offIdx = ((S.offIdx ?? -1) + 1) % OFFNETS.length];
-  r.att = S.approved.includes(block) ? { kind: 'present', at: S.clock, via: block } : { kind: 'pending', at: S.clock, block };
+  r.att = S.approved.includes(block) ? { kind: 'present', at: S.clock } : { kind: 'pending', at: S.clock, block };
 }
 function studentComment(kind) {
-  const presentIdx = S.roster.map((r, i) => isPresent(r) ? i : -1).filter(i => i >= 0);
-  const w = presentIdx[Math.floor(Math.random() * presentIdx.length)];
+  const idx = S.roster.map((r, i) => isPresent(r) ? i : -1).filter(i => i >= 0);
+  const w = idx[Math.floor(Math.random() * idx.length)];
   let c;
-  if (kind === 'quick') { const t = QUICK[Math.floor(Math.random() * 2)]; c = { who: Math.random() < .3 ? null : w, text: t, quick: true }; }
+  if (kind === 'quick') c = { who: Math.random() < .3 ? null : w, text: QUICK[Math.floor(Math.random() * 2)], quick: true };
   else { const [t, anon] = TYPED[S.typedIdx++ % TYPED.length]; c = { who: anon ? null : w, text: t, quick: false }; }
-  S.comments.push({ id: S.nextId++, topic: 's7', when: 'during', status: 'New', at: fmt(S.clock), ...c });
+  S.comments.push({ id: S.nextId++, topic: 's7', when: 'during', status: 'New', pinned: false, at: fmt(S.clock), ...c });
   S.fresh = S.nextId - 1;
 }
-function parseTime(v) { const [h, m] = v.split(':').map(Number); return h * 60 + m; }
 function submitPoll() {
-  const f = S.pollForm, options = f.options.map(o => o.trim()).filter(Boolean);
-  if (!f.q.trim() || options.length < 2) return toast('A poll needs a question and at least two answers.');
-  const opensAt = f.open === 'at' ? parseTime(f.openAt) : S.clock;
-  const closesAt = f.open === 'later' ? null : f.close === 'after' ? opensAt + +f.mins : f.close === 'at' ? parseTime(f.closeAt) : null;
-  const status = f.open === 'now' ? 'open' : f.open === 'at' ? (opensAt <= S.clock ? 'open' : 'scheduled') : 'saved';
-  S.polls.push({ id: S.nextId++, topic: f.topic, q: f.q.trim(), options, counts: options.map(() => 0), status, opensAt, closesAt });
+  const f = S.pollForm;
+  const draft = { q: f.q, options: f.options.slice() };
+  if (f.open !== 'later' && !complete(draft)) return toast('To open or schedule a poll it needs a question and two answers. Choose Later to save it unfinished.');
+  const [h, m] = (f.openAt || '00:00').split(':').map(Number);
+  const opensAt = f.open === 'at' ? h * 60 + m : f.open === 'now' ? S.clock : null;
+  const dur = f.open !== 'later' && f.close === 'after' ? +f.mins : null;
+  const status = f.open === 'now' || (f.open === 'at' && opensAt <= S.clock) ? 'open' : f.open === 'at' ? 'scheduled' : 'saved';
+  const p = f.editId ? S.polls.find(x => x.id === f.editId) : { id: S.nextId++, topic: 's7' };
+  const options = status === 'saved' ? draft.options : draft.options.map(o => o.trim()).filter(Boolean);
+  Object.assign(p, { q: draft.q.trim(), options, counts: options.map(() => 0), status, opensAt, closesAt: status === 'open' && dur ? S.clock + dur : null, dur });
+  if (!f.editId) S.polls.push(p);
   S.pollForm = null;
-  toast(status === 'open' ? 'Poll open. Students get a badge and banner.' : status === 'scheduled' ? `Scheduled for ${fmt(opensAt)}` : 'Saved');
+  toast(status === 'open' ? 'Poll open. Students get a badge and banner.' : status === 'scheduled' ? `Scheduled for ${fmt(opensAt)}` : complete(p) ? 'Saved' : 'Saved as a draft');
 }
 function act(a, d) {
   switch (a) {
     case 'closeWindow':
       S.window = 'closed';
       S.roster.forEach(r => { if (r.att && r.att.kind === 'pending') { r.att = null; r.lapsed = true; } });
-      toast('Check-in closed. Pending check-ins count as Absent.');
+      toast('Check-in closed. Anyone still waiting for approval counts as absent.');
       break;
     case 'openWindow': S.window = 'open'; S.windowAt = S.clock; break;
     case 'approve': {
-      S.approved.push(d.b);
-      let n = 0;
-      S.roster.forEach(r => { if (r.att && r.att.kind === 'pending' && r.att.block === d.b) { r.att = { kind: 'present', at: r.att.at, via: d.b }; n++; } });
-      toast(`${plural(n, 'Student')} now present. ${d.b} accepted for Session 7 only.`);
+      S.approved.push(d.b); let n = 0;
+      S.roster.forEach(r => { if (r.att && r.att.kind === 'pending' && r.att.block === d.b) { r.att = { kind: 'present', at: r.att.at }; n++; } });
+      toast(`${plural(n, 'Student')} now present. That network is accepted for this Session only.`);
       break;
     }
-    case 'mark': { const r = rosterById(d.id); const prev = r.att; r.att = { kind: d.v, at: S.clock }; S.undo = () => r.att = prev; toast(`${r.name} marked ${d.v === 'manual' ? 'present' : 'absent'}`, true); break; }
-    case 'reset': { const r = rosterById(d.id); r.claimed = false; S.undo = () => r.claimed = true; toast(`Claim reset for ${r.name}. They can claim from their new phone.`, true); break; }
-    case 'undo': if (S.undo) S.undo(); S.undo = null; S.toast = null; break;
-    case 'export': toast('Would download software-engineering-attendance.xlsx (Roster × Sessions).'); break;
-    case 'inbox': S.inbox = d.v; break;
-    case 'cstatus': {
-      const ids = d.ids.split(',').map(Number), cs = S.comments.filter(c => ids.includes(c.id)), prev = cs.map(c => c.status);
-      cs.forEach(c => c.status = d.v); S.undo = () => cs.forEach((c, i) => c.status = prev[i]);
-      toast(`${plural(cs.length, 'Comment')} → ${d.v}`, true); break;
+    case 'mark': {
+      const r = rosterById(d.id), prev = r.att;
+      const same = r.att && r.att.kind === d.v;
+      r.att = same ? null : { kind: d.v, at: S.clock };
+      S.undo = () => r.att = prev;
+      toast(same ? `${r.name}: mark cleared` : `${r.name} marked ${d.v === 'manual' ? 'present' : 'absent'}`, true); break;
     }
+    case 'reset': { const r = rosterById(d.id); r.claimed = false; S.undo = () => r.claimed = true; toast(`Claim reset for ${r.name}.`, true); break; }
+    case 'undo': if (S.undo) S.undo(); S.undo = null; S.toast = null; break;
+    case 'export': S.menu = false; toast('Would download software-engineering-attendance.xlsx'); break;
+    case 'cstatus': {
+      const ids = d.ids.split(',').map(Number), cs = S.comments.filter(c => ids.includes(c.id)), prev = cs.map(c => [c.status, c.pinned]);
+      cs.forEach(c => { c.status = d.v; c.pinned = false; }); S.undo = () => cs.forEach((c, i) => [c.status, c.pinned] = prev[i]);
+      toast(d.v === 'New' ? 'Back in the inbox' : `${plural(cs.length, 'Comment')} ${d.v.toLowerCase()}`, true); break;
+    }
+    case 'cpin': { const ids = d.ids.split(',').map(Number), cs = S.comments.filter(c => ids.includes(c.id)), v = !cs.every(c => c.pinned); cs.forEach(c => c.pinned = v); break; }
     case 'expand': S.expanded[d.k] = !S.expanded[d.k]; break;
-    case 'pnew': S.pollForm = { q: '', options: ['', '', ''], topic: 's7', open: 'now', openAt: fmt(S.clock + 10).padStart(5, '0'), close: 'hand', mins: 3, closeAt: fmt(S.clock + 15).padStart(5, '0') }; break;
+    case 'toggle': S[d.k] = !S[d.k]; if (d.k === 'diag') S.menu = false; break;
+    case 'drawer': S.drawer = d.v || null; break;
+    case 'view': S.view = d.v; S.menu = false; break;
+    case 'pnew': S.pollForm = { q: '', options: ['', '', ''], open: 'now', openAt: hhmm(S.clock + 10), close: 'hand', mins: 3 }; break;
+    case 'pedit': { const p = S.polls.find(x => x.id === +d.id); S.pollForm = { editId: p.id, q: p.q, options: p.options.concat(p.options.length < 2 ? [''] : []), open: p.status === 'scheduled' ? 'at' : 'later', openAt: hhmm(p.opensAt || S.clock + 10), close: p.dur ? 'after' : 'hand', mins: p.dur || 3 }; break; }
     case 'padd': S.pollForm.options.push(''); break;
     case 'pf': S.pollForm[d.k] = d.v; break;
     case 'pcancel': S.pollForm = null; break;
-    case 'popen': { const p = S.polls.find(x => x.id === +d.id); p.status = 'open'; p.opensAt = S.clock; if (p.closesAt && p.closesAt <= S.clock) p.closesAt = null; break; }
+    case 'popen': { const p = S.polls.find(x => x.id === +d.id); if (!complete(p)) { toast('Finish the poll first.'); break; } p.status = 'open'; p.opensAt = S.clock; p.closesAt = p.dur ? S.clock + p.dur : null; break; }
     case 'pclose': { const p = S.polls.find(x => x.id === +d.id); p.status = 'closed'; p.closesAt = S.clock; toast('Closed. Students now see the results.'); break; }
-    case 'pdel': S.polls = S.polls.filter(x => x.id !== +d.id); break;
-    case 'pshow': S.screen = 'poll'; S.screenPoll = +d.id; if (S.variant === 'a') S.projecting = true; break;
-    case 'screen':
-      S.screen = d.v;
-      if (d.v === 'poll') { const p = S.polls.find(x => x.status === 'open') || S.polls.filter(x => x.status === 'closed').pop(); S.screenPoll = p && p.id; }
-      break;
-    case 'project': S.projecting = true; if (S.variant !== 'a') S.screen = 'qr'; break;
+    case 'pshow': S.screen = 'poll'; S.screenPoll = +d.id; S.projecting = true; break;
+    case 'screen': S.screen = d.v; if (d.v === 'poll') { const p = currentPoll(); S.screenPoll = p && p.id; } break;
+    case 'project': S.projecting = true; break;
     case 'unproject': S.projecting = false; break;
-    case 'aview': S.view = d.v; break;
-    case 'btab': S.tab = d.v; break;
-    case 'cv': S.cview = d.v; break;
     case 'importOpen': S.importBox = { text: '' }; break;
-    case 'importFile': S.importBox.text = '318245671, Noa Levi\n318253590, Amir Haddad\n340120001, Gal Navon\n340120002, Sivan Oren'; break;
+    case 'importFile': S.importBox.text = '318245671, Noa Levi\n340120001, Gal Navon\n340120002, Sivan Oren'; break;
     case 'importCancel': S.importBox = null; break;
     case 'importDo': {
       const rows = S.importBox.text.split('\n').map(l => l.split(/[,\t]/).map(s => s.trim())).filter(r => r[0] && r[1] && !S.roster.some(x => x.id === r[0]));
       rows.forEach(([id, name]) => S.roster.push({ id, name, claimed: false, att: null }));
-      S.importBox = null; toast(`${plural(rows.length, 'Student')} added. They claim their entry on first scan.`); break;
+      S.importBox = null; toast(`${plural(rows.length, 'Student')} added.`); break;
     }
-    /* scenario */
     case 'sIn': studentCheckin('classroom'); break;
-    case 'sOff': studentCheckin('off'); break;
     case 'sIn5': for (let i = 0; i < 5; i++) studentCheckin('classroom'); break;
+    case 'sOff': studentCheckin('off'); break;
     case 'sQuick': studentComment('quick'); break;
     case 'sTyped': studentComment('typed'); break;
     case 'sTick': tickClock(+d.v); break;
     case 'set': S[d.k] = d.v; break;
     case 'panel': S.panel = !S.panel; break;
-    case 'resetAll': { const keep = { variant: S.variant, look: S.look, grouping: S.grouping, panel: S.panel }; S = { ...initial(), ...keep }; break; }
+    case 'resetAll': { const keep = { variant: S.variant, grouping: S.grouping, panel: S.panel }; S = { ...initial(), ...keep }; break; }
     case 'vprev': case 'vnext': {
       const i = VARIANTS.findIndex(v => v.k === S.variant);
       setVariant(VARIANTS[(i + (a === 'vnext' ? 1 : -1) + VARIANTS.length) % VARIANTS.length].k); return;
@@ -699,27 +601,23 @@ function act(a, d) {
 /* ================= render ================= */
 function pseg(k, opts) { return `<div class="pseg">${opts.map(([v, l]) => `<button class="${S[k] === v ? 'on' : ''}" data-a="set" data-k="${k}" data-v="${v}">${l}</button>`).join('')}</div>`; }
 function renderPanel() {
-  const t = tally();
   const dump = {
-    variant: S.variant, look: S.look, grouping: S.grouping, clock: fmt(S.clock), checkinWindow: S.window, approvedNetworks: S.approved,
-    attendance: t, pending: Object.fromEntries(pendingBlocks().map(([b, rs]) => [b, rs.map(r => r.name)])),
-    projector: S.screen + (S.screen === 'poll' ? ` #${S.screenPoll}` : ''), projecting: S.projecting,
-    polls: S.polls.map(p => `${p.status}: ${p.q} [${p.counts.join('/')}]`),
-    comments: ['New', 'Pinned', 'Addressed', 'Ignored'].map(s => `${s} ${S.comments.filter(c => c.status === s).length}`).join(', '),
+    variant: S.variant, grouping: S.grouping, diagnostics: S.diag, clock: fmt(S.clock), checkinWindow: S.window, approvedNetworks: S.approved,
+    attendance: tally(), pending: Object.fromEntries(pendingBlocks().map(([b, rs]) => [b, rs.map(r => r.name)])),
+    polls: S.polls.map(p => `${p.status}: ${p.q || '(untitled)'} [${p.counts.join('/')}]`),
+    comments: { open: S.comments.filter(c => c.status === 'New').length, pinned: S.comments.filter(c => c.pinned && c.status === 'New').length, dealtWith: S.comments.filter(c => c.status !== 'New').length },
   };
   $('panel').innerHTML = `<div class="row"><h2 class="grow">Scenario</h2><button class="pb" data-a="panel">Hide</button></div>
     <p>Plays the Students and the clock. Throwaway prototype; reload resets it.</p>
-    <div class="g"><span class="eyebrow">Open questions</span>
-      <div>Look ${pseg('look', [['binder', 'Binder (from Student app)'], ['plain', 'Plain']])}</div>
-      <div>Quick reactions in the inbox ${pseg('grouping', [['grouped', 'Grouped with counts'], ['each', 'One by one']])}</div></div>
+    <div class="g"><span class="eyebrow">Still open</span><div>Quick reactions ${pseg('grouping', [['grouped', 'Grouped with counts'], ['each', 'One by one']])}</div></div>
     <div class="g"><span class="eyebrow">Students</span>
       <button class="pb" data-a="sIn">A Student checks in from the classroom Wi-Fi</button>
       <button class="pb" data-a="sIn5">Five Students check in from the classroom Wi-Fi</button>
-      <button class="pb" data-a="sOff">A Student checks in from another network (mobile data)</button>
+      <button class="pb" data-a="sOff">A Student checks in from another network</button>
       <button class="pb" data-a="sQuick">A Student sends a quick reaction</button>
       <button class="pb" data-a="sTyped">A Student types a Comment</button></div>
     <div class="g"><span class="eyebrow">Clock (${fmt(S.clock)}; votes trickle in, scheduled polls fire)</span>
-      <div class="pseg"><button data-a="sTick" data-v="1">+1 min</button><button data-a="sTick" data-v="5">+5 min</button><button data-a="sTick" data-v="15">+15 min</button></div></div>
+      <div class="pseg"><button data-a="sTick" data-v="1">+1 min</button><button data-a="sTick" data-v="5">+5 min</button><button data-a="sTick" data-v="15">+15 min</button><button data-a="sTick" data-v="30">+30 min</button></div></div>
     <button class="pb" data-a="resetAll">Reset everything</button>
     <details open><summary class="eyebrow">State</summary><pre>${esc(JSON.stringify(dump, null, 1))}</pre></details>`;
 }
@@ -727,24 +625,23 @@ function renderSwitcher() {
   const v = VARIANTS.find(x => x.k === S.variant);
   $('switcher').innerHTML = `<button data-a="vprev" aria-label="Previous variant">←</button><span class="lbl-v">${v.k.toUpperCase()} · ${v.name}</span><button data-a="vnext" aria-label="Next variant">→</button><button class="scen" data-a="panel">Scenario</button>`;
 }
-function renderToast() {
-  $('toast').innerHTML = S.toast ? `<div class="toast" role="status"><span>${esc(S.toast.msg)}</span>${S.toast.undo ? `<button class="link" data-a="undo">Undo</button>` : ''}</div>` : '';
-}
+function renderToast() { $('toast').innerHTML = S.toast ? `<div class="toast" role="status"><span>${esc(S.toast.msg)}</span>${S.toast.undo ? `<button class="link" data-a="undo">Undo</button>` : ''}</div>` : ''; }
 function render() {
-  const scrolls = [...document.querySelectorAll('#stage .sec')].map(e => e.scrollTop);
   const f = document.activeElement, fKey = f && (f.dataset.in || f.dataset.f), fPos = f && f.selectionStart;
-  document.body.className = `look-${S.look}${S.panel ? ' panel-open' : ''}`;
-  $('stage').innerHTML = RENDER[S.variant]();
-  [...document.querySelectorAll('#stage .sec')].forEach((e, i) => { if (scrolls[i]) e.scrollTop = scrolls[i]; });
+  const dScroll = document.querySelector('.drawer') ? document.querySelector('.drawer').scrollTop : 0;
+  document.body.className = S.panel ? 'panel-open' : '';
+  $('stage').innerHTML = RENDER[S.variant]() + overlay();
+  const dr = document.querySelector('.drawer'); if (dr) dr.scrollTop = dScroll;
   if (fKey) { const el = document.querySelector(`[data-in="${fKey}"], [data-f="${fKey}"]`); if (el) { el.focus(); try { el.setSelectionRange(fPos, fPos); } catch (_) {} } }
   renderPanel(); renderSwitcher(); renderToast();
   S.fresh = null;
 }
-function setVariant(k) { S.variant = k; S.projecting = false; if (location.hash !== '#' + k) location.hash = k; render(); }
+function setVariant(k) { S.variant = k; S.drawer = null; if (location.hash !== '#' + k) location.hash = k; render(); }
 
 document.addEventListener('click', e => {
   const el = e.target.closest('[data-a]');
-  if (!el || el.tagName === 'SELECT' || el.disabled) return;
+  if (!el) { if (S.menu && !e.target.closest('.menu')) { S.menu = false; render(); } return; }
+  if (el.tagName === 'SELECT' || el.disabled) return;
   e.preventDefault();
   act(el.dataset.a, el.dataset);
 });
@@ -754,14 +651,10 @@ document.addEventListener('input', e => {
   if (t.dataset.in === 'importText') { S.importBox.text = t.value; render(); }
   if (t.dataset.f && S.pollForm) { const k = t.dataset.f; if (/^o\d$/.test(k)) S.pollForm.options[+k.slice(1)] = t.value; else S.pollForm[k] = t.value; }
 });
-document.addEventListener('change', e => {
-  const t = e.target;
-  if (t.dataset.in === 'topicFilter') { S.topicFilter = t.value; render(); }
-  if (t.dataset.f && S.pollForm) { S.pollForm[t.dataset.f] = t.value; }
-});
+document.addEventListener('change', e => { const t = e.target; if (t.dataset.f && S.pollForm) S.pollForm[t.dataset.f] = t.value; });
 document.addEventListener('submit', e => { e.preventDefault(); if (e.target.dataset.form === 'poll') { submitPoll(); render(); } });
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape' && S.projecting) { S.projecting = false; render(); return; }
+  if (e.key === 'Escape') { if (S.projecting) S.projecting = false; else if (S.drawer) S.drawer = null; else if (S.menu) S.menu = false; else return; render(); return; }
   if (e.target.closest('input, textarea, select, [contenteditable]')) return;
   if (e.key === 'ArrowRight') act('vnext', {});
   if (e.key === 'ArrowLeft') act('vprev', {});
