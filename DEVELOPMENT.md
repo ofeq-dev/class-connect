@@ -29,3 +29,5 @@ Open `http://localhost:5173/lecturer` and sign in.
 - `src/shared/`: types both sides use.
 
 Agents branch from `dev` and open PRs into `dev`.
+
+Put `Closes #<ticket>` in the PR body. A merge into `dev` closes that ticket (the `close tickets on dev merge` workflow), which unblocks the tickets waiting on it.
