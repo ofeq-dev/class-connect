@@ -1,0 +1,101 @@
+import { randomBytes } from "node:crypto";
+import { Hono, type Context } from "hono";
+import { getCookie, setCookie } from "hono/cookie";
+import { createMiddleware } from "hono/factory";
+import { validator } from "hono/validator";
+import type { RosterEntry, Viewer } from "../course";
+import { DomainError } from "../errors";
+import { streamLiveEvents } from "../live-events";
+import type { AppDeps } from "./app";
+
+export const DEVICE_COOKIE = "cc_device";
+/** The longest lifetime browsers allow; refreshed on every visit (ADR 0002). */
+const FOUR_HUNDRED_DAYS = 400 * 24 * 60 * 60;
+
+type Vars = { Variables: { deviceToken: string | undefined } };
+
+const studentIdBody = validator("json", (value) => {
+  const b = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+  return { studentId: typeof b.studentId === "string" ? b.studentId : "" };
+});
+
+function setDeviceCookie(c: Context, token: string) {
+  setCookie(c, DEVICE_COOKIE, token, {
+    httpOnly: true,
+    secure: true,
+    sameSite: "Lax",
+    path: "/",
+    maxAge: FOUR_HUNDRED_DAYS,
+  });
+}
+
+/** What the Student app may know about its own Roster entry: never the device token. */
+const me = (entry: RosterEntry) => ({ name: entry.name, studentId: entry.studentId });
+
+export function studentRoutes(deps: AppDeps) {
+  /**
+   * Reads the device token and, when it still resolves to a Student, refreshes the cookie so a
+   * phone in use is never forgotten. An unknown or reset token is left alone: it's unclaimed.
+   */
+  const deviceToken = createMiddleware<Vars>(async (c, next) => {
+    const token = getCookie(c, DEVICE_COOKIE);
+    c.set("deviceToken", token);
+    await next();
+    const alreadySet = c.res.headers.getSetCookie().some((h) => h.startsWith(`${DEVICE_COOKIE}=`));
+    if (token && !alreadySet && deps.course.whoIs(token)) setDeviceCookie(c, token);
+  });
+
+  const qrSession = (c: Context) => deps.course.readSession(c.req.param("code") ?? "");
+
+  return new Hono<Vars>()
+    .use(deviceToken)
+
+    // The QR entry page, /s/<code>: claim if needed, then the app.
+    .get("/s/:code", (c) => {
+      const session = qrSession(c);
+      const viewer = deps.course.whoIs(c.var.deviceToken, session.courseId);
+      const course = deps.course.courseSummary(session.courseId);
+      return c.json({ course, session, me: viewer ? me(viewer.rosterEntry) : null });
+    })
+    .post("/s/:code/lookup", studentIdBody, (c) => {
+      const session = qrSession(c);
+      const entry = deps.course.findRosterEntry(session.courseId, c.req.valid("json").studentId);
+      if (!entry) {
+        throw new DomainError("claim.unknown-student", "That student ID isn't on this Course's Roster.");
+      }
+      const mine = deps.course.whoIs(c.var.deviceToken, session.courseId)?.rosterEntry.id === entry.id;
+      if (entry.claimed && !mine) {
+        throw new DomainError("claim.already-claimed", "Already claimed — ask your Lecturer.");
+      }
+      return c.json({ name: entry.name });
+    })
+    .post("/s/:code/claim", studentIdBody, (c) => {
+      const session = qrSession(c);
+      // One token per phone: a phone already bound on another Course keeps its token.
+      const token = c.var.deviceToken ?? randomBytes(32).toString("base64url");
+      const entry = deps.course.claim(session.courseId, c.req.valid("json").studentId, token);
+      setDeviceCookie(c, token);
+      return c.json(me(entry));
+    })
+
+    // The Student app at /.
+    .get("/me", (c) => {
+      const viewer: Viewer | null = deps.course.whoIs(c.var.deviceToken);
+      if (!viewer) return c.json({ claimed: false as const });
+      const today = deps.course.today();
+      const session = deps.course.listSessions(viewer.course.id).find((s) => s.date === today) ?? null;
+      return c.json({
+        claimed: true as const,
+        course: { id: viewer.course.id, name: viewer.course.name },
+        me: me(viewer.rosterEntry),
+        today,
+        session,
+      });
+    })
+
+    .get("/events", (c) => {
+      const viewer = deps.course.whoIs(c.var.deviceToken);
+      if (!viewer) return c.json({ error: "unclaimed", message: "Scan your Session's QR code first." }, 401);
+      return streamLiveEvents(c, deps.events, { courseId: viewer.course.id, role: "student" }, deps.sseHeartbeatMs);
+    });
+}

@@ -9,7 +9,7 @@ import type { Notice, NoticeType } from "../shared/notices";
 export const noticeQueryKeys: { [T in NoticeType]: (id: number) => QueryKey[] } = {
   "course.changed": (id) => [["courses"], ["course", id]],
   "roster.changed": (courseId) => [["roster", courseId]],
-  "session.changed": (id) => [["sessions"], ["session", id]],
+  "session.changed": (id) => [["sessions"], ["session", id], ["student"]],
   // A summary change may also have spent LLM requests.
   "summary.changed": (sessionId) => [["summary", sessionId], ["summaries"], ["llm-usage"]],
 };

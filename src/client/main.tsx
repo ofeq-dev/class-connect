@@ -3,7 +3,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Route, Routes } from "react-router";
 import { LecturerApp } from "./lecturer/LecturerApp";
-import { StudentHome } from "./student/StudentHome";
+import { StudentApp } from "./student/StudentApp";
 import "./styles.css";
 
 const queryClient = new QueryClient({
@@ -16,7 +16,7 @@ createRoot(document.getElementById("root")!).render(
       <BrowserRouter>
         <Routes>
           <Route path="/lecturer/*" element={<LecturerApp />} />
-          <Route path="*" element={<StudentHome />} />
+          <Route path="*" element={<StudentApp />} />
         </Routes>
       </BrowserRouter>
     </QueryClientProvider>

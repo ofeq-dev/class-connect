@@ -24,3 +24,9 @@ export function aSession(t: TestApp, courseId: number, input: Partial<SessionInp
     ...input,
   });
 }
+
+/** A Student who has claimed their Roster entry from a phone with this device token. */
+export function aClaimedStudent(t: TestApp, courseId: number, studentId = "1001", deviceToken = `device-${studentId}`) {
+  const entry = t.modules.course.findRosterEntry(courseId, studentId) ?? aRoster(t, courseId, 1)[0]!;
+  return { rosterEntry: t.modules.course.claim(courseId, entry.studentId, deviceToken), deviceToken };
+}
