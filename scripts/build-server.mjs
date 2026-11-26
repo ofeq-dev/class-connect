@@ -1,12 +1,15 @@
 import { build } from "esbuild";
 
 await build({
-  entryPoints: ["src/server/main.ts"],
+  entryPoints: {
+    main: "src/server/main.ts",
+    backup: "src/server/backup-cli.ts",
+  },
   bundle: true,
   platform: "node",
   format: "esm",
   target: "node22",
   packages: "external",
-  outfile: "dist/server/main.js",
+  outdir: "dist/server",
   sourcemap: true,
 });

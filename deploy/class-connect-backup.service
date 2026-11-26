@@ -1,0 +1,16 @@
+# Nightly consistent backup of the Class Connect database (#19), started by
+# class-connect-backup.timer. Writes to /mnt/d/class-connect-backups/ and keeps 14 nightly copies.
+# Run once by hand: sudo systemctl start class-connect-backup.service
+
+[Unit]
+Description=Class Connect nightly database backup
+RequiresMountsFor=/mnt/d
+
+[Service]
+Type=oneshot
+User=josh
+WorkingDirectory=/srv/class-connect/current
+Environment=DATABASE_PATH=/var/lib/class-connect/app.db
+Environment=BACKUP_DIR=/mnt/d/class-connect-backups
+EnvironmentFile=/etc/class-connect.env
+ExecStart=/usr/bin/node dist/server/backup.js --kind nightly

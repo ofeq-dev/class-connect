@@ -11,6 +11,8 @@
     "dev:client": "vite",
     "build": "vite build && node scripts/build-server.mjs",
     "start": "node --env-file-if-exists=.env dist/server/main.js",
+    "backup": "node --env-file-if-exists=.env dist/server/backup.js",
+    "deploy": "sh -c 'ssh wsl bash -s -- \"$@\" < scripts/deploy.sh' deploy",
     "check": "tsc --noEmit && eslint . && vitest run",
     "test": "vitest",
     "db:generate": "drizzle-kit generate",
