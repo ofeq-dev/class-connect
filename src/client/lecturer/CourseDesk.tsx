@@ -4,7 +4,16 @@ import { Link, useParams } from "react-router";
 import { api, ok } from "../api";
 import { EditIcon, TrashIcon } from "./icons";
 import { Menu } from "./Menu";
-import { formatDate, useCourse, useCourseLive, useRoster, useSessions } from "./queries";
+import {
+  formatDate,
+  SUMMARY_STATE_LABEL,
+  useCourse,
+  useCourseLive,
+  useLlmUsage,
+  useRoster,
+  useSessions,
+  useSummaries,
+} from "./queries";
 
 interface Session {
   id: number;
@@ -18,6 +27,7 @@ export function CourseDesk() {
   useCourseLive(courseId);
   const course = useCourse(courseId);
   const roster = useRoster(courseId);
+  const usage = useLlmUsage();
 
   if (course.error) return <p className="page error">{course.error.message}</p>;
   const claimed = roster.data?.filter((e) => e.claimed).length ?? 0;
@@ -29,6 +39,11 @@ export function CourseDesk() {
           <Link className="crumb" to="/lecturer">← Your Courses</Link>
           <span className="title">{course.data?.name ?? " "}</span>
         </div>
+        {usage.data && (
+          <span className="muted small num">
+            LLM requests today: {usage.data.today} / {usage.data.limit}
+          </span>
+        )}
         <Menu label="Course menu">
           <Link to={`/lecturer/courses/${courseId}/roster`}>Roster</Link>
           <Link to={`/lecturer/courses/${courseId}/settings`}>Course settings</Link>
@@ -37,6 +52,7 @@ export function CourseDesk() {
 
       <div className="desk">
         <SessionsSection courseId={courseId} />
+        <SummariesSection courseId={courseId} />
         <section className="sec" data-s="ros">
           <div className="sec-head">
             <h2><span className="hl">Roster</span></h2>
@@ -107,6 +123,54 @@ function SessionsSection({ courseId }: { courseId: string }) {
           )}
         </>
       )}
+    </section>
+  );
+}
+
+function SummariesSection({ courseId }: { courseId: string }) {
+  const sessions = useSessions(courseId);
+  const summaries = useSummaries(courseId);
+  const client = useQueryClient();
+  const retry = useMutation({
+    mutationFn: async (sessionId: number) =>
+      ok(
+        await api.api.lecturer.courses[":courseId"].sessions[":sessionId"].summary.retry.$post({
+          param: { courseId, sessionId: String(sessionId) },
+        }),
+      ),
+    onSuccess: () => client.invalidateQueries({ queryKey: ["summaries"] }),
+  });
+  const byId = new Map(sessions.data?.sessions.map((s) => [s.id, s]));
+  const rows = [...(summaries.data ?? [])].reverse(); // newest Session first
+
+  return (
+    <section className="sec" data-s="sum">
+      <div className="sec-head">
+        <h2><span className="hl">Session summaries</span></h2>
+      </div>
+      {summaries.data && rows.length === 0 && <p className="empty">Add a Session to summarise it.</p>}
+      <ul className="list" aria-label="Session summaries">
+        {rows.map((row) => {
+          const s = byId.get(row.sessionId);
+          if (!s) return null;
+          return (
+            <li key={row.sessionId}>
+              <Link className="grow" to={`/lecturer/courses/${courseId}/sessions/${row.sessionId}/summary`}>
+                <b>{formatDate(s.date)}</b> <span className="muted num">{s.start}</span>
+              </Link>
+              <span className={`chip ${row.state === "failed" ? "c-warn" : row.state === "draft" ? "c-ok" : "c-mute"}`}>
+                {SUMMARY_STATE_LABEL[row.state]}
+              </span>
+              {row.state === "failed" && (
+                <button className="btn-line" disabled={retry.isPending} onClick={() => retry.mutate(row.sessionId)}>
+                  Retry
+                </button>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      {retry.error && <p className="error">{retry.error.message}</p>}
     </section>
   );
 }

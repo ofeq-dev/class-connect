@@ -7,6 +7,7 @@ import { CoursesPage } from "./CoursesPage";
 import { LiveConsole } from "./LiveConsole";
 import { RosterPage } from "./RosterPage";
 import { SignInPage } from "./SignInPage";
+import { SummaryPage } from "./SummaryPage";
 
 export function LecturerApp() {
   const me = useQuery({
@@ -24,6 +25,7 @@ export function LecturerApp() {
       <Route path="courses/:courseId/roster" element={<RosterPage />} />
       <Route path="courses/:courseId/settings" element={<CourseSettingsPage />} />
       <Route path="courses/:courseId/sessions/:sessionId/live" element={<LiveConsole />} />
+      <Route path="courses/:courseId/sessions/:sessionId/summary" element={<SummaryPage />} />
       <Route path="*" element={<p className="page">Nothing here. <a href="/lecturer">Your Courses</a></p>} />
     </Routes>
   );
