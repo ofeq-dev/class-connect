@@ -6,6 +6,7 @@ import type { CourseModule } from "../course";
 import { DomainError, NotFoundError } from "../errors";
 import type { LiveEvents } from "../live-events";
 import { lecturerRoutes } from "./lecturer";
+import { studentRoutes } from "./student";
 
 export interface AppDeps {
   course: CourseModule;
@@ -28,7 +29,8 @@ export function createApp(deps: AppDeps) {
       return c.json({ error: "internal", message: "Something went wrong." }, 500);
     })
     .get("/healthz", (c) => c.json(deps.health()))
-    .route("/api/lecturer", lecturerRoutes(deps));
+    .route("/api/lecturer", lecturerRoutes(deps))
+    .route("/api/student", studentRoutes(deps));
 
   if (deps.clientDir && fs.existsSync(deps.clientDir)) {
     const root = path.relative(process.cwd(), deps.clientDir);

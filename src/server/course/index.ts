@@ -64,6 +64,8 @@ export interface CourseModule {
   listCourses(lecturerId: number): Course[];
   /** The Course, if it is this Lecturer's; NotFoundError otherwise. */
   readCourse(lecturerId: number, courseId: number): Course;
+  /** A Course's id and name, for a Student's QR page before they have claimed. */
+  courseSummary(courseId: number): { id: number; name: string };
   updateCourse(courseId: number, changes: { name?: string; translationLanguages?: string[] }): Course;
 
   importRoster(courseId: number, csv: string): RosterImportReport;
@@ -230,6 +232,11 @@ export function createCourseModule({ db, clock, events, timeZone }: CourseDeps):
       const row = courseRow(courseId);
       if (row.lecturerId !== lecturerId) throw new NotFoundError("Course");
       return toCourse(row);
+    },
+
+    courseSummary(courseId) {
+      const { id, name } = courseRow(courseId);
+      return { id, name };
     },
 
     updateCourse(courseId, changes) {
