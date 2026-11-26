@@ -1,5 +1,5 @@
-import { randomBytes } from "node:crypto";
-import { and, asc, eq } from "drizzle-orm";
+import { createHash, randomBytes } from "node:crypto";
+import { and, asc, desc, eq } from "drizzle-orm";
 import { localDate, type Clock } from "../clock";
 import type { Db } from "../db";
 import { DomainError, NotFoundError } from "../errors";
@@ -26,6 +26,12 @@ export interface RosterEntry {
   name: string;
   claimed: boolean;
   claimedAt: string | null;
+}
+
+/** A Student resolved from their device token: their Roster entry and its Course. */
+export interface Viewer {
+  course: Course;
+  rosterEntry: RosterEntry;
 }
 
 export interface RosterImportReport {
@@ -65,6 +71,16 @@ export interface CourseModule {
   /** The entry with this student ID on the Course's Roster, or null (the "You are <name>?" step). */
   findRosterEntry(courseId: number, studentId: string): RosterEntry | null;
   listRoster(courseId: number): RosterEntry[];
+  /**
+   * Binds this device to the Roster entry with this student ID (ADR 0002). First claim wins;
+   * one device per Student and one Student per device. Only the token's hash is stored.
+   */
+  claim(courseId: number, studentId: string, deviceToken: string): RosterEntry;
+  /**
+   * The Student this device token is bound to, in the given Course, or else in the Course it
+   * claimed most recently (a Course switcher is v2). Null for a missing, unknown or reset token.
+   */
+  whoIs(deviceToken: string | undefined, courseId?: number): Viewer | null;
   /** Releases a Claim at once. Never touches attendance. */
   resetClaim(courseId: number, rosterEntryId: number): RosterEntry;
 
@@ -105,6 +121,11 @@ function languages(raw: string[]): string[] {
   if (bad) throw new DomainError("course.bad-language", `"${bad}" isn't a language code like ar or ru.`);
   if (codes.length > 10) throw new DomainError("course.too-many-languages", "Choose at most 10 languages.");
   return codes;
+}
+
+/** Only this hash of a device token is ever stored (ADR 0002). */
+function tokenHash(token: string): string {
+  return createHash("sha256").update(token).digest("hex");
 }
 
 function sessionTimes(input: SessionInput): SessionInput {
@@ -281,6 +302,52 @@ export function createCourseModule({ db, clock, events, timeZone }: CourseDeps):
         .orderBy(asc(rosterEntry.name))
         .all()
         .map(toEntry);
+    },
+
+    claim(courseId, rawStudentId, deviceToken) {
+      courseRow(courseId);
+      const entry = entryRow(courseId, rawStudentId.trim());
+      if (!entry) {
+        throw new DomainError("claim.unknown-student", "That student ID isn't on this Course's Roster.");
+      }
+      const hash = tokenHash(deviceToken);
+      if (entry.deviceTokenHash === hash) return toEntry(entry);
+      if (entry.deviceTokenHash !== null) {
+        throw new DomainError("claim.already-claimed", "Already claimed — ask your Lecturer.");
+      }
+      const boundHere = db
+        .select({ id: rosterEntry.id })
+        .from(rosterEntry)
+        .where(and(eq(rosterEntry.courseId, courseId), eq(rosterEntry.deviceTokenHash, hash)))
+        .get();
+      if (boundHere) {
+        throw new DomainError(
+          "claim.device-already-bound",
+          "This phone is already set up for another Student on this Course — ask your Lecturer.",
+        );
+      }
+      const row = db
+        .update(rosterEntry)
+        .set({ deviceTokenHash: hash, claimedAt: clock.now() })
+        .where(eq(rosterEntry.id, entry.id))
+        .returning()
+        .get()!;
+      rosterChanged(courseId);
+      return toEntry(row);
+    },
+
+    whoIs(deviceToken, courseId) {
+      if (!deviceToken) return null;
+      const bound = eq(rosterEntry.deviceTokenHash, tokenHash(deviceToken));
+      const row = db
+        .select()
+        .from(rosterEntry)
+        .where(courseId === undefined ? bound : and(bound, eq(rosterEntry.courseId, courseId)))
+        .orderBy(desc(rosterEntry.claimedAt), desc(rosterEntry.id))
+        .limit(1)
+        .get();
+      if (!row) return null;
+      return { course: toCourse(courseRow(row.courseId)), rosterEntry: toEntry(row) };
     },
 
     resetClaim(courseId, rosterEntryId) {
