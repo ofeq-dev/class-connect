@@ -178,7 +178,7 @@ The brief's features as stories, each pointing at its use case.
 
 **Main flow**
 1. On the classroom Wi-Fi, the Lecturer opens the Session in the console and opens the Check-in window. The browser reports the Lecturer's public addresses.
-2. The Lecturer shows the QR code and live count on the Projector window.
+2. The Lecturer shows the QR code and live count on the Projector window, opened from the Course's projector link on the laptop's second display or on a classroom PC.
 3. Students check in (UC-3); the console shows "19 of 32 present" and the lists live.
 4. The Lecturer closes the window (or leaves it; it closes at midnight).
 
@@ -289,6 +289,7 @@ The brief's features as stories, each pointing at its use case.
 5. The Lecturer publishes. Students can now see it, and translations into the Course's languages are made.
 
 **Alternative flows**
+- 1a. The Transcript has no timestamps (a `.txt` or pasted text): it is accepted with a warning, and the outline has no times.
 - 3a. Every model fails or the daily limit is hit: an error and Retry are shown.
 - 4a. The Lecturer restores an earlier version; it becomes the newest.
 - 4b. The Lecturer regenerates, after confirming; a new AI version is added.
