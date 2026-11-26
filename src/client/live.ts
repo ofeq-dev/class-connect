@@ -12,6 +12,8 @@ export const noticeQueryKeys: { [T in NoticeType]: (id: number) => QueryKey[] } 
   "session.changed": (id) => [["sessions"], ["session", id], ["student"]],
   // A summary change may also have spent LLM requests.
   "summary.changed": (sessionId) => [["summary", sessionId], ["summaries"], ["llm-usage"]],
+  // The console's count, and the Student's own Check-in line (window opened or closed).
+  "attendance.changed": (sessionId) => [["attendance", sessionId], ["student"]],
 };
 
 export function applyNotice(client: QueryClient, notice: Notice): void {

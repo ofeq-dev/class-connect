@@ -22,6 +22,13 @@
       "when": 1795726911819,
       "tag": "0002_jobs_llm_and_summaries",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1795727695147,
+      "tag": "0003_checkin_window_and_attendance",
+      "breakpoints": true
     }
   ]
 }

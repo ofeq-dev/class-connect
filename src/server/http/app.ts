@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { Hono } from "hono";
+import type { AttendanceModule } from "../attendance";
 import type { CourseModule } from "../course";
 import { DomainError, NotFoundError } from "../errors";
 import type { LiveEvents } from "../live-events";
@@ -12,6 +13,7 @@ import { studentRoutes } from "./student";
 
 export interface AppDeps {
   course: CourseModule;
+  attendance: AttendanceModule;
   summaries: SummariesModule;
   llm: Pick<LlmGateway, "usageToday">;
   events: LiveEvents;

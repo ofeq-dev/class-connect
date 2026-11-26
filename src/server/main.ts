@@ -1,6 +1,7 @@
 import { execSync } from "node:child_process";
 import path from "node:path";
 import { serve } from "@hono/node-server";
+import { createAttendanceModule } from "./attendance";
 import { systemClock } from "./clock";
 import { loadConfig } from "./config";
 import { createCourseModule } from "./course";
@@ -33,6 +34,13 @@ const course = createCourseModule({
   timeZone: config.timeZone,
 });
 const lecturer = course.ensureLecturer(config.lecturerName);
+const attendance = createAttendanceModule({
+  db: database.db,
+  clock: systemClock,
+  events,
+  course,
+  timeZone: config.timeZone,
+});
 const jobs = createJobs({
   db: database.db,
   clock: systemClock,
@@ -60,6 +68,7 @@ const sha = commitSha();
 
 const app = createApp({
   course,
+  attendance,
   summaries,
   llm,
   events,
