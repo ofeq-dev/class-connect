@@ -19,6 +19,7 @@ WorkingDirectory=/srv/class-connect/current
 Environment=NODE_ENV=production
 Environment=PORT=3000
 Environment=DATABASE_PATH=/var/lib/class-connect/app.db
+Environment=FILES_DIR=/var/lib/class-connect/files
 EnvironmentFile=/etc/class-connect.env
 # Migrations apply at startup, then it listens on 127.0.0.1 only; the tunnel is the only way in.
 # Adjust the node path if Node is not installed at /usr/bin/node.

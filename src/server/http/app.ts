@@ -5,10 +5,14 @@ import { Hono } from "hono";
 import type { CourseModule } from "../course";
 import { DomainError, NotFoundError } from "../errors";
 import type { LiveEvents } from "../live-events";
+import type { LlmGateway } from "../llm";
+import type { SummariesModule } from "../summaries";
 import { lecturerRoutes } from "./lecturer";
 
 export interface AppDeps {
   course: CourseModule;
+  summaries: SummariesModule;
+  llm: Pick<LlmGateway, "usageToday">;
   events: LiveEvents;
   lecturer: { id: number; passwordHash: string };
   cookieSecret: string;

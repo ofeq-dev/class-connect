@@ -5,6 +5,7 @@ import { validator } from "hono/validator";
 import { NotFoundError } from "../errors";
 import { verifyPassword } from "../lecturer-auth";
 import { streamLiveEvents } from "../live-events";
+import { DAILY_LIMIT } from "../llm";
 import type { AppDeps } from "./app";
 
 export const LECTURER_COOKIE = "cc_lecturer";
@@ -131,6 +132,27 @@ export function lecturerRoutes(deps: AppDeps) {
       deps.course.deleteSession(ownSession(c).id);
       return c.json({ ok: true });
     })
+
+    // Session summaries
+    .get("/courses/:courseId/summaries", requireLecturer, (c) =>
+      c.json(deps.summaries.forCourse(ownCourse(c).id)),
+    )
+    .get("/courses/:courseId/sessions/:sessionId/summary", requireLecturer, (c) =>
+      c.json(deps.summaries.forLecturer(ownSession(c).id)),
+    )
+    .post(
+      "/courses/:courseId/sessions/:sessionId/summary/transcript",
+      requireLecturer,
+      json((b) => ({ text: str(b.text), fileName: optStr(b.fileName) })),
+      async (c) => c.json(await deps.summaries.uploadTranscript(ownSession(c).id, c.req.valid("json"))),
+    )
+    .post("/courses/:courseId/sessions/:sessionId/summary/generate", requireLecturer, (c) =>
+      c.json(deps.summaries.generate(ownSession(c).id)),
+    )
+    .post("/courses/:courseId/sessions/:sessionId/summary/retry", requireLecturer, (c) =>
+      c.json(deps.summaries.retry(ownSession(c).id)),
+    )
+    .get("/llm-usage", requireLecturer, (c) => c.json({ today: deps.llm.usageToday(), limit: DAILY_LIMIT }))
 
     .get("/events", requireLecturer, (c) => {
       const course = c.req.query("course");
