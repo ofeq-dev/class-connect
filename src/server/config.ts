@@ -1,4 +1,5 @@
 import path from "node:path";
+import { DEFAULT_TIME_ZONE } from "./clock";
 
 export interface Config {
   port: number;
@@ -9,6 +10,7 @@ export interface Config {
   cookieSecret: string;
   sseHeartbeatMs: number;
   commitSha: string;
+  timeZone: string;
 }
 
 function required(env: NodeJS.ProcessEnv, name: string): string {
@@ -27,5 +29,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     cookieSecret: required(env, "COOKIE_SECRET"),
     sseHeartbeatMs: Number(env.SSE_HEARTBEAT_MS ?? 25_000),
     commitSha: env.GIT_SHA ?? "unknown",
+    timeZone: env.APP_TIME_ZONE ?? DEFAULT_TIME_ZONE,
   };
 }

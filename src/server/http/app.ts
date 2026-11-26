@@ -3,7 +3,7 @@ import path from "node:path";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { Hono } from "hono";
 import type { CourseModule } from "../course";
-import { DomainError } from "../errors";
+import { DomainError, NotFoundError } from "../errors";
 import type { LiveEvents } from "../live-events";
 import { lecturerRoutes } from "./lecturer";
 
@@ -23,6 +23,7 @@ export function createApp(deps: AppDeps) {
   const app = new Hono()
     .onError((err, c) => {
       if (err instanceof DomainError) return c.json({ error: err.code, message: err.message }, 400);
+      if (err instanceof NotFoundError) return c.json({ error: "not-found", message: err.message }, 404);
       console.error(err);
       return c.json({ error: "internal", message: "Something went wrong." }, 500);
     })

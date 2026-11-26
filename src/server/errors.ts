@@ -8,3 +8,11 @@ export class DomainError extends Error {
     this.name = "DomainError";
   }
 }
+
+/** The thing asked for doesn't exist, or isn't the caller's. Routes turn it into a 404. */
+export class NotFoundError extends Error {
+  constructor(readonly what: string) {
+    super(`${what} not found.`);
+    this.name = "NotFoundError";
+  }
+}

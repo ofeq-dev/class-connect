@@ -22,7 +22,12 @@ function commitSha(): string {
 // Migrations run before the server listens (#19).
 const database = openDatabase(config.databasePath, config.migrationsDir);
 const events = createLiveEvents();
-const course = createCourseModule({ db: database.db, clock: systemClock, events });
+const course = createCourseModule({
+  db: database.db,
+  clock: systemClock,
+  events,
+  timeZone: config.timeZone,
+});
 const lecturer = course.ensureLecturer(config.lecturerName);
 const sha = commitSha();
 

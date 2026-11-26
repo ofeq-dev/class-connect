@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { DomainError } from "../errors";
+import { DomainError, NotFoundError } from "../errors";
 import { aCourse, makeTestApp, type TestApp } from "../testing";
 
 let t: TestApp;
@@ -32,6 +32,28 @@ describe("Course", () => {
     expect(t.fakes.events.published).toEqual([
       { courseId: null, audience: "lecturer", notice: { type: "course.changed", id: created.id } },
     ]);
+  });
+
+  it("reads only the Lecturer's own Course", () => {
+    const created = aCourse(t);
+    expect(t.modules.course.readCourse(t.lecturer.id, created.id)).toEqual(created);
+    expect(() => t.modules.course.readCourse(t.lecturer.id + 1, created.id)).toThrow(NotFoundError);
+    expect(() => t.modules.course.readCourse(t.lecturer.id, 999)).toThrow(NotFoundError);
+  });
+
+  it("renames a Course and sets its translation languages, cleaned and checked", () => {
+    const { id } = aCourse(t);
+    const updated = t.modules.course.updateCourse(id, {
+      name: " Software Engineering B ",
+      translationLanguages: ["ar", " ru ", "ar", ""],
+    });
+    expect(updated).toMatchObject({ name: "Software Engineering B", translationLanguages: ["ar", "ru"] });
+    expect(() => t.modules.course.updateCourse(id, { translationLanguages: ["Arabic"] })).toThrow(DomainError);
+    expect(t.fakes.events.published.at(-1)).toEqual({
+      courseId: null,
+      audience: "lecturer",
+      notice: { type: "course.changed", id },
+    });
   });
 
   it("keeps a single Lecturer row across restarts and follows a renamed Lecturer", () => {

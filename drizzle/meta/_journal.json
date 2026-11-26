@@ -8,6 +8,13 @@
       "when": 1795724310823,
       "tag": "0000_lecturer_and_course",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1795725417690,
+      "tag": "0001_roster_and_session",
+      "breakpoints": true
     }
   ]
 }
