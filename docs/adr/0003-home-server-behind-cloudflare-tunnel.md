@@ -12,5 +12,7 @@ The stack research recommended one Fly.io machine with a volume. Instead, Class 
 - The client IP is read from `CF-Connecting-IP`. The app binds to `127.0.0.1` so it can be reached only through the tunnel; otherwise that header could be forged.
 - Cloudflare's proxy serves every hostname over both IPv4 and IPv6, so a single-family subdomain cannot reveal the Lecturer's other address. The Lecturer's browser asks `api4.ipify.org` and `api6.ipify.org` instead and reports both.
 - Cloudflare closes a proxied connection after about 100 seconds without data, so SSE streams send a heartbeat every ~25 seconds.
-- Backups are a nightly `sqlite3 .backup` copy to another disk; there are no volume snapshots.
+- Backups are a consistent copy made by the app itself (`better-sqlite3` `db.backup()`; the box has no `sqlite3` CLI), nightly from a systemd timer and before every deploy, to the Windows `D:` drive (`/mnt/d`). There are no volume snapshots.
+- Deploys run on the box: a merge to `master` passes CI, then a self-hosted GitHub Actions runner on the home server builds the commit into its own release directory, swaps a `current` symlink and restarts the systemd unit, rolling back if `/healthz` doesn't report the new commit. A GitHub-hosted runner can't reach the box, which accepts no inbound connections except through the tunnel.
+- Migrations run at app startup and stay additive, so the previous release still runs against the newer schema after a rollback.
 - There is no fallback host. If the home server is down during class, the demo is down.
