@@ -8,11 +8,12 @@
   Desk console and Binder won, with notes: too crowded, hard to read at a glance, attendance and
   polls always expanded, Roster too prominent, pinned Comments should sit on top, actions should
   be icons, no IP addresses unless a diagnostic flag is on, saved polls may be incomplete.
-  Round 2: a calmer teaching console in two arrangements, switchable with the pill at the
-  bottom (or ← / →), stored in the URL hash:
-    #d Calm columns   three glance cards; details open in place.
-    #e Inbox + rail   Comments take the page; attendance and the current poll sit in a rail;
-                      details open in a side drawer.
+  Round 2 (commit 98ac104) compared Calm columns (#d) with Inbox + rail (#e); Calm columns won,
+  with quick reactions grouped.
+  Round 3: Calm columns only, plus a Topic filter on Comments, a closed poll that stays on the
+  card until dismissed (so its results can go on the projector), and a projector window for an
+  extended display: "Open projector window" opens it; drag it to the projector and go full
+  screen. The thumbnail in the header shows what the class sees; the console picks what it shows.
   Roster, the attendance sheet download and Diagnostics live in the ⋯ menu.
   The Scenario panel plays the Students and the clock. All state is in memory; reload resets it.
 -->
@@ -146,6 +147,15 @@ input[type=text], input[type=time], textarea, select { border: 1.5px solid var(-
 .proj.poll .po div { position: relative; padding: 1cqw 2cqw; border: .3cqw solid #111; border-radius: 1cqw; display: flex; justify-content: space-between; overflow: hidden; }
 .proj.poll .po i { position: absolute; inset: 0 auto 0 0; background: var(--hl-poll); }
 .proj.poll .po span, .proj.poll .po b { position: relative; }
+.filters { display: flex; gap: 6px; flex-wrap: wrap; }
+.filters button { border: 1.5px solid var(--line); background: var(--card); border-radius: 999px; padding: 3px 11px; font-size: 13px; font-weight: 700; }
+.filters button.on { background: var(--hl); border-color: var(--ink); }
+.filters button b { color: var(--muted); font-weight: 700; margin-left: 6px; }
+.projctl { display: flex; align-items: center; gap: 10px; }
+.thumb { width: 168px; padding: 0; border: 3px solid #111; border-radius: 3px; background: #111; flex: none; position: relative; }
+.thumb .off { position: absolute; inset: 0; display: grid; place-items: center; background: rgb(17 17 17 / .72); color: #fff; font-size: 12px; font-weight: 700; text-align: center; padding: 6px; }
+.projctl .seg button:disabled { opacity: .35; }
+.proj.blank { grid-template-columns: 1fr; place-items: center; color: #bbb; font-size: 3cqw; }
 .overlay { position: fixed; inset: 0; z-index: 45; background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 20px; }
 .overlay .proj { max-width: min(1200px, (100vh - 120px) * 16 / 9); }
 .overlay .ctl { display: flex; gap: 8px; align-items: center; color: #ccc; font-size: 13px; }
@@ -202,8 +212,7 @@ body.panel-open #panel { display: flex; }
 
 <script>
 const VARIANTS = [
-  { k: 'd', name: 'Calm columns' },
-  { k: 'e', name: 'Inbox + rail' },
+  { k: 'd', name: 'Calm columns · round 3' },
 ];
 const NAMES = ['Noa Levi', 'Amir Haddad', 'Maya Cohen', 'Yonatan Peretz', 'Shira Mizrahi', 'Omer Biton', 'Tamar Friedman', 'Daniel Azoulay', 'Lior Katz', 'Yael Shapiro', 'Itay Ben-David', 'Rotem Avraham', 'Nadav Golan', 'Hila Dahan', 'Eitan Malka', 'Adi Rosen', 'Guy Ohana', 'Michal Sasson', 'Ariel Vaknin', 'Neta Elbaz', 'Rami Khoury', 'Lina Mansour', 'Ido Segal', 'Talia Weiss', 'Yuval Harari', 'Dana Amar', 'Bar Levy', 'Sapir Hazan', 'Tom Barak', 'Mor Edri', 'Yarin Gabay', 'Ella Tal'];
 const QUICK = ['Too fast', 'Can you repeat that?'];
@@ -259,7 +268,7 @@ function initial() {
       { id: 3, topic: 's7', q: 'Which diagram did you find hardest last week?', options: ['Class', 'Use case', 'Activity'], counts: [12, 5, 9], status: 'closed', opensAt: 606, closesAt: 611 },
       { id: 4, topic: 's7', q: 'Exam format preference?', options: ['', '', ''], counts: [0, 0, 0], status: 'saved', opensAt: null, closesAt: null },
     ],
-    showDone: false, expanded: {}, fresh: null,
+    showDone: false, expanded: {}, fresh: null, topicFilter: 'all', focusPoll: 1,
     attOpen: false, pollsOpen: false, drawer: null,
     view: 'live', projecting: false, screen: 'qr', screenPoll: null,
     pollForm: null, rosterQ: '', importBox: null, toast: null,
@@ -333,10 +342,15 @@ function attDetail() {
 /* ================= comments ================= */
 const who = c => c.who === null ? 'Anonymous' : S.roster[c.who].name;
 function inboxItems() {
-  const open = S.comments.filter(c => c.status === 'New');
+  const open = S.comments.filter(c => c.status === 'New' && inTopic(c));
   const pinned = open.filter(c => c.pinned).reverse();
   const rest = open.filter(c => !c.pinned).reverse();
   return { pinned: pinned.map(c => ({ one: c })), rest: group(rest) };
+}
+const inTopic = c => S.topicFilter === 'all' || c.topic === S.topicFilter;
+function topicFilters() {
+  const n = t => S.comments.filter(c => c.status === 'New' && (t === 'all' || c.topic === t)).length;
+  return `<div class="filters">${[['all', 'All']].concat(S.topics.map(t => [t.id, t.name])).map(([id, l]) => `<button class="${S.topicFilter === id ? 'on' : ''}" data-a="set" data-k="topicFilter" data-v="${id}">${l}<b>${n(id) || ''}</b></button>`).join('')}</div>`;
 }
 function group(cs) {
   if (S.grouping !== 'grouped') return cs.map(c => ({ one: c }));
@@ -356,7 +370,7 @@ function cmIcons(cs) {
   return `<span class="icons">${ib('pin', pinned ? 'Unpin' : 'Pin to top', 'cpin', ids, pinned ? 'on' : '')}${ib('check', 'Addressed', 'cstatus', `${ids} data-v="Addressed"`, 'ok')}${ib('ignore', 'Ignore', 'cstatus', `${ids} data-v="Ignored"`, 'bad')}</span>`;
 }
 function meta(c) {
-  const where = c.topic === 's7' ? (c.when === 'before' ? 'before the Session' : '') : topicName(c.topic);
+  const where = S.topicFilter !== 'all' ? (c.when === 'before' ? 'before the Session' : '') : c.topic === 's7' ? (c.when === 'before' ? 'before the Session' : '') : topicName(c.topic);
   return [`<b>${esc(who(c))}</b>`, where, c.at].filter(Boolean).map(s => `<span>${s}</span>`).join('');
 }
 function commentCard(c) {
@@ -370,9 +384,10 @@ function groupCard(g) {
 }
 function commentsArea() {
   const { pinned, rest } = inboxItems();
-  const done = S.comments.filter(c => c.status !== 'New').reverse();
+  const done = S.comments.filter(c => c.status !== 'New' && inTopic(c)).reverse();
   const card = i => i.one ? commentCard(i.one) : groupCard(i);
   return `<section class="sec" data-s="cm"><div class="sec-head"><h2><span class="hl">Comments</span></h2><span class="small muted">${pinned.length + rest.reduce((n, i) => n + (i.group ? i.group.length : 1), 0)} open</span></div>
+    ${topicFilters()}
     ${pinned.map(card).join('')}
     ${rest.length ? rest.map(card).join('') : (pinned.length ? '' : '<p class="muted">All caught up.</p>')}
     <button class="more" data-a="toggle" data-k="showDone">${S.showDone ? '▾' : '▸'} Dealt with (${done.length})</button>
@@ -385,21 +400,24 @@ function bars(p) {
   return `<div class="bars">${p.options.map((o, i) => { const pct = t ? Math.round(p.counts[i] * 100 / t) : 0; return `<div class="bar"><i style="width:${pct}%"></i><span>${esc(o)}</span><b>${p.counts[i]}</b></div>`; }).join('')}</div>`;
 }
 function currentPoll() {
-  return S.polls.find(p => p.status === 'open')
-    || S.polls.filter(p => p.status === 'scheduled').sort((a, b) => a.opensAt - b.opensAt)[0]
-    || S.polls.filter(p => p.status === 'closed').sort((a, b) => b.closesAt - a.closesAt)[0];
+  return S.polls.find(p => p.id === S.focusPoll)
+    || S.polls.find(p => p.status === 'open')
+    || S.polls.filter(p => p.status === 'scheduled').sort((a, b) => a.opensAt - b.opensAt)[0];
 }
+const onScreen = p => S.screen === 'poll' && S.screenPoll === p.id;
 function pollGlance() {
   if (S.pollForm) return pollForm();
   const p = currentPoll();
   let h = '';
   if (!p) h = '<p class="muted">No poll running.</p>';
   else if (p.status === 'open') h = `<div class="state"><span class="dot on"></span><span class="grow">Open · ${plural(total(p), 'vote')}${p.closesAt ? ` · closes ${fmt(p.closesAt)}` : ''}</span></div><div class="poll-q">${esc(p.q)}</div>${bars(p)}
-    <div class="row"><button class="btn" data-a="pclose" data-id="${p.id}">Close and show results</button><button class="link small" data-a="pshow" data-id="${p.id}">Project</button></div>`;
+    <div class="row wrap"><button class="btn" data-a="pclose" data-id="${p.id}">${onScreen(p) ? 'Close and show results' : 'Close poll'}</button>${onScreen(p) ? '<span class="chip c-ok">On projector</span>' : `<button class="btn btn-line" data-a="pshow" data-id="${p.id}">Show on projector</button>`}</div>`;
   else if (p.status === 'scheduled') h = `<div class="state"><span class="dot"></span><span class="grow">Next poll opens ${fmt(p.opensAt)}</span></div><div class="poll-q">${esc(p.q)}</div>
     <div class="row"><button class="btn btn-line btn-sm" data-a="popen" data-id="${p.id}">Open now</button></div>`;
-  else h = `<div class="state"><span class="dot"></span><span class="grow">Last poll · closed ${fmt(p.closesAt)}</span></div><div class="poll-q">${esc(p.q)}</div>${bars(p)}`;
-  return h + `<button class="btn btn-line" data-a="pnew">+ New poll</button>`;
+  else if (p.status === 'closed') h = `<div class="state"><span class="dot"></span><span class="grow">Closed ${fmt(p.closesAt)} · ${plural(total(p), 'vote')} · Students see the results</span></div><div class="poll-q">${esc(p.q)}</div>${bars(p)}
+    <div class="row wrap">${onScreen(p) ? '<span class="chip c-ok">Results on projector</span>' : `<button class="btn" data-a="pshow" data-id="${p.id}">Show results on projector</button>`}<button class="btn btn-line" data-a="pdone">Done</button></div>`;
+  else h = `<div class="state"><span class="dot"></span><span class="grow">Saved · not open yet</span></div><div class="poll-q">${esc(p.q || 'Untitled poll')}</div>`;
+  return h + (p && (p.status === 'open' || p.status === 'closed') ? '' : `<button class="btn btn-line" data-a="pnew">+ New poll</button>`);
 }
 function pollList() {
   const label = p => ({ open: '<span class="chip c-ok">Open</span>', scheduled: `<span class="chip c-warn">${fmt(p.opensAt)}</span>`, saved: `<span class="chip c-mute">${complete(p) ? 'Saved' : 'Draft'}</span>`, closed: '<span class="chip c-mute">Closed</span>' }[p.status]);
@@ -437,6 +455,7 @@ function rosterView() {
 /* ================= projector ================= */
 function projector() {
   const t = tally();
+  if (S.screen === 'blank') return `<div class="proj blank">Class Connect</div>`;
   if (S.screen === 'poll') {
     const p = S.polls.find(x => x.id === S.screenPoll);
     if (p) {
@@ -451,9 +470,33 @@ function projector() {
 }
 
 /* ================= shell + variants ================= */
+let projWin = null;
+const projOpen = () => projWin && !projWin.closed;
+function projCtl() {
+  const p = currentPoll(), canPoll = p && (p.status === 'open' || p.status === 'closed');
+  return `<div class="projctl"><div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end"><span class="small muted">${projOpen() ? 'The class sees' : 'Projector window not open'}</span>
+      <span class="seg"><button class="${S.screen === 'qr' ? 'on' : ''}" data-a="screen" data-v="qr">QR + count</button><button class="${S.screen === 'poll' ? 'on' : ''}" data-a="screen" data-v="poll" ${canPoll ? '' : 'disabled'}>Poll</button><button class="${S.screen === 'blank' ? 'on' : ''}" data-a="screen" data-v="blank">Blank</button></span></div>
+    <button class="thumb" data-a="projwin" title="${projOpen() ? 'Bring the projector window forward' : 'Open the projector window'}">${projector()}${projOpen() ? '' : '<span class="off">Open projector window</span>'}</button></div>`;
+}
+function openProjector() {
+  projWin = window.open('', 'cc-projector', 'width=1280,height=720');
+  if (!projWin) return toast('The browser blocked the projector window. Allow pop-ups for this page.');
+  const css = document.querySelector('style').textContent;
+  const fonts = [...document.querySelectorAll('link[rel=stylesheet]')].map(l => l.outerHTML).join('');
+  projWin.document.open();
+  projWin.document.write(`<!doctype html><meta charset="utf-8"><title>Class Connect · Projector</title>${fonts}<style>${css} html,body{height:100%;margin:0;background:#000} body{display:grid;place-items:center} #p{width:min(100vw,177.78vh)} #fs{position:fixed;top:8px;right:8px;opacity:.5;font:12px Inter,sans-serif;background:#222;color:#fff;border:0;border-radius:6px;padding:6px 10px;cursor:pointer} #fs:hover{opacity:1}</style><div id="p"></div><button id="fs" onclick="document.documentElement.requestFullscreen();this.remove()">Full screen</button>`);
+  projWin.document.close();
+  projWin.focus();
+  toast('Drag the projector window onto the projector, then press Full screen.');
+}
+function syncProjector() {
+  if (!projOpen()) return;
+  const el = projWin.document.getElementById('p');
+  if (el) el.innerHTML = projector();
+}
 function header() {
   return `<header class="top"><div class="grow"><div class="t">Session 7 · Sequence diagrams</div><div class="small muted">Software Engineering · 10:15–11:45 · now ${fmt(S.clock)}</div></div>
-    <button class="btn" data-a="project">Show on projector</button>${ib('more', 'More', 'toggle', 'data-k="menu"')}
+    ${projCtl()}${ib('more', 'More', 'toggle', 'data-k="menu"')}
     ${S.menu ? `<div class="menu"><button data-a="view" data-v="roster">Roster <span class="muted">${S.roster.length}</span></button><button data-a="export">Download attendance sheet</button><hr><button data-a="toggle" data-k="diag">Diagnostics <span class="muted">${S.diag ? 'on' : 'off'}</span></button></div>` : ''}</header>`;
 }
 function attSection(mode) {
@@ -477,7 +520,7 @@ function VariantE() {
   if (S.drawer) h += `<div class="drawer-bg" data-a="drawer" data-v=""></div>${S.drawer === 'att' ? attSection('drawer') : pollSection('drawer')}`;
   return h;
 }
-const RENDER = { d: VariantD, e: VariantE };
+const RENDER = { d: VariantD };
 function overlay() {
   if (!S.projecting) return '';
   const hasPoll = S.polls.some(p => p.status === 'open' || p.status === 'closed');
@@ -490,7 +533,7 @@ function tickClock(mins) {
   for (let i = 0; i < mins; i++) {
     S.clock++;
     S.polls.forEach(p => {
-      if (p.status === 'scheduled' && p.opensAt <= S.clock) { p.status = 'open'; if (p.dur) p.closesAt = S.clock + p.dur; toast(`Scheduled poll opened: ${p.q}`); }
+      if (p.status === 'scheduled' && p.opensAt <= S.clock) { p.status = 'open'; const f = S.polls.find(x => x.id === S.focusPoll); if (!f || f.status !== 'open') S.focusPoll = p.id; if (p.dur) p.closesAt = S.clock + p.dur; toast(`Scheduled poll opened: ${p.q}`); }
       if (p.status === 'open' && p.closesAt && p.closesAt <= S.clock) { p.status = 'closed'; toast(`Poll closed: ${p.q}`); }
       if (p.status === 'open') { const n = 1 + Math.floor(Math.random() * 3); for (let k = 0; k < n; k++) p.counts[Math.floor(Math.random() * p.options.length)]++; }
     });
@@ -501,7 +544,7 @@ function studentCheckin(where) {
   if (!r) return toast('Every claimed Student has checked in.');
   if (S.window !== 'open') return toast(`${r.name} scanned, but Check-in is closed.`);
   if (where === 'classroom') { r.att = { kind: 'present', at: S.clock }; return; }
-  const block = OFFNETS[S.offIdx = ((S.offIdx ?? -1) + 1) % OFFNETS.length];
+  const block = where === 'off' ? OFFNETS[0] : OFFNETS[S.offIdx = ((S.offIdx ?? 0) % (OFFNETS.length - 1)) + 1];
   r.att = S.approved.includes(block) ? { kind: 'present', at: S.clock } : { kind: 'pending', at: S.clock, block };
 }
 function studentComment(kind) {
@@ -525,6 +568,7 @@ function submitPoll() {
   const options = status === 'saved' ? draft.options : draft.options.map(o => o.trim()).filter(Boolean);
   Object.assign(p, { q: draft.q.trim(), options, counts: options.map(() => 0), status, opensAt, closesAt: status === 'open' && dur ? S.clock + dur : null, dur });
   if (!f.editId) S.polls.push(p);
+  if (status === 'open') S.focusPoll = p.id;
   S.pollForm = null;
   toast(status === 'open' ? 'Poll open. Students get a badge and banner.' : status === 'scheduled' ? `Scheduled for ${fmt(opensAt)}` : complete(p) ? 'Saved' : 'Saved as a draft');
 }
@@ -567,10 +611,12 @@ function act(a, d) {
     case 'padd': S.pollForm.options.push(''); break;
     case 'pf': S.pollForm[d.k] = d.v; break;
     case 'pcancel': S.pollForm = null; break;
-    case 'popen': { const p = S.polls.find(x => x.id === +d.id); if (!complete(p)) { toast('Finish the poll first.'); break; } p.status = 'open'; p.opensAt = S.clock; p.closesAt = p.dur ? S.clock + p.dur : null; break; }
-    case 'pclose': { const p = S.polls.find(x => x.id === +d.id); p.status = 'closed'; p.closesAt = S.clock; toast('Closed. Students now see the results.'); break; }
-    case 'pshow': S.screen = 'poll'; S.screenPoll = +d.id; S.projecting = true; break;
-    case 'screen': S.screen = d.v; if (d.v === 'poll') { const p = currentPoll(); S.screenPoll = p && p.id; } break;
+    case 'popen': { const p = S.polls.find(x => x.id === +d.id); if (!complete(p)) { toast('Finish the poll first.'); break; } p.status = 'open'; p.opensAt = S.clock; p.closesAt = p.dur ? S.clock + p.dur : null; S.focusPoll = p.id; break; }
+    case 'pclose': { const p = S.polls.find(x => x.id === +d.id); p.status = 'closed'; p.closesAt = S.clock; toast(onScreen(p) ? 'Closed. Results are on the projector and on Students’ phones.' : 'Closed. Students now see the results on their phones.'); break; }
+    case 'pshow': S.screen = 'poll'; S.screenPoll = +d.id; if (!projOpen()) openProjector(); break;
+    case 'projwin': if (projOpen()) projWin.focus(); else openProjector(); break;
+    case 'pdone': if (onScreen(currentPoll())) S.screen = 'qr'; S.focusPoll = null; break;
+    case 'screen': S.screen = d.v; if (d.v === 'poll') { const p = currentPoll(); S.screenPoll = p && p.id; } if (!projOpen()) openProjector(); break;
     case 'project': S.projecting = true; break;
     case 'unproject': S.projecting = false; break;
     case 'importOpen': S.importBox = { text: '' }; break;
@@ -584,6 +630,7 @@ function act(a, d) {
     case 'sIn': studentCheckin('classroom'); break;
     case 'sIn5': for (let i = 0; i < 5; i++) studentCheckin('classroom'); break;
     case 'sOff': studentCheckin('off'); break;
+    case 'sOffNew': studentCheckin('offNew'); break;
     case 'sQuick': studentComment('quick'); break;
     case 'sTyped': studentComment('typed'); break;
     case 'sTick': tickClock(+d.v); break;
@@ -613,7 +660,8 @@ function renderPanel() {
     <div class="g"><span class="eyebrow">Students</span>
       <button class="pb" data-a="sIn">A Student checks in from the classroom Wi-Fi</button>
       <button class="pb" data-a="sIn5">Five Students check in from the classroom Wi-Fi</button>
-      <button class="pb" data-a="sOff">A Student checks in from another network</button>
+      <button class="pb" data-a="sOff">A Student checks in from the same other network as Ariel and Neta</button>
+      <button class="pb" data-a="sOffNew">A Student checks in from a different network again</button>
       <button class="pb" data-a="sQuick">A Student sends a quick reaction</button>
       <button class="pb" data-a="sTyped">A Student types a Comment</button></div>
     <div class="g"><span class="eyebrow">Clock (${fmt(S.clock)}; votes trickle in, scheduled polls fire)</span>
@@ -630,7 +678,8 @@ function render() {
   const f = document.activeElement, fKey = f && (f.dataset.in || f.dataset.f), fPos = f && f.selectionStart;
   const dScroll = document.querySelector('.drawer') ? document.querySelector('.drawer').scrollTop : 0;
   document.body.className = S.panel ? 'panel-open' : '';
-  $('stage').innerHTML = RENDER[S.variant]() + overlay();
+  $('stage').innerHTML = RENDER[S.variant]();
+  syncProjector();
   const dr = document.querySelector('.drawer'); if (dr) dr.scrollTop = dScroll;
   if (fKey) { const el = document.querySelector(`[data-in="${fKey}"], [data-f="${fKey}"]`); if (el) { el.focus(); try { el.setSelectionRange(fPos, fPos); } catch (_) {} } }
   renderPanel(); renderSwitcher(); renderToast();
