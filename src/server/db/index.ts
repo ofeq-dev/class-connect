@@ -41,3 +41,6 @@ export function openDatabase(file: string, migrationsDir: string): OpenedDatabas
     close: () => sqlite.close(),
   };
 }
+
+/** The handle a transaction callback receives; writes through it commit or roll back together. */
+export type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
