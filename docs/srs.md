@@ -183,14 +183,15 @@ There is exactly one Lecturer account. It can run several Courses.
 | FR-LC-4 | The Comments column must show Pinned Comments on top, Topic filter chips with open counts, icon actions (pin, Addressed, Ignore) with Undo, and Addressed and Ignored Comments folded under "Dealt with (n)". |
 | FR-LC-5 | The Poll column must show only the current Poll (focused, else open, else next scheduled); others sit behind "All polls (n)". A closed Poll stays on the card with its results until **Done**. |
 | FR-LC-6 | IP addresses, network blocks and a short device ID (the first 6 characters of the stored device-token hash) must be shown only when the Diagnostics flag is on (off by default). |
-| FR-LC-7 | The Projector window must be its own page, updated live, showing either the QR code with the Session title and checked-in count, or the current Poll with its vote count (results only after it closes), or nothing. It never shows Comments or Pending names. It opens from an unguessable per-Course link (`/p/<secret>`) with no sign-in, so a classroom PC can be set up once; the Lecturer can make a new link, which stops the old one working. |
+| FR-LC-7 | The Projector window must be its own page, updated live, showing either the QR code with the Session title and checked-in count, or the current Poll with its vote count (results only after it closes), or nothing. It never shows Comments or Pending names. It opens from an unguessable per-Course link (`/p/<secret>`) with no sign-in, so a classroom PC can be set up once; the Lecturer can make a new link, which stops the old one working. It shows the Course's Session whose projector mode was set most recently, else Blank. The projector mode is server state, so the console thumbnail, the window and a classroom PC always agree. |
 | FR-LC-8 | The console must show today's LLM request count against the 1000-a-day limit. |
+| FR-LC-9 | Outside a live Session, the Lecturer must work from a **Course desk** per Course: its Sessions (with **Open live console** for today's), Session summaries and Assignments, with the Roster, Topics, Course settings, Download attendance sheet and Diagnostics in its ⋯ menu. Those screens keep the live console's Binder look; tier 3 screens are minimal. |
 
 ### 3.7 Student phone app — [#11](https://github.com/ofeq-dev/class-connect/issues/11)
 
 | ID | Requirement |
 |---|---|
-| FR-SA-1 | The app must have four bottom tabs in the Binder look, each with its own highlighter colour: **Today** (Session, Check-in status, shortcuts to open Polls and commenting; yellow), **Polls** (open Polls, then results of closed ones; pink), **Comment** (Topic, text, anonymous switch, quick reactions, Send; green), **Mine** (own Comments with status; blue). |
+| FR-SA-1 | The app must have four bottom tabs in the Binder look, each with its own highlighter colour: **Today** (Session, Check-in status, shortcuts to open Polls and commenting, then a **Session summaries** list and an **Assignments** list, each opening a plain sub-page for reading a summary, handing in a Submission, reading a Review and asking for or offering help; yellow), **Polls** (open Polls, then results of closed ones; pink), **Comment** (Topic, text, anonymous switch, quick reactions, Send; green), **Mine** (own Comments with status; blue). |
 | FR-SA-2 | Check-in status and its problems (off-network Pending, window closed) must show in the same spot on Today. |
 | FR-SA-3 | The app should offer a dark theme. |
 
@@ -233,13 +234,17 @@ The data each module owns is drawn table by table in the [class diagram](diagram
 - Uploaded files are stored on disk under their content hash; their extracted text is stored in the database.
 - The server stores the author of an anonymous Comment and the voter of every Vote, but no read model shows them to the Lecturer.
 
-## 7. Open items
+## 7. Gaps settled while writing
 
-Gaps found while writing this doc set and not yet settled:
+Five gaps found while writing this doc set were settled with the Lecturer-developer on 2026-11-26, and are written into the requirements above and into the [demo spec](https://github.com/ofeq-dev/class-connect/issues/20):
 
-1. **Student screens for tier 3.** The Student app's four tabs cover Check-in, Polls and Comments. Where a Student reads a published Session summary, hands in a Submission, reads their Review and makes a Help request or offer is not designed. Raised on the [map](https://github.com/ofeq-dev/class-connect/issues/1) with the Lecturer screens outside the live Session.
+1. **Student screens for tier 3** (FR-SA-1): Session summaries and Assignments are lists on Today, each opening a plain sub-page. The tab bar stays at four.
+2. **Who creates a Session's Topic** (FR-FB-1): Feedback works it out from the Course's Sessions and stores it on first use, so Course never calls Feedback.
+3. **What Diagnostics shows for a device** (FR-LC-6): a 6-character device ID from the stored token hash.
+4. **Transcripts without timestamps** (FR-SUM-1, FR-SUM-2): accepted with a warning; the outline has no times.
+5. **Access to the Projector window** (FR-LC-7): an unguessable, replaceable per-Course link.
 
-Four other gaps found while writing (who creates a Session's Topic, what Diagnostics shows for a device, Transcripts without timestamps, and access to the Projector window) were settled with the Lecturer-developer on 2026-11-26 and are written into FR-FB-1, FR-SUM-1, FR-SUM-2, FR-LC-6 and FR-LC-7.
+Nothing is open.
 
 ## 8. Traceability
 

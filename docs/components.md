@@ -181,8 +181,9 @@ flowchart LR
 
 | Surface | Look | Structure |
 |---|---|---|
-| **Student phone app** | "Binder": lined paper, ring-binder tabs, a highlighter colour per tab; Bricolage Grotesque headings, Atkinson Hyperlegible body | Four bottom tabs: Today (yellow), Polls (pink), Comment (green), Mine (blue). Prototype: [`prototype/student-phone-app`](https://github.com/ofeq-dev/class-connect/tree/prototype/student-phone-app) |
+| **Student phone app** | "Binder": lined paper, ring-binder tabs, a highlighter colour per tab; Bricolage Grotesque headings, Atkinson Hyperlegible body | Four bottom tabs: Today (yellow), Polls (pink), Comment (green), Mine (blue). Tier 3 lives on Today, as Session summaries and Assignments lists with plain sub-pages. Prototype: [`prototype/student-phone-app`](https://github.com/ofeq-dev/class-connect/tree/prototype/student-phone-app) |
 | **Lecturer console** | Binder, carried over | Header with Projector control and ⋯ menu (Roster, Download attendance sheet, Diagnostics); three calm columns: Attendance, Comments, Poll. Prototype: [`prototype/lecturer-screens`](https://github.com/ofeq-dev/class-connect/tree/prototype/lecturer-screens) |
-| **Projector window** | Large, public | QR code + live count, or the current Poll, or Blank; updated by the same Live events. Opened by an unguessable per-Course link (`/p/<secret>`) with no sign-in; the Lecturer can make a new one |
+| **Course desk** | Binder, carried over | One per Course, outside the live Session: Sessions, Session summaries and Assignments, with Roster, Topics, Course settings, Download attendance sheet and Diagnostics in its ⋯ menu. Tier 3 screens are minimal. See the [demo spec](https://github.com/ofeq-dev/class-connect/issues/20) |
+| **Projector window** | Large, public | QR code + live count, or the current Poll, or Blank; updated by the same Live events. Opened by an unguessable per-Course link (`/p/<secret>`) with no sign-in; the Lecturer can make a new one. Shows the Session whose projector mode was set most recently; the mode is server state on the Session |
 
 Front-end libraries: React, React Router (plain client-side routing), TanStack Query, `marked` + `DOMPurify` for Markdown preview.

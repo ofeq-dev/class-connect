@@ -198,6 +198,8 @@ classDiagram
     start
     end
     qr_code
+    projector_mode : QR, Poll, Blank
+    projected_poll_id
   }
   lecturer "1" --> "*" course
   course "1" --> "*" roster_entry
@@ -282,6 +284,7 @@ classDiagram
     anonymous
     timing : before, during, after
     status : New, Pinned, Addressed, Ignored
+    reaction : quick-reaction key or none
     created_at
   }
   class poll {

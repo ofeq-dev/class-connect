@@ -308,7 +308,7 @@ The brief's features as stories, each pointing at its use case.
 2. It is shown in their browser's language if a translation exists, else in the Transcript's language.
 3. The Student may switch language.
 
-**Open:** where in the Student app this lives is not designed ([SRS § 7](srs.md#7-open-items)).
+**Where:** Today → Session summaries, then the summary's sub-page.
 
 ### UC-13 Set an Assignment
 
@@ -340,7 +340,7 @@ The brief's features as stories, each pointing at its use case.
 - 1a. The Student replaces their Submission; before the due date only the latest counts.
 - 1b. After the due date the Submission is still accepted and marked Late.
 
-**Open:** where in the Student app this lives is not designed ([SRS § 7](srs.md#7-open-items)).
+**Where:** Today → Assignments, then the Assignment's sub-page.
 
 ### UC-15 Review and Release
 
@@ -378,7 +378,7 @@ The brief's features as stories, each pointing at its use case.
 2. Another Student at Secure on Q2 taps "Offer to help with Q2".
 3. Neither knows who else has asked or offered. They wait for the match (UC-17).
 
-**Open:** where in the Student app this lives is not designed ([SRS § 7](srs.md#7-open-items)).
+**Where:** the Assignment's sub-page on Today, under the Student's own Review.
 
 ### UC-17 Match Help requests
 
