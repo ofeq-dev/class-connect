@@ -4,7 +4,7 @@ Drawn from [System architecture and components](https://github.com/ofeq-dev/clas
 
 The server is one Hono process. HTTP routes are thin adapters: they call only the module interfaces below. Five **feature modules** own all domain state. Five **infrastructure modules** are injected into them, so tests can pass in fakes.
 
-Operations marked **‡** are not named in the architecture resolution. Each module needs one to do what was decided, so they are drawn here and listed in [Open seams found while drawing the diagrams](https://github.com/ofeq-dev/class-connect/issues/15).
+Operations the architecture resolution didn't name, but the decided behaviour needs, were confirmed by [Open seams found while drawing the diagrams](https://github.com/ofeq-dev/class-connect/issues/15). `nextMoment(after)` on Attendance and Feedback gives the earliest scheduled Check-in window close, or scheduled Poll open or close, after a given time. The next-event timer wakes at the earliest of those and the next job `run_at`.
 
 ## Modules and their interfaces
 
@@ -21,8 +21,8 @@ classDiagram
     class Course {
       <<module>>
       +importRoster(course, csv) RosterEntry[]
-      +addRosterEntry(course, studentId, name) RosterEntry ‡
-      +findRosterEntry(course, studentId) RosterEntry ‡
+      +addRosterEntry(course, studentId, name) RosterEntry
+      +findRosterEntry(course, studentId) RosterEntry
       +claim(course, studentId, deviceToken) RosterEntry
       +resetClaim(rosterEntry)
       +whoIs(token) Viewer
@@ -41,12 +41,13 @@ classDiagram
       +sheet(course) AttendanceSheet
       +exportXlsx(course) Bytes
       +isPresent(session, rosterEntry) boolean
+      +nextMoment(after) Instant
     }
     class Feedback {
       <<module>>
-      +addTopic(course, name) Topic ‡
-      +renameTopic(topic, name) ‡
-      +archiveTopic(topic) ‡
+      +addTopic(course, name) Topic
+      +renameTopic(topic, name)
+      +archiveTopic(topic)
       +comment(topic, author, text, anonymous) Comment
       +setStatus(comment, status)
       +listComments(filter) Comment[]
@@ -55,6 +56,7 @@ classDiagram
       +closePoll(poll)
       +vote(poll, rosterEntry, option)
       +results(poll, viewer) PollResults
+      +nextMoment(after) Instant
     }
     class Summaries {
       <<module>>
@@ -70,9 +72,10 @@ classDiagram
       +setAssignment(course, assignment, criteria) Assignment
       +submit(assignment, rosterEntry, textOrPdf) Submission
       +startReviewRun(assignment)
-      +retryReview(submission) ‡
+      +retryReview(submission)
       +editReview(review, levels)
       +release(assignment, matchDeadline)
+      +releaseReview(review)
       +requestHelp(criterion, rosterEntry)
       +offerHelp(criterion, rosterEntry)
       +matchNow(assignment)

@@ -7,7 +7,7 @@ Conventions in every diagram:
 - **Routes** are the thin Hono adapters; they resolve the caller with `Course.whoIs(token)` and pass the result on. That lookup is left out after the first diagram.
 - **Live events** carry change notices only (`{type, id}`), never data. On a notice, the client refetches the TanStack Query keys mapped to that type. Every page also refetches everything after its SSE stream reconnects.
 - **Worker** is the one in-process worker draining the durable `job` table. The **next-event timer** wakes at the next scheduled moment and only sends notices or queues jobs; it never changes state.
-- A step marked **‡** is not settled by the architecture resolution; see [Open seams found while drawing the diagrams](https://github.com/ofeq-dev/class-connect/issues/15).
+- Scheduled moments (Poll open or close, Check-in window close) are not `job` rows. The timer asks each module for its `nextMoment(after)` and recomputes after every wake, and whenever a module reports a schedule change. Settled in [Open seams found while drawing the diagrams](https://github.com/ofeq-dev/class-connect/issues/15).
 
 ## 1. Claim, then Check-in
 
@@ -40,7 +40,7 @@ sequenceDiagram
   C-->>R: unknown
   R-->>S: claim needed
   S->>R: POST claim lookup {studentId}
-  R->>C: findRosterEntry(course, studentId) ‡
+  R->>C: findRosterEntry(course, studentId)
   C-->>R: entry name
   R-->>S: "You are Dana Levi. Correct?"
   S->>R: POST claim {studentId} (confirmed)
@@ -110,7 +110,8 @@ sequenceDiagram
     R->>F: openPoll(poll)
     F->>F: set opened_at
     F->>E: publish(course, all, poll.changed)
-  else opened on schedule ‡
+  else opened on schedule
+    T->>F: nextMoment(now)
     T->>K: wake at scheduled_open_at
     T->>E: publish(course, all, poll.changed)
     Note over F,K: no write: the Poll reads as open because now ≥ scheduled_open_at
@@ -144,8 +145,9 @@ sequenceDiagram
     R->>F: closePoll(poll)
     F->>F: set closed_at
     F->>E: publish(course, all, poll.changed)
-  else closed on schedule ‡
+  else closed on schedule
     T->>E: publish(course, all, poll.changed) at scheduled_close_at
+    Note over F,K: no write: the Poll reads as closed because now ≥ scheduled_close_at
   end
   E-->>S: poll.changed
   S->>R: GET /polls/:id/results
@@ -265,7 +267,7 @@ sequenceDiagram
     E-->>L: progress bar, Retry on failed Submissions
   end
 
-  Note over H,J: ‡ when every review.submission job has settled
+  Note over H,J: the handler that settles the run's last job (succeeded, or failed after 3 attempts)<br/>finds no unsettled jobs in the same transaction and queues compare
   H->>J: enqueue(review.compare)
   W->>H: handler(review.compare)
   H->>H: fingerprints over every Submission
@@ -278,11 +280,19 @@ sequenceDiagram
   G-->>H: counts per Criterion, common mistakes
   H->>E: publish(course, lecturer, homework.changed)
 
+  opt Lecturer retries a failed Submission
+    L->>R: Retry
+    R->>H: retryReview(submission)
+    H->>J: enqueue(review.submission, {submission})
+    Note over H,J: on success the same settle check re-queues review.compare, then review.classSummary
+  end
+
   L->>R: edit any draft Review
   R->>H: editReview(review, levels)
 
   L->>R: Release {match deadline, default Release + 2 days}
   R->>H: release(assignment, matchDeadline)
+  H->>H: refuse while any on-time Submission has no Review (Retry or write it by hand)
   H->>H: set released_at on assignment and its Reviews
   H->>J: enqueue(help.match, {assignment}, runAt = matchDeadline)
   H->>E: publish(course, student, homework.changed)
@@ -300,7 +310,8 @@ sequenceDiagram
   alt Lecturer presses Match now
     L->>R: Match now
     R->>H: matchNow(assignment)
-    H->>J: enqueue(help.match, {assignment}, runAt = now) ‡
+    H->>J: enqueue(help.match, {assignment}, runAt = now)
+    Note over H,J: the deadline job stays queued and no-ops later because matched_at is set
   else deadline passes
     Note over J,W: the next-event timer wakes at run_at, the worker picks the job up
   end
@@ -310,5 +321,12 @@ sequenceDiagram
   H->>E: publish(course, all, homework.changed)
   E-->>SA: "You and B are paired for Q2"
   E-->>SB: "You and A are paired for Q2"
-  Note over SA,SB: unmatched request: "No Helper this time — ask your Lecturer". Unmatched offer: thanked.
+  Note over SA,SB: unmatched request: "No Helper this time — ask your Lecturer". Unmatched offer: thanked.<br/>Help requests and offers close for good once matched_at is set.
+
+  opt Late Submission after Release
+    Note over H,G: its own review.submission job, then its fingerprints and embedding join similarity.<br/>The released class summary stays frozen
+    L->>R: release this Review
+    R->>H: releaseReview(review)
+    H->>E: publish(course, student, homework.changed)
+  end
 ```

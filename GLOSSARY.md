@@ -115,7 +115,7 @@ The judgement of one Submission: a level, evidence and feedback for every Criter
 _Avoid_: Grade, marking, feedback (as the whole)
 
 **Release**:
-The Lecturer publishing an Assignment's results all at once: every Student's Review and the class summary, which also opens Help requests and offers.
+The Lecturer publishing an Assignment's results all at once: every Student's Review and the class summary, which also opens Help requests and offers. It waits until every Submission handed in on time has a Review. The Review of a Late Submission is released on its own afterwards.
 _Avoid_: Publish, return, send out
 
 **Help request**:
@@ -127,5 +127,5 @@ A Student who reached Secure on a Criterion and offered, after Release, to help 
 _Avoid_: Tutor, mentor, buddy
 
 **Help match**:
-The pairing of a Help request with a Helper's offer on the same Criterion, made by the app in one pass when the match deadline passes or the Lecturer matches early; only then do the two learn each other's names.
+The pairing of a Help request with a Helper's offer on the same Criterion, made by the app in one pass when the match deadline passes or the Lecturer matches early; only then do the two learn each other's names. After that pass no more Help requests or offers are taken.
 _Avoid_: Buddy pairing, peer assignment
