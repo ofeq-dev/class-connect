@@ -8,4 +8,5 @@ export {
   type TestApp,
   type TestAppOptions,
 } from "./make-test-app";
+export { MemoryFileStore } from "./memory-file-store";
 export { RecordingEvents, type RecordedNotice } from "./recording-events";
