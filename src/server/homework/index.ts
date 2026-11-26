@@ -12,6 +12,7 @@ import { assignment as assignmentTable, criterion, submission as submissionTable
 
 export const MIN_CRITERIA = 3;
 export const MAX_CRITERIA = 5;
+export const MAX_PDF_BYTES = 10 * 1024 * 1024;
 
 export interface AssignmentInput {
   title: string;
@@ -194,6 +195,9 @@ export function createHomeworkModule({ db, clock, course, llm, files, events }: 
 
   async function readSubmission(input: SubmissionInput) {
     if ("pdf" in input) {
+      if (input.pdf.byteLength > MAX_PDF_BYTES) {
+        throw new DomainError("submission.too-big", "That PDF is over 10 MB. Try a smaller file or paste your work.");
+      }
       const extracted = await pdfText(input.pdf);
       if (extracted === null) throw new DomainError("submission.bad-pdf", "That file isn't a PDF we can read.");
       const text = extracted.trim();

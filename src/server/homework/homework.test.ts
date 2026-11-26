@@ -112,6 +112,12 @@ describe("Submissions", () => {
     expect(homework().studentView(assignmentId, dana).submission).toBeNull();
   });
 
+  it("refuses a PDF over 10 MB", async () => {
+    const big = new Uint8Array(10 * 1024 * 1024 + 1);
+    big.set(PDF);
+    await expect(homework().submit(assignmentId, dana, { pdf: big, fileName: "big.pdf" })).rejects.toThrow(/10 MB/);
+  });
+
   it("refuses a Student who isn't on the Assignment's Course", async () => {
     const otherCourse = aCourse(t, "Databases").id;
     const stranger = t.modules.course.addRosterEntry(otherCourse, "2001", "Stranger").id;

@@ -40,6 +40,7 @@ export function makeTestApp(options: TestAppOptions = {}) {
   const app = createApp({
     course,
     summaries,
+    homework,
     llm,
     events,
     lecturer: { id: lecturer.id, passwordHash },
