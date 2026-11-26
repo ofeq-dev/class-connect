@@ -40,6 +40,13 @@ describe("notice → query keys", () => {
     expect(staleKeys()).toEqual([["course", 1], ["roster", 2], ["sessions", 1], ["session", 5]]);
   });
 
+  it("session.changed also refreshes the Student app's view of today", () => {
+    const client = clientWith(["student", "me"], ["student", "entry", "abc"]);
+    applyNotice(client, { type: "session.changed", id: 5 });
+    expect(stale(client, ["student", "me"])).toBe(true);
+    expect(stale(client, ["student", "entry", "abc"])).toBe(true);
+  });
+
   it("a reconnect makes every query stale", () => {
     const client = clientWith(["courses"], ["other"]);
     applyReconnect(client);
