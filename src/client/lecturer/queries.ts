@@ -39,3 +39,38 @@ export function formatDate(date: string): string {
     timeZone: "UTC",
   });
 }
+
+export function useSummaries(courseId: string) {
+  return useQuery({
+    queryKey: ["summaries", Number(courseId)],
+    queryFn: async () =>
+      ok(await api.api.lecturer.courses[":courseId"].summaries.$get({ param: { courseId } })),
+  });
+}
+
+export function useSummary(courseId: string, sessionId: string) {
+  return useQuery({
+    queryKey: ["summary", Number(sessionId)],
+    queryFn: async () =>
+      ok(
+        await api.api.lecturer.courses[":courseId"].sessions[":sessionId"].summary.$get({
+          param: { courseId, sessionId },
+        }),
+      ),
+  });
+}
+
+export function useLlmUsage() {
+  return useQuery({
+    queryKey: ["llm-usage"],
+    queryFn: async () => ok(await api.api.lecturer["llm-usage"].$get()),
+  });
+}
+
+export const SUMMARY_STATE_LABEL = {
+  "no-transcript": "No Transcript",
+  ready: "Transcript uploaded",
+  summarising: "Summarising…",
+  failed: "Failed",
+  draft: "Draft",
+} as const;
