@@ -89,7 +89,7 @@ _Avoid_: Unbind, unlink, account reset
 ### Session summaries
 
 **Transcript**:
-The text record of what was said in a Session, with timestamps, uploaded by the Lecturer.
+The text record of what was said in a Session, with timestamps when it has them, uploaded by the Lecturer.
 _Avoid_: Captions, subtitles, recording
 
 **Session summary**:

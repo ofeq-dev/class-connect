@@ -178,7 +178,7 @@ The brief's features as stories, each pointing at its use case.
 
 **Main flow**
 1. On the classroom Wi-Fi, the Lecturer opens the Session in the console and opens the Check-in window. The browser reports the Lecturer's public addresses.
-2. The Lecturer shows the QR code and live count on the Projector window.
+2. The Lecturer shows the QR code and live count on the Projector window, opened from the Course's projector link on the laptop's second display or on a classroom PC.
 3. Students check in (UC-3); the console shows "19 of 32 present" and the lists live.
 4. The Lecturer closes the window (or leaves it; it closes at midnight).
 
@@ -289,6 +289,7 @@ The brief's features as stories, each pointing at its use case.
 5. The Lecturer publishes. Students can now see it, and translations into the Course's languages are made.
 
 **Alternative flows**
+- 1a. The Transcript has no timestamps (a `.txt` or pasted text): it is accepted with a warning, and the outline has no times.
 - 3a. Every model fails or the daily limit is hit: an error and Retry are shown.
 - 4a. The Lecturer restores an earlier version; it becomes the newest.
 - 4b. The Lecturer regenerates, after confirming; a new AI version is added.
@@ -307,7 +308,7 @@ The brief's features as stories, each pointing at its use case.
 2. It is shown in their browser's language if a translation exists, else in the Transcript's language.
 3. The Student may switch language.
 
-**Open:** where in the Student app this lives is not designed ([SRS § 7](srs.md#7-open-items)).
+**Where:** Today → Session summaries, then the summary's sub-page.
 
 ### UC-13 Set an Assignment
 
@@ -339,7 +340,7 @@ The brief's features as stories, each pointing at its use case.
 - 1a. The Student replaces their Submission; before the due date only the latest counts.
 - 1b. After the due date the Submission is still accepted and marked Late.
 
-**Open:** where in the Student app this lives is not designed ([SRS § 7](srs.md#7-open-items)).
+**Where:** Today → Assignments, then the Assignment's sub-page.
 
 ### UC-15 Review and Release
 
@@ -377,7 +378,7 @@ The brief's features as stories, each pointing at its use case.
 2. Another Student at Secure on Q2 taps "Offer to help with Q2".
 3. Neither knows who else has asked or offered. They wait for the match (UC-17).
 
-**Open:** where in the Student app this lives is not designed ([SRS § 7](srs.md#7-open-items)).
+**Where:** the Assignment's sub-page on Today, under the Student's own Review.
 
 ### UC-17 Match Help requests
 

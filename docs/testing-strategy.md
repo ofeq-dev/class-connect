@@ -41,7 +41,8 @@ Interface: `importRoster`, `claim`, `resetClaim`, `whoIs(token)`, and Session cr
   - One device per Student and one Student per device: a device that has already claimed one entry can't claim another.
   - Only the device token's hash is stored. `whoIs` resolves the raw token and returns nothing for an unknown or reset token.
 - **Claim reset**: it releases the binding at once, so the old token stops resolving and a new claim succeeds. It doesn't touch attendance history (Attendance owns attendance; checked by an Attendance test that uses Course).
-- **Sessions**: each Session gets a unique QR code, `/s/<code>`. Its start and end times are stored, and deleting it removes the Session. A Session Topic is created alongside it (checked with Feedback).
+- **Sessions**: each Session gets a unique QR code, `/s/<code>`. Its start and end times are stored, and deleting it removes the Session. Every Session shows a Topic (checked with Feedback).
+- **Projector link**: `projectorCourse(secret)` resolves the Course's current link. A new link stops the old one resolving.
 
 ### Attendance
 
@@ -76,7 +77,7 @@ Interface: `openWindow(session, {ipv4, ipv6})`, `closeWindow`, `checkIn → Pres
 
 Interface: `comment`, `setStatus`, `listComments`, `createPoll`, `openPoll`, `closePoll`, `vote`, `results(poll, viewer)`.
 
-- **Topics**: General exists for every Course, and each Session has its own Topic. The Lecturer can add, rename and archive named Topics.
+- **Topics**: General exists for every Course, and each Session has its own Topic, listed before anything uses it and stored the first time a Comment or Poll does. The Lecturer can add, rename and archive named Topics.
 - **Comments**:
   - Only a claimed Student can comment.
   - On a Session Topic, the before / during / after tag comes from the fake Clock against the Session's start and end, including the boundaries. Other Topics carry a timestamp only.
@@ -100,7 +101,7 @@ Interface: `comment`, `setStatus`, `listComments`, `createPoll`, `openPoll`, `cl
 
 Interface: `uploadTranscript`, `generate`, `saveEdit`, `restore`, `publish`, `forStudent(session, language)`.
 
-- **Transcripts**: VTT cue numbers are stripped and timestamps kept. A `.txt` upload and pasted text both work. A Session has at most one Session summary.
+- **Transcripts**: VTT cue numbers are stripped and timestamps kept. A `.txt` upload and pasted text both work. A Transcript with no timestamps is accepted with a warning, and the scripted summary's outline then has no times. A Session has at most one Session summary.
 - **Generate**:
   - `generate` queues a job.
   - `FakeJobs.runDue()` calls the scripted gateway once, with the summary task. The result has the four sections and becomes version 1, marked as made by AI.
@@ -176,6 +177,7 @@ A small suite starts the real Hono app from `makeTestApp` on an ephemeral port. 
   - The test asserts the order and scope of the notices each stream receives, and that refetching after each notice gives the expected state.
 - **Reconnect**: a stream that drops and reconnects gets no backlog. The client contract (refetch everything after a reconnect) is covered by the client test below.
 - **Heartbeat**: an idle stream receives a heartbeat within the configured interval.
+- **Projector window**: the per-Course link opens it with no sign-in; an old link stops working after a new one is made.
 - **Downloads**: the Attendance sheet export returns an xlsx with the right content type and file name.
 - **Boundaries**: the app listens only on `127.0.0.1` (checked from the server config). A route can't reach a module's internals, which the import-boundary lint enforces rather than a test.
 

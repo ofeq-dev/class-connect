@@ -26,6 +26,8 @@ classDiagram
       +claim(course, studentId, deviceToken) RosterEntry
       +resetClaim(rosterEntry)
       +whoIs(token) Viewer
+      +projectorCourse(secret) Course
+      +newProjectorLink(course) secret
       +createSession(course, date, start, end) Session
       +readSession(idOrQrCode) Session
       +updateSession(session, changes)
@@ -177,6 +179,7 @@ classDiagram
     lecturer_id
     name
     translation_languages
+    projector_secret
   }
   class roster_entry {
     <<table>>
@@ -195,6 +198,8 @@ classDiagram
     start
     end
     qr_code
+    projector_mode : QR, Poll, Blank
+    projected_poll_id
   }
   lecturer "1" --> "*" course
   course "1" --> "*" roster_entry
@@ -279,6 +284,7 @@ classDiagram
     anonymous
     timing : before, during, after
     status : New, Pinned, Addressed, Ignored
+    reaction : quick-reaction key or none
     created_at
   }
   class poll {
@@ -315,7 +321,7 @@ classDiagram
   roster_entry "1" --> "*" vote : one per Poll
 ```
 
-Whether a Poll is open is worked out from its scheduled and manual times and the Clock, latest action winning; it is never a stored flag.
+Feedback works out each Session's Topic from Course's Sessions, so Course never calls Feedback; the `topic` row is created the first time a Comment or Poll uses it. Whether a Poll is open is worked out from its scheduled and manual times and the Clock, latest action winning; it is never a stored flag.
 
 ### Summaries
 

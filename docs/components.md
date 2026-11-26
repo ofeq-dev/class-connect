@@ -86,9 +86,9 @@ Each is a deep module: a small interface over the rules and the tables it owns. 
 
 | Module | Responsibility | Key operations | Requirements |
 |---|---|---|---|
-| **Course** | Courses, the Roster, Claims and Sessions; resolves who is calling | `importRoster`, `addRosterEntry`, `findRosterEntry`, `claim`, `resetClaim`, `whoIs(token)`, Session create / read / update / delete | FR-ID-* |
+| **Course** | Courses, the Roster, Claims and Sessions, the projector link; resolves who is calling | `importRoster`, `addRosterEntry`, `findRosterEntry`, `claim`, `resetClaim`, `whoIs(token)`, `projectorCourse(secret)`, `newProjectorLink`, Session create / read / update / delete | FR-ID-* |
 | **Attendance** | The Check-in window, the block match, Pending check-ins, Network approval for one Session, Manual marks, the Attendance sheet | `openWindow`, `closeWindow`, `checkIn → Present \| Pending`, `approveNetwork`, `mark`, `sheet`, `exportXlsx`, `isPresent`, `nextMoment` | FR-ATT-* |
-| **Feedback** | Topics, Comments with status and timing tags, Polls and Votes | `addTopic`, `renameTopic`, `archiveTopic`, `comment`, `setStatus`, `listComments`, `createPoll`, `openPoll`, `closePoll`, `vote`, `results(poll, viewer)`, `nextMoment` | FR-FB-* |
+| **Feedback** | Topics (each Session's own Topic worked out from Course's Sessions, stored on first use), Comments with status and timing tags, Polls and Votes | `addTopic`, `renameTopic`, `archiveTopic`, `comment`, `setStatus`, `listComments`, `createPoll`, `openPoll`, `closePoll`, `vote`, `results(poll, viewer)`, `nextMoment` | FR-FB-* |
 | **Summaries** | Transcripts, Session summaries with version history, publishing and translations | `uploadTranscript`, `generate`, `saveEdit`, `restore`, `publish`, `forStudent` | FR-SUM-* |
 | **Homework** | Assignments and Criteria, Submissions, the review run, similarity, Release and Help matching | `setAssignment`, `submit`, `startReviewRun`, `retryReview`, `editReview`, `release`, `releaseReview`, `requestHelp`, `offerHelp`, `matchNow`, Lecturer and Student read models | FR-HW-* |
 
@@ -181,8 +181,9 @@ flowchart LR
 
 | Surface | Look | Structure |
 |---|---|---|
-| **Student phone app** | "Binder": lined paper, ring-binder tabs, a highlighter colour per tab; Bricolage Grotesque headings, Atkinson Hyperlegible body | Four bottom tabs: Today (yellow), Polls (pink), Comment (green), Mine (blue). Prototype: [`prototype/student-phone-app`](https://github.com/ofeq-dev/class-connect/tree/prototype/student-phone-app) |
+| **Student phone app** | "Binder": lined paper, ring-binder tabs, a highlighter colour per tab; Bricolage Grotesque headings, Atkinson Hyperlegible body | Four bottom tabs: Today (yellow), Polls (pink), Comment (green), Mine (blue). Tier 3 lives on Today, as Session summaries and Assignments lists with plain sub-pages. Prototype: [`prototype/student-phone-app`](https://github.com/ofeq-dev/class-connect/tree/prototype/student-phone-app) |
 | **Lecturer console** | Binder, carried over | Header with Projector control and ⋯ menu (Roster, Download attendance sheet, Diagnostics); three calm columns: Attendance, Comments, Poll. Prototype: [`prototype/lecturer-screens`](https://github.com/ofeq-dev/class-connect/tree/prototype/lecturer-screens) |
-| **Projector window** | Large, public | QR code + live count, or the current Poll, or Blank; updated by the same Live events |
+| **Course desk** | Binder, carried over | One per Course, outside the live Session: Sessions, Session summaries and Assignments, with Roster, Topics, Course settings, Download attendance sheet and Diagnostics in its ⋯ menu. Tier 3 screens are minimal. See the [demo spec](https://github.com/ofeq-dev/class-connect/issues/20) |
+| **Projector window** | Large, public | QR code + live count, or the current Poll, or Blank; updated by the same Live events. Opened by an unguessable per-Course link (`/p/<secret>`) with no sign-in; the Lecturer can make a new one. Shows the Session whose projector mode was set most recently; the mode is server state on the Session |
 
 Front-end libraries: React, React Router (plain client-side routing), TanStack Query, `marked` + `DOMPurify` for Markdown preview.
