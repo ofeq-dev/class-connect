@@ -71,15 +71,17 @@ flowchart LR
 
 ## 5. Milestones
 
+The planning date for the live demo is the assignment's due date, 2026-11-30. The real class date is later; when it is known, M3–M7 move back with it. The short build changes no scope: a lower tier never delays a higher one, so tier 3 is what gets cut if time runs out.
+
 | Milestone | Target | Exit criterion |
 |---|---|---|
 | M1 Decisions made | 2026-11-26 | Every map ticket closed except the demo spec |
-| M2 Doc set submitted | ~2026-11-30 | D1–D9 committed on `master` |
-| M3 Demo spec ready | after M2 | D10 ready for `/to-spec`, including the seeded demo Course and the fake LLM's canned replies |
-| M4 Tier 1 built | after M3 | Check-in to Attendance sheet works end to end on `cc.ofeq.dev` |
-| M5 Tiers 2 and 3 built | after M4 | Comments, Polls, Session summaries and Reviews work on the demo path |
-| M6 Rehearsed | before the demo | The [rehearsal script](testing-strategy.md#rehearsing-the-live-demo) passes on an iPhone and an Android phone, then one real-LLM dry run the day before |
-| M7 Live demo | the class date (not yet recorded) | Classmates check in, comment and vote live |
+| M2 Doc set submitted | 2026-11-30 | D1–D9 committed on `master` |
+| M3 Demo spec ready | 2026-11-27 | D10 ready for `/to-spec`, including the seeded demo Course and the fake LLM's canned replies |
+| M4 Tier 1 built | 2026-11-28 | Check-in to Attendance sheet works end to end on `cc.ofeq.dev` |
+| M5 Tiers 2 and 3 built | 2026-11-29 | Comments, Polls, Session summaries and Reviews work on the demo path |
+| M6 Rehearsed | 2026-11-29 evening | The [rehearsal script](testing-strategy.md#rehearsing-the-live-demo) passes on an iPhone and an Android phone, then one real-LLM dry run the day before |
+| M7 Live demo | 2026-11-30 | Classmates check in, comment and vote live |
 
 ## 6. Roles
 

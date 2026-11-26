@@ -97,7 +97,7 @@ There is exactly one Lecturer account. It can run several Courses.
 
 | ID | Requirement |
 |---|---|
-| FR-FB-1 | Every Course must have a General Topic and one Topic per Session. The Lecturer must be able to add, rename and archive named Topics (such as "Assignment 2" or "Midterm"). Archiving hides a Topic from Students and keeps its Comments and Polls. |
+| FR-FB-1 | Every Course must have a General Topic and one Topic per Session (worked out by Feedback from the Course's Sessions, stored the first time a Comment or Poll uses it). The Lecturer must be able to add, rename and archive named Topics (such as "Assignment 2" or "Midterm"). Archiving hides a Topic from Students and keeps its Comments and Polls. |
 
 **Comments**
 
@@ -127,8 +127,8 @@ There is exactly one Lecturer account. It can run several Courses.
 
 | ID | Requirement |
 |---|---|
-| FR-SUM-1 | The Lecturer must be able to give a Session a Transcript as a `.vtt` or `.txt` upload or as pasted text. VTT cue numbers are stripped and timestamps kept. |
-| FR-SUM-2 | Generating must make one background request to an OpenRouter free model (fallback list, 3-minute timeout) and produce, in the Transcript's language: an overview paragraph, an outline of topics each with a start timestamp, key points, and 3–5 review questions. |
+| FR-SUM-1 | The Lecturer must be able to give a Session a Transcript as a `.vtt` or `.txt` upload or as pasted text. VTT cue numbers are stripped and timestamps kept. A Transcript with no timestamps is accepted, with the warning "No timestamps found — the outline won't have times." |
+| FR-SUM-2 | Generating must make one background request to an OpenRouter free model (fallback list, 3-minute timeout) and produce, in the Transcript's language: an overview paragraph, an outline of topics, each with a start timestamp when the Transcript has them, key points, and 3–5 review questions. |
 | FR-SUM-3 | While generating, the Lecturer must see "Summarising…"; if every model fails or the daily limit is reached, an error and a Retry. |
 | FR-SUM-4 | A Session must have at most one Session summary. The Lecturer must be able to edit it as Markdown in a text box with a live preview. Regenerating asks for confirmation. |
 | FR-SUM-5 | Every generation and every saved edit must add a version recording its time and whether the AI or the Lecturer made it. The Lecturer can view and restore versions; restoring copies the old version as the newest. |
@@ -182,8 +182,8 @@ There is exactly one Lecturer account. It can run several Courses.
 | FR-LC-3 | The Attendance column must show the count, the window state with one Close / Reopen button, one card per network with Pending check-ins and an **Approve network** button, and expandable lists with ✓ / ✕ Manual mark icons and Undo. |
 | FR-LC-4 | The Comments column must show Pinned Comments on top, Topic filter chips with open counts, icon actions (pin, Addressed, Ignore) with Undo, and Addressed and Ignored Comments folded under "Dealt with (n)". |
 | FR-LC-5 | The Poll column must show only the current Poll (focused, else open, else next scheduled); others sit behind "All polls (n)". A closed Poll stays on the card with its results until **Done**. |
-| FR-LC-6 | IP addresses, network blocks and device tokens must be shown only when the Diagnostics flag is on (off by default). |
-| FR-LC-7 | The Projector window must be its own page, updated live, showing either the QR code with the Session title and checked-in count, or the current Poll with its vote count (results only after it closes), or nothing. It never shows Comments or Pending names. |
+| FR-LC-6 | IP addresses, network blocks and a short device ID (the first 6 characters of the stored device-token hash) must be shown only when the Diagnostics flag is on (off by default). |
+| FR-LC-7 | The Projector window must be its own page, updated live, showing either the QR code with the Session title and checked-in count, or the current Poll with its vote count (results only after it closes), or nothing. It never shows Comments or Pending names. It opens from an unguessable per-Course link (`/p/<secret>`) with no sign-in, so a classroom PC can be set up once; the Lecturer can make a new link, which stops the old one working. |
 | FR-LC-8 | The console must show today's LLM request count against the 1000-a-day limit. |
 
 ### 3.7 Student phone app — [#11](https://github.com/ofeq-dev/class-connect/issues/11)
@@ -235,13 +235,11 @@ The data each module owns is drawn table by table in the [class diagram](diagram
 
 ## 7. Open items
 
-Gaps found while writing this doc set. They are raised on the map, not settled here:
+Gaps found while writing this doc set and not yet settled:
 
-1. **Student screens for tier 3.** The Student app's four tabs cover Check-in, Polls and Comments. Where a Student reads a published Session summary, hands in a Submission, reads their Review and makes a Help request or offer is not designed.
-2. **Who creates a Session's Topic.** The testing strategy says it is created alongside the Session, but Course doesn't depend on Feedback in the class diagram.
-3. **Device tokens in Diagnostics.** The console's Diagnostics flag shows "device tokens", but only token hashes are stored.
-4. **Transcripts without timestamps.** A `.txt` or pasted Transcript may have no timestamps, while the outline needs a start timestamp per topic.
-5. **Projector window access.** It is "public", but whether it needs the Lecturer's sign-in or an unguessable link is not stated.
+1. **Student screens for tier 3.** The Student app's four tabs cover Check-in, Polls and Comments. Where a Student reads a published Session summary, hands in a Submission, reads their Review and makes a Help request or offer is not designed. Raised on the [map](https://github.com/ofeq-dev/class-connect/issues/1) with the Lecturer screens outside the live Session.
+
+Four other gaps found while writing (who creates a Session's Topic, what Diagnostics shows for a device, Transcripts without timestamps, and access to the Projector window) were settled with the Lecturer-developer on 2026-11-26 and are written into FR-FB-1, FR-SUM-1, FR-SUM-2, FR-LC-6 and FR-LC-7.
 
 ## 8. Traceability
 
