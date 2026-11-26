@@ -129,7 +129,9 @@ export function lecturerRoutes(deps: AppDeps) {
       (c) => c.json(deps.course.updateSession(ownSession(c).id, c.req.valid("json"))),
     )
     .delete("/courses/:courseId/sessions/:sessionId", requireLecturer, (c) => {
-      deps.course.deleteSession(ownSession(c).id);
+      const { id } = ownSession(c);
+      deps.summaries.deleteSummary(id);
+      deps.course.deleteSession(id);
       return c.json({ ok: true });
     })
 
@@ -151,6 +153,18 @@ export function lecturerRoutes(deps: AppDeps) {
     )
     .post("/courses/:courseId/sessions/:sessionId/summary/retry", requireLecturer, (c) =>
       c.json(deps.summaries.retry(ownSession(c).id)),
+    )
+    .post(
+      "/courses/:courseId/sessions/:sessionId/summary/versions",
+      requireLecturer,
+      json((b) => ({ markdown: str(b.markdown) })),
+      (c) => c.json(deps.summaries.saveEdit(ownSession(c).id, c.req.valid("json").markdown)),
+    )
+    .post("/courses/:courseId/sessions/:sessionId/summary/versions/:versionId/restore", requireLecturer, (c) =>
+      c.json(deps.summaries.restore(ownSession(c).id, idParam(c, "versionId"))),
+    )
+    .post("/courses/:courseId/sessions/:sessionId/summary/versions/:versionId/publish", requireLecturer, (c) =>
+      c.json(deps.summaries.publish(ownSession(c).id, idParam(c, "versionId"))),
     )
     .get("/llm-usage", requireLecturer, (c) => c.json({ today: deps.llm.usageToday(), limit: DAILY_LIMIT }))
 

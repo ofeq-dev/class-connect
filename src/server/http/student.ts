@@ -4,7 +4,7 @@ import { getCookie, setCookie } from "hono/cookie";
 import { createMiddleware } from "hono/factory";
 import { validator } from "hono/validator";
 import type { RosterEntry, Viewer } from "../course";
-import { DomainError } from "../errors";
+import { DomainError, NotFoundError } from "../errors";
 import { streamLiveEvents } from "../live-events";
 import type { AppDeps } from "./app";
 
@@ -91,6 +91,18 @@ export function studentRoutes(deps: AppDeps) {
         today,
         session,
       });
+    })
+
+    // Published Session summaries of this phone's Course, and one to read.
+    .get("/summaries", (c) => c.json(deps.summaries.listForStudent(c.var.deviceToken)))
+    .get("/summaries/:sessionId", (c) => {
+      const published = deps.summaries.forStudent(
+        c.var.deviceToken,
+        Number(c.req.param("sessionId")),
+        c.req.query("lang"),
+      );
+      if (!published) throw new NotFoundError("Session summary");
+      return c.json(published);
     })
 
     .get("/events", (c) => {
