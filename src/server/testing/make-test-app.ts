@@ -1,4 +1,5 @@
 import path from "node:path";
+import { DEFAULT_TIME_ZONE } from "../clock";
 import { createCourseModule } from "../course";
 import { openDatabase } from "../db";
 import { createApp } from "../http";
@@ -22,7 +23,7 @@ export function makeTestApp(options: TestAppOptions = {}) {
   const database = openDatabase(":memory:", path.resolve(process.cwd(), "drizzle"));
   const clock = new FakeClock();
   const events = new RecordingEvents();
-  const course = createCourseModule({ db: database.db, clock, events });
+  const course = createCourseModule({ db: database.db, clock, events, timeZone: DEFAULT_TIME_ZONE });
   const lecturer = course.ensureLecturer("Test Lecturer");
 
   const app = createApp({

@@ -7,7 +7,9 @@ import type { Notice, NoticeType } from "../shared/notices";
  * can publish without an entry here fails the type check.
  */
 export const noticeQueryKeys: { [T in NoticeType]: (id: number) => QueryKey[] } = {
-  "course.changed": () => [["courses"]],
+  "course.changed": (id) => [["courses"], ["course", id]],
+  "roster.changed": (courseId) => [["roster", courseId]],
+  "session.changed": (id) => [["sessions"], ["session", id]],
 };
 
 export function applyNotice(client: QueryClient, notice: Notice): void {

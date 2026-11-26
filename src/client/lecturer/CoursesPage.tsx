@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
+import { Link } from "react-router";
 import { api, ok } from "../api";
 import { useLiveEvents } from "../live";
 
@@ -77,9 +78,10 @@ export function CoursesPage() {
         )}
         <div className="cards">
           {courses.data?.map((course) => (
-            <article className="card" key={course.id}>
+            <Link className="card" key={course.id} to={`/lecturer/courses/${course.id}`}>
               <h3>{course.name}</h3>
-            </article>
+              <span className="muted small">Open the Course desk</span>
+            </Link>
           ))}
         </div>
       </section>

@@ -1,12 +1,33 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { deleteCookie, getSignedCookie, setSignedCookie } from "hono/cookie";
 import { createMiddleware } from "hono/factory";
+import { validator } from "hono/validator";
+import { NotFoundError } from "../errors";
 import { verifyPassword } from "../lecturer-auth";
 import { streamLiveEvents } from "../live-events";
 import type { AppDeps } from "./app";
 
 export const LECTURER_COOKIE = "cc_lecturer";
 const THIRTY_DAYS = 60 * 60 * 24 * 30;
+
+type Body = Record<string, unknown>;
+const str = (v: unknown) => (typeof v === "string" ? v : "");
+const optStr = (v: unknown) => (typeof v === "string" ? v : undefined);
+
+/**
+ * Narrows a JSON body to the shape a route takes. Only shapes are checked here; the module
+ * applies the rules. Declaring it also types the request body for Hono's typed client.
+ */
+const json = <T>(shape: (b: Body) => T) =>
+  validator("json", (value) => shape(value && typeof value === "object" ? (value as Body) : {}));
+
+const sessionTimes = (b: Body) => ({ date: str(b.date), start: str(b.start), end: str(b.end) });
+
+function idParam(c: Context, name: string): number {
+  const id = Number(c.req.param(name));
+  if (!Number.isInteger(id) || id <= 0) throw new NotFoundError(name);
+  return id;
+}
 
 export function lecturerRoutes(deps: AppDeps) {
   const requireLecturer = createMiddleware<{ Variables: { lecturerId: number } }>(
@@ -20,10 +41,21 @@ export function lecturerRoutes(deps: AppDeps) {
     },
   );
 
-  return new Hono()
-    .post("/session", async (c) => {
-      const body = await c.req.json<{ password?: unknown }>().catch(() => ({}) as { password?: unknown });
-      const password = typeof body.password === "string" ? body.password : "";
+  /** Resolves :courseId to a Course owned by the signed-in Lecturer, else 404. */
+  const ownCourse = (c: Context<{ Variables: { lecturerId: number } }>) =>
+    deps.course.readCourse(c.var.lecturerId, idParam(c, "courseId"));
+
+  /** Resolves :sessionId to a Session of the Lecturer's :courseId, else 404. */
+  const ownSession = (c: Context<{ Variables: { lecturerId: number } }>) => {
+    const course = ownCourse(c);
+    const session = deps.course.readSession(idParam(c, "sessionId"));
+    if (session.courseId !== course.id) throw new NotFoundError("Session");
+    return session;
+  };
+
+  return new Hono<{ Variables: { lecturerId: number } }>()
+    .post("/session", json((b) => ({ password: str(b.password) })), async (c) => {
+      const { password } = c.req.valid("json");
       if (!verifyPassword(password, deps.lecturer.passwordHash)) {
         return c.json({ error: "wrong-password", message: "That password isn't right." }, 401);
       }
@@ -41,18 +73,68 @@ export function lecturerRoutes(deps: AppDeps) {
       return c.json({ ok: true });
     })
     .get("/me", requireLecturer, (c) => c.json({ id: c.var.lecturerId }))
+
+    // Courses
     .get("/courses", requireLecturer, (c) => c.json(deps.course.listCourses(c.var.lecturerId)))
-    .post("/courses", requireLecturer, async (c) => {
-      const body = await c.req.json<{ name?: unknown }>().catch(() => ({}) as { name?: unknown });
-      const created = deps.course.createCourse(
-        c.var.lecturerId,
-        typeof body.name === "string" ? body.name : "",
-      );
+    .post("/courses", requireLecturer, json((b) => ({ name: str(b.name) })), (c) => {
+      const created = deps.course.createCourse(c.var.lecturerId, c.req.valid("json").name);
       return c.json(created, 201);
     })
+    .get("/courses/:courseId", requireLecturer, (c) => c.json(ownCourse(c)))
+    .patch(
+      "/courses/:courseId",
+      requireLecturer,
+      json((b) => ({
+        name: optStr(b.name),
+        translationLanguages: Array.isArray(b.translationLanguages) ? b.translationLanguages.map(str) : undefined,
+      })),
+      (c) => c.json(deps.course.updateCourse(ownCourse(c).id, c.req.valid("json"))),
+    )
+
+    // Roster
+    .get("/courses/:courseId/roster", requireLecturer, (c) =>
+      c.json(deps.course.listRoster(ownCourse(c).id)),
+    )
+    .post(
+      "/courses/:courseId/roster",
+      requireLecturer,
+      json((b) => ({ studentId: str(b.studentId), name: str(b.name) })),
+      (c) => {
+        const { studentId, name } = c.req.valid("json");
+        return c.json(deps.course.addRosterEntry(ownCourse(c).id, studentId, name), 201);
+      },
+    )
+    .post("/courses/:courseId/roster/import", requireLecturer, json((b) => ({ csv: str(b.csv) })), (c) =>
+      c.json(deps.course.importRoster(ownCourse(c).id, c.req.valid("json").csv)),
+    )
+    .post("/courses/:courseId/roster/:entryId/reset-claim", requireLecturer, (c) => {
+      const course = ownCourse(c);
+      return c.json(deps.course.resetClaim(course.id, idParam(c, "entryId")));
+    })
+
+    // Sessions
+    .get("/courses/:courseId/sessions", requireLecturer, (c) => {
+      const course = ownCourse(c);
+      return c.json({ today: deps.course.today(), sessions: deps.course.listSessions(course.id) });
+    })
+    .post("/courses/:courseId/sessions", requireLecturer, json(sessionTimes), (c) =>
+      c.json(deps.course.createSession(ownCourse(c).id, c.req.valid("json")), 201),
+    )
+    .get("/courses/:courseId/sessions/:sessionId", requireLecturer, (c) => c.json(ownSession(c)))
+    .patch(
+      "/courses/:courseId/sessions/:sessionId",
+      requireLecturer,
+      json((b) => ({ date: optStr(b.date), start: optStr(b.start), end: optStr(b.end) })),
+      (c) => c.json(deps.course.updateSession(ownSession(c).id, c.req.valid("json"))),
+    )
+    .delete("/courses/:courseId/sessions/:sessionId", requireLecturer, (c) => {
+      deps.course.deleteSession(ownSession(c).id);
+      return c.json({ ok: true });
+    })
+
     .get("/events", requireLecturer, (c) => {
       const course = c.req.query("course");
-      const courseId = course ? Number(course) : null;
+      const courseId = course ? deps.course.readCourse(c.var.lecturerId, Number(course)).id : null;
       return streamLiveEvents(c, deps.events, { courseId, role: "lecturer" }, deps.sseHeartbeatMs);
     });
 }

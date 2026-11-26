@@ -1,4 +1,4 @@
-export { aCourse } from "./builders";
+export { aCourse, aRoster, aSession } from "./builders";
 export { FakeClock } from "./fake-clock";
 export { cookieHeader, listen, openSse, signInLecturer, type SseEvent } from "./http";
 export {

@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { listen, openSse, signInLecturer, makeTestApp, type TestApp } from "../testing";
 
@@ -123,6 +124,9 @@ describe("Health", () => {
   it("reports the commit SHA and the newest migration", async () => {
     await start();
     const res = await fetch(`${server.url}/healthz`);
-    expect(await res.json()).toEqual({ sha: "test-sha", migration: "0000_lecturer_and_course" });
+    const journal = JSON.parse(readFileSync("drizzle/meta/_journal.json", "utf8")) as {
+      entries: { tag: string }[];
+    };
+    expect(await res.json()).toEqual({ sha: "test-sha", migration: journal.entries.at(-1)!.tag });
   });
 });
