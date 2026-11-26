@@ -12,6 +12,7 @@ export const noticeQueryKeys: { [T in NoticeType]: (id: number) => QueryKey[] } 
   "session.changed": (id) => [["sessions"], ["session", id], ["student"]],
   // A summary change may also have spent LLM requests.
   "summary.changed": (sessionId) => [["summary", sessionId], ["summaries"], ["llm-usage"]],
+  "assignment.changed": (id) => [["assignment", id], ["assignments"], ["student", "assignment", id], ["student", "assignments"]],
 };
 
 export function applyNotice(client: QueryClient, notice: Notice): void {
