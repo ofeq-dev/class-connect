@@ -7,26 +7,34 @@ import { job as jobTable } from "./schema";
  * Jobs (docs/diagrams/class-diagram.md, #15, #18): a durable `job` table worked by one
  * in-process worker. A handler does its slow work first, then writes its result and marks the
  * job done in one transaction with `complete(job, tx => …)`, so a job interrupted before that
- * leaves nothing written. Attempts count at claim, 3 for every kind. On boot, `recover()` puts
- * `running` jobs back to `queued`. There is no drain on shutdown.
+ * leaves nothing written. Attempts count at claim, 3 for every kind: a handler that throws is
+ * queued again until its last attempt, then failed for good, when its kind's `onFailed` hook
+ * runs. On boot, `recover()` puts `running` jobs back to `queued`. There is no drain on shutdown.
  */
-export type JobKind =
-  | "summary.generate"
-  | "summary.translate"
-  | "review.submission"
-  | "review.compare"
-  | "review.classSummary"
-  | "help.match";
+
+/** Each job kind's payload, as its feature module queues it. */
+export interface JobPayloads {
+  "summary.generate": { sessionId: number };
+  "summary.translate": { sessionId: number; language: string };
+  "review.submission": { runId: number; submissionId: number };
+  "review.compare": { runId: number };
+  "review.classSummary": { runId: number };
+  "help.match": { assignmentId: number };
+}
+
+export type JobKind = keyof JobPayloads;
 
 export type JobStatus = "queued" | "running" | "done" | "failed";
 
-export interface Job {
+export interface Job<K extends JobKind = JobKind> {
   id: number;
-  kind: JobKind;
-  payload: unknown;
+  kind: K;
+  payload: JobPayloads[K];
   runAt: Date;
-  /** Attempts so far, counting the current run once claimed; MAX_ATTEMPTS means this is the last. */
+  /** Attempts so far, counting the current run once claimed. */
   attempts: number;
+  /** True on the run whose failure ends the job failed, so a handler can fall back instead. */
+  lastAttempt: boolean;
 }
 
 export interface JobState extends Job {
@@ -35,21 +43,26 @@ export interface JobState extends Job {
   error: string | null;
 }
 
-export type JobHandler = (job: Job) => Promise<void>;
+export type JobHandler<K extends JobKind = JobKind> = (job: Job<K>) => Promise<void>;
+
+export interface JobOptions<K extends JobKind = JobKind> {
+  /**
+   * Runs when a job of this kind ends failed for good (its last attempt threw, or `fail` was
+   * called), in the same transaction that marks it failed, so its writes commit with the failure.
+   */
+  onFailed?: (job: Job<K>, error: string) => void;
+}
 
 export interface Jobs {
-  enqueue(kind: JobKind, payload: unknown, runAt?: Date): Job;
-  register(kind: JobKind, handler: JobHandler): void;
+  enqueue<K extends JobKind>(kind: K, payload: JobPayloads[K], runAt?: Date): Job<K>;
+  register<K extends JobKind>(kind: K, handler: JobHandler<K>, options?: JobOptions<K>): void;
   progress(job: Job, done: number, total: number): void;
   /** Re-queues a failed job now, with its attempts reset (the Lecturer's Retry). */
   retry(job: Job | number): void;
   /** Writes the job's result and marks it done, in one transaction. */
   complete(job: Job, write: (tx: Tx) => void): void;
-  /**
-   * Ends the job failed at once, with no automatic retry (e.g. an LlmError already retried).
-   * With `write`, the write and the failure commit together.
-   */
-  fail(job: Job, error: string, write?: (tx: Tx) => void): void;
+  /** Ends the job failed at once, with no automatic retry, and runs its kind's `onFailed`. */
+  fail(job: Job, error: string): void;
   read(jobId: number): JobState;
   /** How many of these jobs are in each status, counted from the job rows. */
   tally(jobIds: number[]): JobTally;
@@ -99,7 +112,7 @@ export interface JobsDeps {
 }
 
 export function createJobs({ db, clock, setTimer = realTimer, onError }: JobsDeps): JobWorker {
-  const handlers = new Map<JobKind, JobHandler>();
+  const handlers = new Map<JobKind, { handler: JobHandler; options: JobOptions }>();
   let current: Promise<void> | null = null;
   let again = false;
   let started = false;
@@ -108,8 +121,9 @@ export function createJobs({ db, clock, setTimer = realTimer, onError }: JobsDep
   const toState = (row: typeof jobTable.$inferSelect): JobState => ({
     id: row.id,
     kind: row.kind as JobKind,
-    payload: JSON.parse(row.payload) as unknown,
+    payload: JSON.parse(row.payload) as JobPayloads[JobKind],
     runAt: row.runAt,
+    lastAttempt: row.attempts >= MAX_ATTEMPTS,
     status: row.status as JobStatus,
     attempts: row.attempts,
     progress:
@@ -118,7 +132,8 @@ export function createJobs({ db, clock, setTimer = realTimer, onError }: JobsDep
         : null,
     error: row.error,
   });
-  const toJob = ({ id, kind, payload, runAt, attempts }: JobState): Job => ({ id, kind, payload, runAt, attempts });
+  const toJob = ({ id, kind, payload, runAt, attempts, lastAttempt }: JobState): Job =>
+    ({ id, kind, payload, runAt, attempts, lastAttempt }) as Job;
   const idOf = (job: Job | number) => (typeof job === "number" ? job : job.id);
 
   function read(jobId: number): JobState {
@@ -147,17 +162,48 @@ export function createJobs({ db, clock, setTimer = realTimer, onError }: JobsDep
     });
   }
 
+  const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
+
+  /**
+   * Marks a running job failed for good and runs its kind's onFailed in the same transaction.
+   * Returns false when the job wasn't running (e.g. reset by a restart). Throws what onFailed throws.
+   */
+  function failForGood(job: Job, error: string): boolean {
+    return db.transaction(() => {
+      const failed = db
+        .update(jobTable)
+        .set({ status: "failed", error })
+        .where(and(eq(jobTable.id, job.id), eq(jobTable.status, "running")))
+        .returning({ id: jobTable.id })
+        .get();
+      if (!failed) return false;
+      handlers.get(job.kind)?.options.onFailed?.(job, error);
+      return true;
+    });
+  }
+
   function afterFailure(claimed: JobState, error: unknown) {
-    const message = error instanceof Error ? error.message : String(error);
-    const out = claimed.attempts >= MAX_ATTEMPTS;
-    db.update(jobTable)
-      .set({ status: out ? "failed" : "queued", error: message, runAt: clock.now() })
-      .where(and(eq(jobTable.id, claimed.id), eq(jobTable.status, "running")))
-      .run();
+    const message = errorText(error);
+    if (!claimed.lastAttempt) {
+      db.update(jobTable)
+        .set({ status: "queued", error: message, runAt: clock.now() })
+        .where(and(eq(jobTable.id, claimed.id), eq(jobTable.status, "running")))
+        .run();
+      return;
+    }
+    try {
+      failForGood(toJob(claimed), message);
+    } catch (hookError) {
+      // onFailed broke: the job still ends failed, without its writes.
+      db.update(jobTable)
+        .set({ status: "failed", error: errorText(hookError) })
+        .where(and(eq(jobTable.id, claimed.id), eq(jobTable.status, "running")))
+        .run();
+    }
   }
 
   async function runOne(claimed: JobState) {
-    const handler = handlers.get(claimed.kind);
+    const handler = handlers.get(claimed.kind)?.handler;
     if (!handler) {
       db.update(jobTable)
         .set({ status: "failed", error: `No handler for ${claimed.kind}` })
@@ -230,11 +276,11 @@ export function createJobs({ db, clock, setTimer = realTimer, onError }: JobsDep
         .returning()
         .get();
       schedule();
-      return toJob(toState(row));
+      return toJob(toState(row)) as Job<typeof kind>;
     },
 
-    register(kind, handler) {
-      handlers.set(kind, handler);
+    register(kind, handler, options = {}) {
+      handlers.set(kind, { handler, options } as { handler: JobHandler; options: JobOptions });
     },
 
     progress(job, done, total) {
@@ -263,14 +309,8 @@ export function createJobs({ db, clock, setTimer = realTimer, onError }: JobsDep
       });
     },
 
-    fail(job, error, write) {
-      db.transaction((tx) => {
-        write?.(tx);
-        tx.update(jobTable)
-          .set({ status: "failed", error })
-          .where(and(eq(jobTable.id, job.id), eq(jobTable.status, "running")))
-          .run();
-      });
+    fail(job, error) {
+      failForGood(job, error);
     },
 
     read,

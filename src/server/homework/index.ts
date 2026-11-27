@@ -4,7 +4,7 @@ import type { CourseModule } from "../course";
 import type { Db } from "../db";
 import { DomainError, NotFoundError } from "../errors";
 import type { FileStore } from "../files";
-import { MAX_ATTEMPTS, type Job, type Jobs, type JobStatus } from "../jobs";
+import type { Job, Jobs, JobStatus } from "../jobs";
 import type { LiveEvents } from "../live-events";
 import type { LlmGateway } from "../llm";
 import { classSummary as classSummaryTask } from "./class-summary-task";
@@ -785,8 +785,8 @@ export function createHomeworkModule({ db, clock, course, llm, files, events, jo
     return out;
   }
 
-  async function handleHelpMatch(job: Job) {
-    const { assignmentId } = job.payload as { assignmentId: number };
+  async function handleHelpMatch(job: Job<"help.match">) {
+    const { assignmentId } = job.payload;
     const row = db.select().from(assignmentTable).where(eq(assignmentTable.id, assignmentId)).get();
     if (!row) return;
     let ran = false;
@@ -812,15 +812,16 @@ export function createHomeworkModule({ db, clock, course, llm, files, events, jo
 
   /**
    * Called inside the transaction that settles one of the run's drafts (written, or failed for
-   * good), while that job is still `running`. When it was the last unsettled one, queues
+   * good). When it was the last unsettled one, queues
    * review.compare: always when the run settles for the first time, and again after a
    * successful Retry. Jobs share the database connection, so the enqueue commits or rolls back
    * with the transaction.
    */
-  function settleDraft(runId: number, succeeded: boolean) {
+  function settleDraft(runId: number, jobId: number, succeeded: boolean) {
     const run = db.select().from(reviewRun).where(eq(reviewRun.id, runId)).get();
     if (!run) return;
-    const othersUnsettled = runProgress(runId).unsettled - 1;
+    const others = jobs.tally(runJobIds(runId).filter((id) => id !== jobId));
+    const othersUnsettled = others.queued + others.running;
     if (othersUnsettled > 0) return;
     if (!succeeded && run.compareJobId !== null) return;
     const compare = jobs.enqueue("review.compare", { runId });
@@ -843,74 +844,48 @@ export function createHomeworkModule({ db, clock, course, llm, files, events, jo
     for (const l of levels) db.insert(reviewLevel).values({ reviewId, ...l }).run();
   }
 
-  const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e));
-
-  /**
-   * Runs a step's slow work, then its write via Jobs.complete. A failure before its last attempt
-   * is thrown so the worker queues it again; on the last attempt `onLastFailure` settles it.
-   */
-  async function attempt<T>(job: Job, work: () => Promise<T>, onLastFailure: (error: string) => void): Promise<T | null> {
-    try {
-      return await work();
-    } catch (error) {
-      if (job.attempts < MAX_ATTEMPTS) throw error;
-      onLastFailure(errorText(error));
-      return null;
-    }
-  }
-
-  async function handleReviewSubmission(job: Job) {
-    const { runId, submissionId } = job.payload as { runId: number; submissionId: number };
+  async function handleReviewSubmission(job: Job<"review.submission">) {
+    const { runId, submissionId } = job.payload;
     const sub = db.select().from(submissionTable).where(eq(submissionTable.id, submissionId)).get();
-    if (!sub) return jobs.fail(job, "The Submission is gone.", () => settleDraft(runId, false));
+    if (!sub) return jobs.fail(job, "The Submission is gone.");
     const row = assignmentRow(sub.assignmentId);
     const criteria = criteriaOf(row.id);
-
-    const draft = await attempt(
-      job,
-      async () => {
-        const result = await llm.generate(reviewSubmission(criteria.length), {
-          instructions: row.instructions,
-          criteria: criteria.map((c) => c.label),
-          text: sub.text,
-        });
-        if (!result.ok) throw new Error(result.error.message);
-        return result.value;
-      },
-      (error) => jobs.fail(job, error, () => settleDraft(runId, false)),
-    );
-    if (draft) {
-      jobs.complete(job, () => {
-        writeReview(
-          submissionId,
-          draft.levels.map((l, i) => ({ criterionId: criteria[i]!.id, ...l })),
-          "ai",
-        );
-        settleDraft(runId, true);
-      });
-    }
+    const result = await llm.generate(reviewSubmission(criteria.length), {
+      instructions: row.instructions,
+      criteria: criteria.map((c) => c.label),
+      text: sub.text,
+    });
+    // Thrown, so Jobs queues it again; after its last attempt onFailed settles it.
+    if (!result.ok) throw new Error(result.error.message);
+    jobs.complete(job, () => {
+      writeReview(
+        submissionId,
+        result.value.levels.map((l, i) => ({ criterionId: criteria[i]!.id, ...l })),
+        "ai",
+      );
+      settleDraft(runId, job.id, true);
+    });
     publishProgress(row.courseId, row.id, runId);
     lecturerChanged(row.courseId, row.id);
   }
 
-  jobs.register("review.submission", handleReviewSubmission);
+  jobs.register("review.submission", handleReviewSubmission, {
+    onFailed(job) {
+      const { runId } = job.payload;
+      settleDraft(runId, job.id, false);
+      const run = db.select().from(reviewRun).where(eq(reviewRun.id, runId)).get();
+      const row = run && db.select().from(assignmentTable).where(eq(assignmentTable.id, run.assignmentId)).get();
+      if (!row) return;
+      publishProgress(row.courseId, row.id, runId);
+      lecturerChanged(row.courseId, row.id);
+    },
+  });
 
-  /**
-   * A run step (compare, class summary) that the worker retries; on its last attempt it is failed
-   * here, so the Lecturer can be told once the failure is saved.
-   */
-  function failingOnLastAttempt(handler: (job: Job) => Promise<void>) {
-    return async (job: Job) => {
-      try {
-        await handler(job);
-      } catch (error) {
-        if (job.attempts < MAX_ATTEMPTS) throw error;
-        jobs.fail(job, errorText(error));
-        const run = db.select().from(reviewRun).where(eq(reviewRun.id, (job.payload as { runId: number }).runId)).get();
-        const row = run && db.select().from(assignmentTable).where(eq(assignmentTable.id, run.assignmentId)).get();
-        if (row) lecturerChanged(row.courseId, row.id);
-      }
-    };
+  /** A failed compare or class summary: the Lecturer is told, and sees its error with Retry. */
+  function runStepFailed(job: Job<"review.compare" | "review.classSummary">) {
+    const run = db.select().from(reviewRun).where(eq(reviewRun.id, job.payload.runId)).get();
+    const row = run && db.select().from(assignmentTable).where(eq(assignmentTable.id, run.assignmentId)).get();
+    if (row) lecturerChanged(row.courseId, row.id);
   }
 
   /** The Assignment's Submissions that have a Review: compare and the class summary run on these. */
@@ -930,8 +905,8 @@ export function createHomeworkModule({ db, clock, course, llm, files, events, jo
     return { run, row: assignmentRow(run.assignmentId) };
   }
 
-  async function handleCompare(job: Job) {
-    const { runId } = job.payload as { runId: number };
+  async function handleCompare(job: Job<"review.compare">) {
+    const { runId } = job.payload;
     const { row } = runOf(runId);
     const subs = reviewedSubmissions(row.id);
     const prints = subs.map((s) => fingerprint(s.text));
@@ -939,11 +914,11 @@ export function createHomeworkModule({ db, clock, course, llm, files, events, jo
     // One batched embedding call. If it fails on the last attempt, the fingerprints decide alone.
     let vectors: number[][] | null = null;
     if (subs.length >= 2) {
-      vectors = await attempt(
-        job,
-        () => llm.embed(subs.map((s) => s.text)),
-        () => {},
-      );
+      try {
+        vectors = await llm.embed(subs.map((s) => s.text));
+      } catch (error) {
+        if (!job.lastAttempt) throw error;
+      }
     }
 
     const pairs: (typeof similarityPair.$inferInsert)[] = [];
@@ -976,10 +951,10 @@ export function createHomeworkModule({ db, clock, course, llm, files, events, jo
     lecturerChanged(row.courseId, row.id);
   }
 
-  jobs.register("review.compare", failingOnLastAttempt(handleCompare));
+  jobs.register("review.compare", handleCompare, { onFailed: runStepFailed });
 
-  async function handleClassSummary(job: Job) {
-    const { runId } = job.payload as { runId: number };
+  async function handleClassSummary(job: Job<"review.classSummary">) {
+    const { runId } = job.payload;
     const { row } = runOf(runId);
     const criteria = criteriaOf(row.id);
     const reviews = reviewsOf(
@@ -1016,7 +991,7 @@ export function createHomeworkModule({ db, clock, course, llm, files, events, jo
     lecturerChanged(row.courseId, row.id);
   }
 
-  jobs.register("review.classSummary", failingOnLastAttempt(handleClassSummary));
+  jobs.register("review.classSummary", handleClassSummary, { onFailed: runStepFailed });
 
   /** A Submission of this Assignment, else 404. */
   function submissionOf(assignmentId: number, submissionId: number) {

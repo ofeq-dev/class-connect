@@ -5,7 +5,7 @@ How Class Connect is tested, drawn from the seams fixed in [System architecture 
 ## Principles
 
 - **Test through interfaces, not internals.** Each feature module (Course, Attendance, Feedback, Summaries, Homework) is a deep module with a small set of operations. Its tests call those operations and check what they return and what the module's read models show afterwards. Tests never reach into a module's tables or private functions, so the module's internals can change without breaking them.
-- **Fake only the injected seams.** The five infrastructure modules (LLM gateway, Jobs, Live events, Clock, File store) are passed into the feature modules. Feature tests pass in fakes for them. Nothing else is mocked.
+- **Fake only the injected seams.** The five infrastructure modules (LLM gateway, Jobs, Live events, Clock, File store) are passed into the feature modules. Feature tests pass in fakes for them, except Jobs, which is the real worker over the test's in-memory database (it is local and cheap, and a fake would duplicate its retry rules). Nothing else is mocked.
 - **The database is real.** Every test gets a fresh SQLite database in memory (`better-sqlite3` `:memory:`), with the checked-in Drizzle migrations applied. There are no repository fakes: SQL constraints, such as one Vote per Poll per Roster entry, are part of the behaviour under test.
 - **Time is the Clock.** States that depend on time (a Poll opening or closing on schedule, the Check-in window closing at midnight, a Late Submission, the Help match deadline) are worked out from the Clock when they are read. So tests set the fake Clock and read, rather than waiting.
 - **Routes are thin, so end-to-end tests are few.** Routes only adapt HTTP to module operations. A small end-to-end suite checks that adapting: identity, cookies, the client IP header, Server-Sent Events. It doesn't repeat the module rules.
@@ -19,7 +19,7 @@ Shared test helpers live in `src/server/testing/`. They are the only place fakes
 |---|---|---|
 | **Clock** | `FakeClock` | `set(instant)` and `advance(duration)`. The default is a fixed weekday morning. `now()` is the only time source any module reads. |
 | **LLM gateway** | The scripted adapter (`LLM_ADAPTER=fake`) | Script a reply per `task`: a fixed result, a function of the input, an `LlmError` (timeout, every model failed, daily limit reached), or a reply that fails the schema. It records every call (task, input) for assertions. It checks scripted replies against the task's schema, so a test can't hand a module a shape the real gateway would reject. `embed` returns deterministic vectors made from the text, so text that is the same or nearly the same gives vectors that are similar. |
-| **Jobs** | `FakeJobs` | Records each queued job (kind, payload, run_at). `runDue()` runs, in order, the jobs whose `run_at` has passed on the fake Clock, using the handlers the feature modules registered. `failNext(kind)` makes the next run of a job kind fail. Tests can inspect each job's status, attempts and progress. |
+| **Jobs** | The real SQLite-backed worker, with its timer not started | `makeTestApp` returns it as `jobs`. `runDue()` runs, in order, the jobs whose `run_at` has passed on the fake Clock, with the real retry rules (3 attempts, then failed). A test makes a job fail by scripting its cause: an `LlmError` or a bad reply on the scripted gateway, or a rejecting `embed`. Tests read a job's status through the module's own read model (e.g. the review run view), or `jobs.read` / `jobs.tally`, never the `job` table. |
 | **Live events** | `RecordingEvents` | Records each notice published, with its scope (Course and role). Tests assert on the notices sent, such as `{type: "poll.changed", id}`. They don't assert on transport. |
 | **File store** | `MemoryFileStore` | Keeps bytes in a map under their content hash. Tests can preload fixture files: a short PDF, a VTT Transcript, a `.txt` Transcript. |
 
@@ -104,7 +104,7 @@ Interface: `uploadTranscript`, `generate`, `saveEdit`, `restore`, `publish`, `fo
 - **Transcripts**: VTT cue numbers are stripped and timestamps kept. A `.txt` upload and pasted text both work. A Transcript with no timestamps is accepted with a warning, and the scripted summary's outline then has no times. A Session has at most one Session summary.
 - **Generate**:
   - `generate` queues a job.
-  - `FakeJobs.runDue()` calls the scripted gateway once, with the summary task. The result has the four sections and becomes version 1, marked as made by AI.
+  - `jobs.runDue()` calls the scripted gateway once, with the summary task. The result has the four sections and becomes version 1, marked as made by AI.
   - A scripted `LlmError` leaves the summary failed with a retryable error, and Retry queues the job again.
   - Regenerating adds a version. It never overwrites one.
   - Notices are published for "Summarising…", done and failed.
@@ -206,7 +206,7 @@ The block-match rule in the rehearsal depends on the real classroom network, mea
 
 | Layer | Runs against | Fakes |
 |---|---|---|
-| Feature module tests | Module interface + in-memory SQLite | Clock, LLM gateway, Jobs, Live events, File store |
+| Feature module tests | Module interface + in-memory SQLite (and the real Jobs worker) | Clock, LLM gateway, Live events, File store |
 | Infrastructure tests | Module interface + real local resource | `fetch` (LLM gateway only), Clock |
 | End-to-end tests | Hono app on an ephemeral port, HTTP + SSE | Same as feature tests |
 | Client unit tests | Pure functions | None |

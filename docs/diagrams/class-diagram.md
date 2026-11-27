@@ -154,7 +154,7 @@ Solid arrows are calls between modules; dotted arrows are injected infrastructur
 | Interface | Real adapter | Test / rehearsal adapter |
 |---|---|---|
 | LLM gateway | OpenRouter: fallback list of free models (Reviews try the pinned Review model first), per-task timeouts, schema validation with one fix-up retry, one call at a time (~15/min), `llm_usage` count against 1000/day | scripted fake (`LLM_ADAPTER=fake`) |
-| Jobs | durable `job` table worked by one in-process worker, plus the next-event timer | run-inline fake |
+| Jobs | durable `job` table worked by one in-process worker, plus the next-event timer | the real worker, timer off (`runDue()` on demand) |
 | Live events | in-process bus feeding one SSE stream per page (Course × role), heartbeat ~25 s | recording fake |
 | Clock | system time | settable fake |
 | File store | files on disk under their content hash | in-memory map |

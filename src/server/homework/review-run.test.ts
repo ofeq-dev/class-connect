@@ -30,11 +30,7 @@ const replyAll = (level: string) => (input: ReviewSubmissionInput) => ({
 
 const homework = () => t.modules.homework;
 const view = () => homework().lecturerView(assignmentId);
-const jobsOf = (kind: string) =>
-  t.database.sqlite.prepare("select id, status from job where kind = ? order by id").all(kind) as {
-    id: number;
-    status: string;
-  }[];
+const callsOf = (task: string) => t.fakes.llm.calls.filter((c) => c.task === task);
 
 async function handIn(texts: string[]) {
   for (const [i, text] of texts.entries()) await homework().submit(assignmentId, students[i]!, { text });
@@ -71,7 +67,6 @@ afterEach(() => t.close());
 describe("Starting a review run", () => {
   it("queues one review.submission job per Submission and shows 0 of 3", () => {
     const started = homework().startReviewRun(assignmentId);
-    expect(jobsOf("review.submission")).toHaveLength(3);
     expect(started.state).toBe("reviewing");
     expect(started.reviewRun).toMatchObject({ done: 0, total: 3, failed: 0 });
     expect(started.submissions.map((s) => s.review.status)).toEqual(["queued", "queued", "queued"]);
@@ -188,8 +183,8 @@ describe("A failing draft", () => {
     homework().startReviewRun(assignmentId);
     await t.jobs.runDue();
 
-    expect(jobsOf("review.compare").map((j) => j.status)).toEqual(["done"]);
-    expect(jobsOf("review.classSummary").map((j) => j.status)).toEqual(["done"]);
+    expect(view().reviewRun).toMatchObject({ compare: "done", classSummary: "done" });
+    expect(callsOf("classSummary")).toHaveLength(1);
     expect(embed).toHaveBeenCalledTimes(1); // one batched call
     expect(embed.mock.calls[0]![0]).toEqual([TEXTS[0], TEXTS[2]]);
     const summary = view().classSummary!;
@@ -200,6 +195,7 @@ describe("A failing draft", () => {
 
   it("runs compare and the class summary again after a successful Retry", async () => {
     failDraftOf(TEXTS[1]!);
+    const embed = vi.spyOn(t.fakes.llm, "embed");
     homework().startReviewRun(assignmentId);
     await t.jobs.runDue();
     const failed = view().submissions[1]!;
@@ -210,9 +206,10 @@ describe("A failing draft", () => {
     expect(retried.state).toBe("reviewing");
     await t.jobs.runDue();
 
-    expect(jobsOf("review.compare").map((j) => j.status)).toEqual(["done", "done"]);
-    expect(jobsOf("review.classSummary").map((j) => j.status)).toEqual(["done", "done"]);
+    expect(embed).toHaveBeenCalledTimes(2);
+    expect(callsOf("classSummary")).toHaveLength(2);
     const v = view();
+    expect(v.reviewRun).toMatchObject({ compare: "done", classSummary: "done" });
     expect(v.submissions[1]!.review.status).toBe("drafted");
     expect(v.classSummary).toMatchObject({ reviewCount: 3 });
     expect(v.classSummary!.counts[0]).toMatchObject({ partly: 2, secure: 1 });
