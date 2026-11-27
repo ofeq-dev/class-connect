@@ -12,8 +12,9 @@ import { FIXTURES_DIR } from "./rehearsal";
 export const DEMO_COURSE_NAME = "Software Engineering (demo)";
 
 /** The demo Course, or one an earlier seed set aside by renaming it "… (replaced <instant>)". */
+const SET_ASIDE = /^ \(replaced \d{4}-\d{2}-\d{2}T\d{2}:\d{2}\)$/;
 const isDemoCourse = (name: string) =>
-  name === DEMO_COURSE_NAME || /^Software Engineering \(demo\) \(replaced \d{4}-\d{2}-\d{2}T\d{2}:\d{2}\)$/.test(name);
+  name.startsWith(DEMO_COURSE_NAME) && (name === DEMO_COURSE_NAME || SET_ASIDE.test(name.slice(DEMO_COURSE_NAME.length)));
 
 /** The seed moves the modules' Clock to each moment it re-enacts. */
 export interface SettableClock extends Clock {
@@ -103,9 +104,9 @@ function addDays(date: string, days: number): string {
 /**
  * Deletes the Lecturer's demo Courses (by name; a real Course is never touched) and everything
  * they own: each module deletes its own data first, Course last, so an interrupted run is
- * finished by the next. Returns how many it deleted.
+ * finished by the next.
  */
-export async function deleteDemoCourses(deps: { modules: SeedDeps["modules"]; lecturerId: number }): Promise<number> {
+export async function deleteDemoCourses(deps: { modules: SeedDeps["modules"]; lecturerId: number }): Promise<void> {
   const { course, attendance, feedback, summaries, homework } = deps.modules;
   const demos = course.listCourses(deps.lecturerId).filter((c) => isDemoCourse(c.name));
   for (const { id } of demos) {
@@ -115,7 +116,6 @@ export async function deleteDemoCourses(deps: { modules: SeedDeps["modules"]; le
     await homework.deleteCourseData(id);
     course.deleteCourse(id);
   }
-  return demos.length;
 }
 
 /**

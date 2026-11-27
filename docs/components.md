@@ -86,7 +86,7 @@ Each is a deep module: a small interface over the rules and the tables it owns. 
 
 | Module | Responsibility | Key operations | Requirements |
 |---|---|---|---|
-| **Course** | Courses, the Roster, Claims and Sessions, the projector link; resolves who is calling | `importRoster`, `addRosterEntry`, `findRosterEntry`, `claim`, `resetClaim`, `whoIs(token)`, `projectorCourse(secret)`, `newProjectorLink`, Session create / read / update / delete | FR-ID-* |
+| **Course** | Courses, the Roster, Claims and Sessions, the projector link; resolves who is calling | `importRoster`, `addRosterEntry`, `findRosterEntry`, `claim`, `resetClaim`, `whoIs(token)`, `projectorCourse(secret)`, `newProjectorLink`, Session create / read / update / delete, `deleteCourse` | FR-ID-* |
 | **Attendance** | The Check-in window, the block match, Pending check-ins, Network approval for one Session, Manual marks, the Attendance sheet | `openWindow`, `closeWindow`, `checkIn → Present \| Pending`, `approveNetwork`, `mark`, `sheet`, `exportXlsx`, `isPresent`, `nextMoment` | FR-ATT-* |
 | **Feedback** | Topics (each Session's own Topic worked out from Course's Sessions, stored on first use), Comments with status and timing tags, Polls and Votes | `addTopic`, `renameTopic`, `archiveTopic`, `comment`, `setStatus`, `listComments`, `createPoll`, `openPoll`, `closePoll`, `vote`, `results(poll, viewer)`, `nextMoment` | FR-FB-* |
 | **Summaries** | Transcripts, Session summaries with version history, publishing and translations | `uploadTranscript`, `generate`, `saveEdit`, `restore`, `publish`, `forStudent` | FR-SUM-* |

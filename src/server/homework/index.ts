@@ -806,16 +806,22 @@ export function createHomeworkModule({ db, clock, course, llm, files, events, jo
           .all()
           .map((r) => r.id),
       );
-      jobs.discard((job) => (job.kind === "help.match" ? assignments.has(job.payload.assignmentId) : "runId" in job.payload && runs.has(job.payload.runId)));
+      jobs.discard((job) => {
+        if (job.kind === "help.match") return assignments.has(job.payload.assignmentId);
+        if (job.kind === "review.submission" || job.kind === "review.compare" || job.kind === "review.classSummary") {
+          return runs.has(job.payload.runId);
+        }
+        return false;
+      });
       const hashes = db.transaction((tx) => {
-        const files = tx
+        const submitted = tx
           .select({ fileHash: submissionTable.fileHash })
           .from(submissionTable)
           .where(inArray(submissionTable.assignmentId, assignmentIds))
           .all();
         // Everything under an Assignment goes with it (on delete cascade).
         tx.delete(assignmentTable).where(inArray(assignmentTable.id, assignmentIds)).run();
-        return [...new Set(files.flatMap((r) => (r.fileHash ? [r.fileHash] : [])))];
+        return [...new Set(submitted.flatMap((r) => (r.fileHash ? [r.fileHash] : [])))];
       });
       const stillUsed = hashes.length
         ? new Set(
