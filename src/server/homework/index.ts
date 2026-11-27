@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, lt } from "drizzle-orm";
 import type { Clock } from "../clock";
 import type { CourseModule } from "../course";
 import type { Db } from "../db";
@@ -56,8 +56,19 @@ export interface Assignment {
 /** What a Student sees: open until the due date, due after it. */
 export type AssignmentState = "open" | "due";
 
-/** The Lecturer's states add the review run: reviewing while it works, reviewed once it settles. */
-export type LecturerAssignmentState = AssignmentState | "reviewing" | "reviewed";
+/** A Student's states add Release, after which their Review and the class summary show. */
+export type StudentAssignmentState = AssignmentState | "released";
+
+/**
+ * The Lecturer's states add the review run (reviewing while it works, reviewed once it settles),
+ * then Release and the Help matching pass.
+ */
+export type LecturerAssignmentState = AssignmentState | "reviewing" | "reviewed" | "released" | "matched";
+
+/** Two days after Release, unless the Lecturer picks another match deadline. */
+export const DEFAULT_MATCH_DELAY_MS = 2 * 24 * 60 * 60 * 1000;
+/** Students see the class summary only when at least this many Reviews went into it. */
+export const MIN_CLASS_SUMMARY_REVIEWS = 5;
 
 export interface ReviewLevel {
   criterionId: number;
@@ -76,6 +87,8 @@ export interface LecturerReview {
   /** Who wrote the Review first; null without one. */
   author: "ai" | "lecturer" | null;
   editedAt: string | null;
+  /** When the Student could first see it: at Release, or on its own for a Late one after it. */
+  releasedAt: string | null;
   /** One per Criterion, in the Criteria's order; empty without a Review. */
   levels: ReviewLevel[];
 }
@@ -105,7 +118,10 @@ export interface SimilarPair {
   passages: { a: string; b: string }[];
 }
 
-/** Anonymised: counts per Criterion and common mistakes, from the Reviews written when it ran. */
+/**
+ * Anonymised: counts per Criterion and common mistakes. The counts are from the Reviews when the
+ * run wrote it, then from the Reviews released at Release, after which it stays as it is.
+ */
 export interface ClassSummary {
   reviewCount: number;
   counts: { criterionId: number; label: string; notYet: number; partly: number; secure: number }[];
@@ -134,6 +150,11 @@ export interface LecturerAssignment extends Assignment {
   /** Above the similarity threshold, highest score first. Never shown to Students. */
   similarPairs: SimilarPair[];
   classSummary: ClassSummary | null;
+  releasedAt: string | null;
+  matchDeadline: string | null;
+  matchedAt: string | null;
+  /** Why Release is refused right now; null when it can go ahead, or once Released. */
+  releaseBlocker: string | null;
 }
 
 export interface AssignmentRow {
@@ -158,18 +179,29 @@ export interface StudentSubmission {
   late: boolean;
 }
 
+/** The Student's own released Review. */
+export interface StudentReview {
+  levels: (ReviewLevel & { label: string })[];
+}
+
 export interface StudentAssignment extends Assignment {
-  state: AssignmentState;
+  state: StudentAssignmentState;
   submission: StudentSubmission | null;
   /** Until the due date a Student can hand in or replace; after it only a first, Late, Submission. */
   canReplace: boolean;
+  /** Their own Review once released; never anyone else's. */
+  review: StudentReview | null;
+  /** After Release, when at least MIN_CLASS_SUMMARY_REVIEWS Reviews went into it. */
+  classSummary: Omit<ClassSummary, "reviewCount"> | null;
+  /** True after Release when the class summary is held back for having too few Reviews. */
+  classSummaryHidden: boolean;
 }
 
 export interface StudentAssignmentRow {
   id: number;
   title: string;
   dueAt: string;
-  state: AssignmentState;
+  state: StudentAssignmentState;
   submitted: boolean;
   late: boolean;
 }
@@ -202,6 +234,12 @@ export interface HomeworkModule {
    * Edits a draft, or writes one by hand (e.g. for a failed draft).
    */
   editReview(assignmentId: number, submissionId: number, levels: ReviewLevel[]): LecturerAssignment;
+  /**
+   * Publishes every Review and the class summary at once and opens Help until the match
+   * deadline (an instant; default two days on), when `help.match` runs. Refused before the due
+   * date, while a run is going, while an on-time Submission has no Review, and a second time.
+   */
+  release(assignmentId: number, matchDeadline?: string): LecturerAssignment;
 }
 
 export interface HomeworkDeps {
@@ -346,8 +384,53 @@ export function createHomeworkModule({ db, clock, course, llm, files, events, jo
     return "reviewed";
   }
 
-  function lecturerStateOf(row: typeof assignmentTable.$inferSelect): LecturerAssignmentState {
-    return runState(latestRun(row.id)) ?? stateOf(row.dueAt);
+  function lecturerStateOf(
+    row: typeof assignmentTable.$inferSelect,
+    run = latestRun(row.id),
+  ): LecturerAssignmentState {
+    if (row.matchedAt) return "matched";
+    if (row.releasedAt) return "released";
+    return runState(run) ?? stateOf(row.dueAt);
+  }
+
+  const studentStateOf = (row: typeof assignmentTable.$inferSelect): StudentAssignmentState =>
+    row.releasedAt ? "released" : stateOf(row.dueAt);
+
+  /** Why Release can't go ahead now, or null when it can (and once it has). */
+  function releaseBlocker(row: typeof assignmentTable.$inferSelect): string | null {
+    if (row.releasedAt) return null;
+    if (stateOf(row.dueAt) === "open") return "Release opens after the due date.";
+    if (runState(latestRun(row.id)) === "reviewing") return "Wait for the review run to finish.";
+    const missing = db
+      .select({ id: submissionTable.id })
+      .from(submissionTable)
+      .leftJoin(reviewTable, eq(reviewTable.submissionId, submissionTable.id))
+      .where(
+        and(
+          eq(submissionTable.assignmentId, row.id),
+          lt(submissionTable.submittedAt, row.dueAt),
+          isNull(reviewTable.id),
+        ),
+      )
+      .all().length;
+    if (missing === 0) return null;
+    return missing === 1
+      ? "1 Submission handed in on time has no Review yet. Retry it or write it by hand."
+      : `${missing} Submissions handed in on time have no Review yet. Retry them or write them by hand.`;
+  }
+
+  /** Not yet / Partly / Secure counts per Criterion over the given Reviews' levels. */
+  function countLevels(criteria: Criterion[], reviews: ReviewLevel[][]) {
+    return criteria.map((c) => {
+      const count = { criterionId: c.id, notYet: 0, partly: 0, secure: 0 };
+      for (const review of reviews) {
+        const level = review.find((l) => l.criterionId === c.id)?.level;
+        if (level === "not-yet") count.notYet++;
+        else if (level === "partly") count.partly++;
+        else if (level === "secure") count.secure++;
+      }
+      return count;
+    });
   }
 
   /** Each Submission's Review with its levels in Criteria order. */
@@ -412,6 +495,7 @@ export function createHomeworkModule({ db, clock, course, llm, files, events, jo
             error: null,
             author: written.review.author as "ai" | "lecturer",
             editedAt: written.review.editedAt?.toISOString() ?? null,
+            releasedAt: written.review.releasedAt?.toISOString() ?? null,
             levels: written.levels,
           }
         : {
@@ -419,6 +503,7 @@ export function createHomeworkModule({ db, clock, course, llm, files, events, jo
             error: job?.status === "failed" ? job.error : null,
             author: null,
             editedAt: null,
+            releasedAt: null,
             levels: [],
           };
       return {
@@ -466,11 +551,15 @@ export function createHomeworkModule({ db, clock, course, llm, files, events, jo
       }));
     return {
       ...assignment,
-      state: runState(run) ?? stateOf(row.dueAt),
+      state: lecturerStateOf(row, run),
       submissions,
       reviewRun: reviewRunView,
       similarPairs,
       classSummary: readClassSummary(assignment),
+      releasedAt: row.releasedAt?.toISOString() ?? null,
+      matchDeadline: row.matchDeadline?.toISOString() ?? null,
+      matchedAt: row.matchedAt?.toISOString() ?? null,
+      releaseBlocker: releaseBlocker(row),
     };
   }
 
@@ -653,6 +742,8 @@ export function createHomeworkModule({ db, clock, course, llm, files, events, jo
     jobs.complete(job, () => {
       db.delete(similarityPair).where(eq(similarityPair.assignmentId, row.id)).run();
       for (const p of pairs) db.insert(similarityPair).values(p).run();
+      // After Release the class summary stays as it was released; a Late Submission only joins similarity.
+      if (assignmentRow(row.id).releasedAt) return;
       const next = jobs.enqueue("review.classSummary", { runId });
       db.update(reviewRun).set({ classSummaryJobId: next.id }).where(eq(reviewRun.id, runId)).run();
     });
@@ -670,16 +761,7 @@ export function createHomeworkModule({ db, clock, course, llm, files, events, jo
       criteria,
     );
     const levels = [...reviews.values()].map((r) => r.levels);
-    const perCriterion = criteria.map((c) => {
-      const count = { criterionId: c.id, notYet: 0, partly: 0, secure: 0 };
-      for (const review of levels) {
-        const level = review.find((l) => l.criterionId === c.id)?.level;
-        if (level === "not-yet") count.notYet++;
-        else if (level === "partly") count.partly++;
-        else if (level === "secure") count.secure++;
-      }
-      return count;
-    });
+    const perCriterion = countLevels(criteria, levels);
 
     let commonMistakes: string[] = [];
     if (levels.length > 0) {
@@ -699,6 +781,7 @@ export function createHomeworkModule({ db, clock, course, llm, files, events, jo
       createdAt: clock.now(),
     };
     jobs.complete(job, () => {
+      if (assignmentRow(row.id).releasedAt) return;
       db.insert(classSummaryTable)
         .values(values)
         .onConflictDoUpdate({ target: classSummaryTable.assignmentId, set: values })
@@ -751,6 +834,9 @@ export function createHomeworkModule({ db, clock, course, llm, files, events, jo
         } else {
           const existing = tx.select().from(assignmentTable).where(eq(assignmentTable.id, assignmentId)).get();
           if (!existing || existing.courseId !== courseId) throw new NotFoundError("Assignment");
+          if (existing.releasedAt) {
+            throw new DomainError("assignment.released", "This Assignment is Released, so it can't be edited.");
+          }
           id = existing.id;
           tx.update(assignmentTable).set({ title, instructions, dueAt }).where(eq(assignmentTable.id, id)).run();
         }
@@ -812,12 +898,23 @@ export function createHomeworkModule({ db, clock, course, llm, files, events, jo
       const row = assignmentRow(assignmentId);
       studentOn(row.courseId, rosterEntryId);
       const mine = submissionRow(assignmentId, rosterEntryId);
+      const assignment = toAssignment(row);
       const state = stateOf(row.dueAt);
+      const written = mine ? reviewsOf([mine.id], assignment.criteria).get(mine.id) : undefined;
+      const labels = new Map(assignment.criteria.map((c) => [c.id, c.label]));
+      const summary = row.releasedAt ? readClassSummary(assignment) : null;
+      const shown = summary !== null && summary.reviewCount >= MIN_CLASS_SUMMARY_REVIEWS;
       return {
-        ...toAssignment(row),
-        state,
+        ...assignment,
+        state: studentStateOf(row),
         submission: mine ? toStudentSubmission(mine, row.dueAt) : null,
         canReplace: state === "open" || !mine,
+        review:
+          written?.review.releasedAt
+            ? { levels: written.levels.map((l) => ({ ...l, label: labels.get(l.criterionId)! })) }
+            : null,
+        classSummary: shown ? { counts: summary.counts, commonMistakes: summary.commonMistakes } : null,
+        classSummaryHidden: summary !== null && !shown,
       };
     },
 
@@ -849,7 +946,7 @@ export function createHomeworkModule({ db, clock, course, llm, files, events, jo
           id: r.id,
           title: r.title,
           dueAt: r.dueAt.toISOString(),
-          state: stateOf(r.dueAt),
+          state: studentStateOf(r),
           submitted: !!s,
           late: !!s && s.submittedAt >= r.dueAt,
         };
@@ -921,6 +1018,47 @@ export function createHomeworkModule({ db, clock, course, llm, files, events, jo
       const read = readLevels(criteriaOf(assignmentId), levels);
       db.transaction(() => writeReview(submissionId, read, "lecturer"));
       lecturerChanged(row.courseId, assignmentId);
+      return lecturerView(assignmentId);
+    },
+
+    release(assignmentId, matchDeadline) {
+      const row = assignmentRow(assignmentId);
+      if (row.releasedAt) throw new DomainError("release.done", "This Assignment is already Released.");
+      const blocker = releaseBlocker(row);
+      if (blocker) throw new DomainError("release.blocked", blocker);
+      const now = clock.now();
+      const deadline = matchDeadline ? new Date(matchDeadline) : new Date(now.getTime() + DEFAULT_MATCH_DELAY_MS);
+      if (Number.isNaN(deadline.getTime()) || deadline <= now) {
+        throw new DomainError("release.bad-deadline", "Pick a match deadline in the future.");
+      }
+      const assignment = toAssignment(row);
+      db.transaction(() => {
+        const reviews = reviewsOf(
+          reviewedSubmissions(assignmentId).map((s) => s.id),
+          assignment.criteria,
+        );
+        // The class summary goes out with the Reviews as they are now, Lecturer edits included.
+        const previous = db.select().from(classSummaryTable).where(eq(classSummaryTable.assignmentId, assignmentId)).get();
+        const levels = [...reviews.values()].map((r) => r.levels);
+        const values = {
+          assignmentId,
+          counts: JSON.stringify({ reviewCount: levels.length, perCriterion: countLevels(assignment.criteria, levels) }),
+          commonMistakes: previous?.commonMistakes ?? "[]",
+          createdAt: now,
+        };
+        db.insert(classSummaryTable)
+          .values(values)
+          .onConflictDoUpdate({ target: classSummaryTable.assignmentId, set: values })
+          .run();
+        const reviewIds = [...reviews.values()].map((r) => r.review.id);
+        if (reviewIds.length) db.update(reviewTable).set({ releasedAt: now }).where(inArray(reviewTable.id, reviewIds)).run();
+        db.update(assignmentTable)
+          .set({ releasedAt: now, matchDeadline: deadline })
+          .where(eq(assignmentTable.id, assignmentId))
+          .run();
+        jobs.enqueue("help.match", { assignmentId }, deadline);
+      });
+      changed(row.courseId, assignmentId);
       return lecturerView(assignmentId);
     },
 
