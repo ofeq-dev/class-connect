@@ -73,6 +73,16 @@ export function studentRoutes(deps: AppDeps) {
     if (token && !alreadySet && deps.course.whoIs(token)) setDeviceCookie(c, token);
   });
 
+  /** The Student this phone is, or a 401 the route returns. */
+  const student = (c: Context<Vars>) => deps.course.whoIs(c.var.deviceToken);
+  const unclaimed = (c: Context) =>
+    c.json({ error: "unclaimed", message: "Scan your Session's QR code first." }, 401);
+  const assignmentParam = (c: Context) => {
+    const id = Number(c.req.param("assignmentId"));
+    if (!Number.isInteger(id) || id <= 0) throw new NotFoundError("Assignment");
+    return id;
+  };
+
   const qrSession = (c: Context) => deps.course.readSession(c.req.param("code") ?? "");
 
   return new Hono<Vars>()
@@ -125,6 +135,39 @@ export function studentRoutes(deps: AppDeps) {
         checkIn: session ? deps.attendance.forStudent(session.id, viewer.rosterEntry.id) : null,
       });
     })
+
+    // Assignments
+    .get("/assignments", (c) => {
+      const viewer = student(c);
+      if (!viewer) return unclaimed(c);
+      return c.json(deps.homework.forStudent(viewer.course.id, viewer.rosterEntry.id));
+    })
+    .get("/assignments/:assignmentId", (c) => {
+      const viewer = student(c);
+      if (!viewer) return unclaimed(c);
+      return c.json(deps.homework.studentView(assignmentParam(c), viewer.rosterEntry.id));
+    })
+    .post(
+      "/assignments/:assignmentId/submission",
+      validator("json", (value) => {
+        const b = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+        return {
+          text: typeof b.text === "string" ? b.text : undefined,
+          pdfBase64: typeof b.pdfBase64 === "string" ? b.pdfBase64 : undefined,
+          fileName: typeof b.fileName === "string" ? b.fileName : "",
+        };
+      }),
+      async (c) => {
+        const viewer = student(c);
+        if (!viewer) return unclaimed(c);
+        const { text, pdfBase64, fileName } = c.req.valid("json");
+        const input =
+          pdfBase64 !== undefined
+            ? { pdf: new Uint8Array(Buffer.from(pdfBase64, "base64")), fileName }
+            : { text: text ?? "" };
+        return c.json(await deps.homework.submit(assignmentParam(c), viewer.rosterEntry.id, input));
+      },
+    )
 
     // Published Session summaries of this phone's Course, and one to read.
     .get("/summaries", (c) => c.json(deps.summaries.listForStudent(c.var.deviceToken)))

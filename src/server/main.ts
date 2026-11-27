@@ -11,6 +11,7 @@ import { createDiskFileStore } from "./files";
 import { createJobs } from "./jobs";
 import { createLiveEvents } from "./live-events";
 import { createOpenRouterGateway, createScriptedGateway } from "./llm";
+import { createHomeworkModule } from "./homework";
 import { createSummariesModule } from "./summaries";
 
 const config = loadConfig();
@@ -55,21 +56,16 @@ const llm =
         apiKey: config.llm.openRouterApiKey,
         models: config.llm.models,
       });
-const summaries = createSummariesModule({
-  db: database.db,
-  clock: systemClock,
-  course,
-  llm,
-  jobs,
-  files: createDiskFileStore(config.filesDir),
-  events,
-});
+const files = createDiskFileStore(config.filesDir);
+const summaries = createSummariesModule({ db: database.db, clock: systemClock, course, llm, jobs, files, events });
+const homework = createHomeworkModule({ db: database.db, clock: systemClock, course, llm, files, events });
 const sha = commitSha();
 
 const app = createApp({
   course,
   attendance,
   summaries,
+  homework,
   llm,
   events,
   lecturer: { id: lecturer.id, passwordHash: config.lecturerPasswordHash },

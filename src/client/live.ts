@@ -20,6 +20,7 @@ export const noticeQueryKeys: { [T in NoticeType]: (id: number) => QueryKey[] } 
   ],
   // The console's count, and the Student's own Check-in line (window opened or closed).
   "attendance.changed": (sessionId) => [["attendance", sessionId], ["student", "me"], ["student", "entry"]],
+  "assignment.changed": (id) => [["assignment", id], ["assignments"], ["student", "assignment", id], ["student", "assignments"]],
 };
 
 export function applyNotice(client: QueryClient, notice: Notice): void {

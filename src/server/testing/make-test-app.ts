@@ -6,6 +6,7 @@ import { openDatabase } from "../db";
 import { createApp } from "../http";
 import { createJobs } from "../jobs";
 import { createScriptedGateway } from "../llm";
+import { createHomeworkModule } from "../homework";
 import { createSummariesModule } from "../summaries";
 import { hashPassword } from "../lecturer-auth";
 import { FakeClock } from "./fake-clock";
@@ -36,11 +37,13 @@ export function makeTestApp(options: TestAppOptions = {}) {
   const llm = createScriptedGateway({ db: database.db, clock });
   const files = new MemoryFileStore();
   const summaries = createSummariesModule({ db: database.db, clock, course, llm, jobs, files, events });
+  const homework = createHomeworkModule({ db: database.db, clock, course, llm, files, events });
 
   const app = createApp({
     course,
     attendance,
     summaries,
+    homework,
     llm,
     events,
     lecturer: { id: lecturer.id, passwordHash },
@@ -51,7 +54,7 @@ export function makeTestApp(options: TestAppOptions = {}) {
 
   return {
     app,
-    modules: { course, attendance, summaries },
+    modules: { course, attendance, summaries, homework },
     fakes: { clock, events, llm, files },
     jobs,
     lecturer,

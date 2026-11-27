@@ -2,7 +2,15 @@ import { Link, NavLink, Route, Routes, useLocation, useParams } from "react-rout
 import { checkInLine } from "../attendance";
 import { useLiveEvents } from "../live";
 import { SummaryView } from "../markdown/SummaryView";
-import { longDate, useStudentMe, useStudentSummaries, useStudentSummary } from "./queries";
+import { AssignmentPage } from "./AssignmentPage";
+import {
+  dueLabel,
+  longDate,
+  useStudentAssignments,
+  useStudentMe,
+  useStudentSummaries,
+  useStudentSummary,
+} from "./queries";
 
 const TABS = [
   { path: "/", key: "today", label: "Today" },
@@ -60,6 +68,7 @@ export function StudentShell() {
               <Empty title="Your comments">Nothing sent yet. Only you and the Lecturer see what you write.</Empty>
             }
           />
+          <Route path="assignments/:assignmentId" element={<AssignmentPage />} />
           <Route path="summaries/:sessionId" element={<SummaryRead />} />
           <Route path="*" element={<Today me={me.data} />} />
         </Routes>
@@ -94,6 +103,7 @@ function Today({ me }: { me: Me }) {
           <p className="bd-when">{longDate(me.today)}</p>
         </>
       )}
+      <Assignments />
       <div className="quick">
         <Link className="qa" to="/comment">
           <b>Message the Lecturer</b>
@@ -123,6 +133,31 @@ function CheckInLine({ checkIn }: { checkIn: NonNullable<Me["checkIn"]> }) {
         <span>{line.detail}</span>
       </div>
     </div>
+  );
+}
+
+function Assignments() {
+  const assignments = useStudentAssignments();
+  if (!assignments.data?.length) return null;
+  return (
+    <section className="hw-list">
+      <h2 className="lbl">Assignments</h2>
+      <ul aria-label="Assignments">
+        {assignments.data.map((a) => (
+          <li key={a.id}>
+            <Link className="qa" to={`/assignments/${a.id}`}>
+              <b dir="auto">{a.title}</b>
+              <span>
+                Due {dueLabel(a.dueAt)}
+                {" · "}
+                {a.submitted ? "Handed in" : a.state === "due" ? "Not handed in" : "To do"}
+                {a.late && <span className="hw-late">Late</span>}
+              </span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
