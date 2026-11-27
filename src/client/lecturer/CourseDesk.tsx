@@ -3,6 +3,7 @@ import { useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router";
 import { api, ok } from "../api";
 import { EditIcon, TrashIcon } from "./icons";
+import { AttendanceSheetItem } from "./AttendanceSheetItem";
 import { DiagnosticsItem } from "./DiagnosticsItem";
 import { Menu } from "./Menu";
 import {
@@ -53,6 +54,7 @@ export function CourseDesk() {
         <Menu label="Course menu">
           <Link to={`/lecturer/courses/${courseId}/roster`}>Roster</Link>
           <Link to={`/lecturer/courses/${courseId}/settings`}>Course settings</Link>
+          <AttendanceSheetItem courseId={courseId} />
           <DiagnosticsItem />
         </Menu>
       </header>

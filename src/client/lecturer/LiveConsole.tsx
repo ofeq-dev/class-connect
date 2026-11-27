@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router";
 import { api, ok } from "../api";
 import { AttendanceColumn } from "./AttendanceColumn";
+import { AttendanceSheetItem } from "./AttendanceSheetItem";
 import { DiagnosticsItem } from "./DiagnosticsItem";
 import { Menu } from "./Menu";
 import { ProjectorControl } from "./ProjectorControl";
@@ -43,6 +44,7 @@ export function LiveConsole() {
         <ProjectorControl courseId={courseId} sessionId={sessionId} />
         <Menu label="Console menu">
           <Link to={`/lecturer/courses/${courseId}/roster`}>Roster</Link>
+          <AttendanceSheetItem courseId={courseId} />
           <DiagnosticsItem />
         </Menu>
       </header>
