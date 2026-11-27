@@ -114,4 +114,33 @@ describe("Session summaries over HTTP", () => {
     const list = await fetch(`${server.url}/api/student/summaries`, { headers: { cookie: `cc_device=${deviceToken}` } });
     expect(await list.json()).toEqual([]);
   });
+
+  it("translates on publish; the phone hears when it's done and reads its language by ?lang=", async () => {
+    const courseId = aCourse(t).id;
+    const sessionId = aSession(t, courseId).id;
+    t.modules.course.updateCourse(courseId, { translationLanguages: ["ar"] });
+    t.fakes.llm.reply("translate", ({ markdown }: { markdown: string }) => ({ markdown: `عربي ${markdown}` }));
+    const { deviceToken } = aClaimedStudent(t, courseId);
+    const phone = `cc_device=${deviceToken}`;
+    const base = `/courses/${courseId}/sessions/${sessionId}/summary`;
+    const read = async (query: string) =>
+      (await fetch(`${server.url}/api/student/summaries/${sessionId}${query}`, { headers: { cookie: phone } })).json();
+
+    const v = (await (await call("POST", `${base}/versions`, { markdown: "Notes." })).json()).versions[0].id;
+    const published = await (await call("POST", `${base}/versions/${v}/publish`)).json();
+    expect(published.translations).toMatchObject([{ language: "ar", state: "translating" }]);
+
+    const stream = await openSse(`${server.url}/api/student/events`, phone);
+    await t.jobs.runDue();
+    expect(await stream.nextMessage()).toEqual({ type: "summary.changed", id: sessionId });
+    stream.close();
+
+    expect(await read("?lang=ar")).toMatchObject({ markdown: "عربي Notes.", language: "ar", languages: ["ar"] });
+    expect(await read("?lang=ru")).toMatchObject({ markdown: "Notes.", language: null });
+
+    const edited = await (await call("PUT", `${base}/translations/ar`, { markdown: "مصحح" })).json();
+    expect(edited.translations).toMatchObject([{ language: "ar", markdown: "مصحح", edited: true }]);
+    expect(await read("?lang=ar")).toMatchObject({ markdown: "مصحح" });
+    expect((await call("POST", `${base}/translations/ar/retry`)).status).toBe(400);
+  });
 });

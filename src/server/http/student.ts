@@ -15,6 +15,11 @@ const FOUR_HUNDRED_DAYS = 400 * 24 * 60 * 60;
 
 type Vars = { Variables: { deviceToken: string | undefined } };
 
+/** `?lang=` on a summary read: the language wanted, "" or absent for the source. */
+const langQuery = validator("query", (value) => ({
+  lang: typeof value.lang === "string" ? value.lang : undefined,
+}));
+
 const studentIdBody = validator("json", (value) => {
   const b = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
   return { studentId: typeof b.studentId === "string" ? b.studentId : "" };
@@ -171,11 +176,11 @@ export function studentRoutes(deps: AppDeps) {
 
     // Published Session summaries of this phone's Course, and one to read.
     .get("/summaries", (c) => c.json(deps.summaries.listForStudent(c.var.deviceToken)))
-    .get("/summaries/:sessionId", (c) => {
+    .get("/summaries/:sessionId", langQuery, (c) => {
       const published = deps.summaries.forStudent(
         c.var.deviceToken,
         Number(c.req.param("sessionId")),
-        c.req.query("lang"),
+        c.req.valid("query").lang,
       );
       if (!published) throw new NotFoundError("Session summary");
       return c.json(published);
