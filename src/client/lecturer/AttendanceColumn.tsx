@@ -1,8 +1,9 @@
+import { clockTime } from "../time";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import type { LecturerAttendance, WhoRow } from "../../server/attendance";
 import { api, ok } from "../api";
-import { clockTime, lecturerAddresses, markAfterTap, networkCard, undoMark, whoGroups, windowButton } from "../attendance";
+import { lecturerAddresses, markAfterTap, networkCard, undoMark, whoGroups, windowButton } from "../attendance";
 import { diagnosticsQuery, useDiagnostics } from "./diagnostics";
 import { CheckIcon, ChevronIcon, CrossIcon } from "./icons";
 import { attendanceKey, useAttendance } from "./queries";

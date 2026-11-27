@@ -1,3 +1,4 @@
+import { LEVEL_LABEL } from "../../shared/homework";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router";
@@ -132,7 +133,6 @@ function SubmissionForm({ assignmentId, replacing, late }: { assignmentId: strin
   );
 }
 
-const LEVEL_LABEL = { "not-yet": "Not yet", partly: "Partly", secure: "Secure" } as const;
 
 /** The Student's own released Review: a level, evidence and feedback per Criterion. */
 function ReviewSection({ levels }: { levels: NonNullable<StudentAssignmentView["review"]>["levels"] }) {

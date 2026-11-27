@@ -1,3 +1,4 @@
+import { clockTime } from "../time";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router";
@@ -18,7 +19,7 @@ function useClock() {
     const timer = setInterval(() => setNow(new Date()), 15_000);
     return () => clearInterval(timer);
   }, []);
-  return now.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+  return clockTime(now);
 }
 
 /** The live console: header, then Attendance | Comments | Poll. */

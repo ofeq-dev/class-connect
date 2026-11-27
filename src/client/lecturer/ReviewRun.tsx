@@ -1,3 +1,4 @@
+import { LEVEL_LABEL, LEVELS } from "../../shared/homework";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Fragment, useState } from "react";
 import { api, ok } from "../api";
@@ -8,7 +9,6 @@ type SubmissionData = AssignmentData["submissions"][number];
 type LevelData = SubmissionData["review"]["levels"][number];
 type Level = LevelData["level"];
 
-const LEVEL_LABEL: Record<Level, string> = { "not-yet": "Not yet", partly: "Partly", secure: "Secure" };
 const STATUS_LABEL: Record<SubmissionData["review"]["status"], string> = {
   "not-started": "Not reviewed",
   queued: "Waiting",
@@ -240,7 +240,7 @@ function ReviewEditor(props: {
           <label className="field">
             <span>Level</span>
             <select value={levels[i]!.level} onChange={(e) => set(i, { level: e.target.value as Level })}>
-              {(Object.keys(LEVEL_LABEL) as Level[]).map((l) => (
+              {LEVELS.map((l) => (
                 <option key={l} value={l}>{LEVEL_LABEL[l]}</option>
               ))}
             </select>

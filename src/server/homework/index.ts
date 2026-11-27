@@ -10,7 +10,8 @@ import type { LlmGateway } from "../llm";
 import { classSummary as classSummaryTask } from "./class-summary-task";
 import { draftCriteria as draftCriteriaTask } from "./draft-criteria-task";
 import { pdfText } from "./pdf";
-import { LEVELS, reviewSubmission, type Level } from "./review-task";
+import { isLevel, type Level } from "../../shared/homework";
+import { reviewSubmission } from "./review-task";
 import {
   assignment as assignmentTable,
   classSummary as classSummaryTable,
@@ -84,6 +85,9 @@ export interface ReviewLevel {
   evidence: string;
   feedback: string;
 }
+
+/** A Review level as the Lecturer sends it; the level is checked against LEVELS. */
+export type ReviewLevelInput = Omit<ReviewLevel, "level"> & { level: string };
 
 /** not-started (no run has included it), queued / running / failed (its job), drafted (a Review exists). */
 export type ReviewStatus = "not-started" | "queued" | "running" | "failed" | "drafted";
@@ -286,7 +290,7 @@ export interface HomeworkModule {
    * The Lecturer's Review of a Submission: a level, evidence and feedback for every Criterion.
    * Edits a draft, or writes one by hand (e.g. for a failed draft).
    */
-  editReview(assignmentId: number, submissionId: number, levels: ReviewLevel[]): LecturerAssignment;
+  editReview(assignmentId: number, submissionId: number, levels: ReviewLevelInput[]): LecturerAssignment;
   /**
    * Publishes every Review and the class summary at once and opens Help until the match
    * deadline (an instant; default two days on), when `help.match` runs. Refused before the due
@@ -1002,8 +1006,8 @@ export function createHomeworkModule({ db, clock, course, llm, files, events, jo
     return sub;
   }
 
-  function readLevels(criteria: Criterion[], levels: ReviewLevel[]): ReviewLevel[] {
-    const given = new Map<number, ReviewLevel>();
+  function readLevels(criteria: Criterion[], levels: ReviewLevelInput[]): ReviewLevel[] {
+    const given = new Map<number, ReviewLevelInput>();
     for (const l of levels) {
       if (given.has(l.criterionId)) throw new DomainError("review.criterion-twice", "A Criterion appears twice.");
       given.set(l.criterionId, l);
@@ -1013,7 +1017,7 @@ export function createHomeworkModule({ db, clock, course, llm, files, events, jo
     }
     return criteria.map((c) => {
       const l = given.get(c.id)!;
-      if (!LEVELS.includes(l.level)) {
+      if (!isLevel(l.level)) {
         throw new DomainError("review.level", `Pick Not yet, Partly or Secure for "${c.label}".`);
       }
       const feedback = (l.feedback ?? "").trim();

@@ -8,7 +8,6 @@ import { COMMENT_STATUSES, TIMINGS, type CommentStatus, type Timing } from "../.
 import type { CommentFilter, PollInput } from "../feedback";
 import { verifyPassword } from "../lecturer-auth";
 import { streamLiveEvents } from "../live-events";
-import type { Level } from "../homework";
 import { DAILY_LIMIT } from "../llm";
 import type { AppDeps } from "./app";
 import { projectorView } from "./projector";
@@ -42,7 +41,7 @@ const reviewBody = (b: Body) => ({
     const o = (l && typeof l === "object" ? l : {}) as Body;
     return {
       criterionId: Number(o.criterionId),
-      level: str(o.level) as Level,
+      level: str(o.level),
       evidence: str(o.evidence),
       feedback: str(o.feedback),
     };
@@ -107,8 +106,8 @@ function idParam(c: Context, name: string): number {
 
 export function lecturerRoutes(deps: AppDeps) {
   /** The console's Attendance glance; Diagnostics (?diagnostics=1) adds IPs, blocks and device IDs. */
-  const glance = (c: Context, sessionId: number) =>
-    deps.attendance.forLecturer(sessionId, { diagnostics: c.req.query("diagnostics") === "1" });
+  const glance = (query: { diagnostics?: "1" }, sessionId: number) =>
+    deps.attendance.forLecturer(sessionId, { diagnostics: query.diagnostics === "1" });
 
   const requireLecturer = createMiddleware<{ Variables: { lecturerId: number } }>(
     async (c, next) => {
@@ -260,7 +259,7 @@ export function lecturerRoutes(deps: AppDeps) {
     // Attendance: the Check-in window, the live count, Network approval and Manual marks.
     // Every route answers with the console's glance; IPs only with ?diagnostics=1 (FR-LC-6).
     .get("/courses/:courseId/sessions/:sessionId/attendance", requireLecturer, diagnosticsFlag, (c) =>
-      c.json(glance(c, ownSession(c).id)),
+      c.json(glance(c.req.valid("query"), ownSession(c).id)),
     )
     .post(
       "/courses/:courseId/sessions/:sessionId/attendance/window/open",
@@ -269,13 +268,13 @@ export function lecturerRoutes(deps: AppDeps) {
       (c) => {
         const sessionId = ownSession(c).id;
         deps.attendance.openWindow(sessionId, c.req.valid("json"));
-        return c.json(glance(c, sessionId));
+        return c.json(glance(c.req.valid("query"), sessionId));
       },
     )
     .post("/courses/:courseId/sessions/:sessionId/attendance/window/close", requireLecturer, diagnosticsFlag, (c) => {
       const sessionId = ownSession(c).id;
       deps.attendance.closeWindow(sessionId);
-      return c.json(glance(c, sessionId));
+      return c.json(glance(c.req.valid("query"), sessionId));
     })
     .post("/courses/:courseId/sessions/:sessionId/attendance/networks/:key/approve", requireLecturer, diagnosticsFlag, (c) => {
       const sessionId = ownSession(c).id;
@@ -285,7 +284,7 @@ export function lecturerRoutes(deps: AppDeps) {
         .networks.find((n) => n.key === c.req.param("key"));
       if (!card?.block) throw new NotFoundError("Network");
       deps.attendance.approveNetwork(sessionId, card.block);
-      return c.json(glance(c, sessionId));
+      return c.json(glance(c.req.valid("query"), sessionId));
     })
     .post(
       "/courses/:courseId/sessions/:sessionId/attendance/marks/:rosterEntryId",
@@ -294,7 +293,7 @@ export function lecturerRoutes(deps: AppDeps) {
       (c) => {
         const sessionId = ownSession(c).id;
         deps.attendance.mark(sessionId, idParam(c, "rosterEntryId"), c.req.valid("json").present);
-        return c.json(glance(c, sessionId));
+        return c.json(glance(c.req.valid("query"), sessionId));
       },
     )
 

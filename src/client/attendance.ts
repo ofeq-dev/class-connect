@@ -1,3 +1,4 @@
+import { clockTime } from "./time";
 import type { PendingNetwork, StudentCheckIn, WhoRow, WindowState } from "../server/attendance";
 
 const IPV4 = /^\d{1,3}(\.\d{1,3}){3}$/;
@@ -30,9 +31,6 @@ export async function lecturerAddresses(
   };
 }
 
-/** "10:18", in the phone's own time zone. */
-export const clockTime = (iso: string) =>
-  new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
 
 export type CheckInTone = "ok" | "wait" | "todo" | "bad";
 

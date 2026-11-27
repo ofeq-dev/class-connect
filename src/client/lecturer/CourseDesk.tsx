@@ -1,3 +1,4 @@
+import { clockTime } from "../time";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router";
@@ -17,7 +18,6 @@ import {
   useAssignments,
   useCourse,
   useCourseLive,
-  formatTime,
   useComments,
   useProjector,
   useRoster,
@@ -169,7 +169,7 @@ function CommentsSection({ courseId }: { courseId: string }) {
         {open.slice(0, 3).map((c) => (
           <li key={c.id}>
             <span className="grow">{c.text}</span>
-            <span className="muted small">{c.author?.name ?? "Anonymous"} · {c.topicName} · {formatTime(c.createdAt)}</span>
+            <span className="muted small">{c.author?.name ?? "Anonymous"} · {c.topicName} · {clockTime(c.createdAt)}</span>
           </li>
         ))}
       </ul>

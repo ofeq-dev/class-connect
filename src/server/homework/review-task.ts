@@ -1,7 +1,8 @@
 import type { LlmTask } from "../llm";
 
-export type Level = "not-yet" | "partly" | "secure";
-export const LEVELS: readonly Level[] = ["not-yet", "partly", "secure"];
+import type { Level } from "../../shared/homework";
+
+export { LEVELS, type Level } from "../../shared/homework";
 
 export interface ReviewSubmissionInput {
   instructions: string;

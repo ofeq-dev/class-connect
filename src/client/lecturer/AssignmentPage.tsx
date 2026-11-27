@@ -1,3 +1,4 @@
+import { localInput } from "../time";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router";
@@ -18,12 +19,6 @@ interface Form {
   criteria: string[];
 }
 
-/** An instant as a datetime-local value in the browser's time zone. */
-function localInput(iso: string): string {
-  const d = new Date(iso);
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
-}
 
 /**
  * The Assignment screen (apricot), minimal: title, instructions, due date and the Criteria
