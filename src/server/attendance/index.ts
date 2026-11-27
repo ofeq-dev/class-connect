@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { isIPv4, isIPv6 } from "node:net";
-import { and, desc, eq, gte, inArray, isNull } from "drizzle-orm";
+import { and, desc, eq, gte, isNull } from "drizzle-orm";
 import { nextLocalMidnight, type Clock } from "../clock";
 import type { CourseModule } from "../course";
 import type { Db } from "../db";
@@ -37,6 +37,40 @@ export interface LecturerAttendance {
   pending: number;
   /** Roster size. */
   total: number;
+  /** One card per network with Pending check-ins, while the window is open; first Check-in first. */
+  networks: PendingNetwork[];
+  /** Every Roster entry, by name: the "Who's here" lists. */
+  students: WhoRow[];
+}
+
+/** What only the Diagnostics flag shows (FR-LC-6). */
+export interface Diagnostics {
+  ip: string | null;
+  block: string | null;
+  /** The first 6 characters of the stored device-token hash; the raw token is never stored. */
+  deviceId: string | null;
+}
+
+/** A network with Pending check-ins, named by an opaque key so the console never sees its block. */
+export interface PendingNetwork {
+  key: string;
+  students: { rosterEntryId: number; name: string }[];
+  /** Only with Diagnostics on. */
+  block?: string;
+}
+
+/** One Roster entry in "Who's here": present, waiting for approval, or absent (not here yet). */
+export interface WhoRow {
+  rosterEntryId: number;
+  name: string;
+  studentId: string;
+  status: "present" | "waiting" | "absent";
+  /** The Lecturer's Manual mark, when that is what counts. */
+  mark: "present" | "absent" | null;
+  /** When the counting Check-in or mark happened. */
+  at: string | null;
+  /** Only with Diagnostics on. */
+  diagnostics?: Diagnostics;
 }
 
 /** One Session's attendance record for a Roster entry, as Diagnostics shows it. */
@@ -69,7 +103,8 @@ export interface AttendanceModule {
    */
   checkIn(sessionId: number, rosterEntryId: number, ip: string, deviceToken: string): CheckInResult;
   isPresent(sessionId: number, rosterEntryId: number): boolean;
-  forLecturer(sessionId: number): LecturerAttendance;
+  /** The console's Attendance column. IPs, blocks and device IDs only with `diagnostics`. */
+  forLecturer(sessionId: number, options?: { diagnostics?: boolean }): LecturerAttendance;
   forStudent(sessionId: number, rosterEntryId: number): StudentCheckIn;
   /**
    * Network approval: makes a block a Classroom network for this Session only. Its Pending
@@ -96,6 +131,9 @@ export interface AttendanceDeps {
 }
 
 const tokenHash = (token: string) => createHash("sha256").update(token).digest("hex");
+
+/** An opaque name for a network block, so the console can ask to approve it without seeing it. */
+export const networkKey = (block: string) => createHash("sha256").update(block).digest("hex").slice(0, 12);
 const DAY = 24 * 60 * 60 * 1000;
 const PRESENT = ["present", "manual-present"] as const;
 
@@ -245,24 +283,64 @@ export function createAttendanceModule({ db, clock, events, course, timeZone }: 
       return !!row && (PRESENT as readonly string[]).includes(row.state);
     },
 
-    forLecturer(sessionId) {
+    forLecturer(sessionId, { diagnostics = false } = {}) {
       const { courseId } = course.readSession(sessionId);
-      const roster = new Set(course.listRoster(courseId).map((e) => e.id));
+      const roster = course.listRoster(courseId);
       const window = windowView(sessionId);
-      const rows = db
-        .select({ rosterEntryId: attendance.rosterEntryId, state: attendance.state })
-        .from(attendance)
-        .where(and(eq(attendance.sessionId, sessionId), inArray(attendance.state, ["present", "manual-present", "pending"])))
-        .all()
-        .filter((r) => roster.has(r.rosterEntryId));
+      const open = window.state === "open";
+      const rows = new Map(
+        db
+          .select()
+          .from(attendance)
+          .where(eq(attendance.sessionId, sessionId))
+          .orderBy(attendance.at, attendance.id)
+          .all()
+          .map((r) => [r.rosterEntryId, r]),
+      );
+      const students: WhoRow[] = roster
+        .map((entry): WhoRow => {
+          const r = rows.get(entry.id);
+          const status: WhoRow["status"] =
+            r && (PRESENT as readonly string[]).includes(r.state)
+              ? "present"
+              : r?.state === "pending" && open
+                ? "waiting"
+                : "absent";
+          const mark: WhoRow["mark"] = r?.state === "manual-present" ? "present" : r?.state === "manual-absent" ? "absent" : null;
+          const counted = status !== "absent" || mark !== null;
+          return {
+            rosterEntryId: entry.id,
+            name: entry.name,
+            studentId: entry.studentId,
+            status,
+            mark,
+            at: counted && r ? r.at.toISOString() : null,
+            ...(diagnostics && {
+              diagnostics: { ip: r?.ip ?? null, block: r?.block ?? null, deviceId: r?.deviceTokenHash?.slice(0, 6) ?? null },
+            }),
+          };
+        })
+        .sort((a, b) => a.name.localeCompare(b.name));
+
+      const networks = new Map<string, PendingNetwork>();
+      if (open) {
+        const names = new Map(roster.map((e) => [e.id, e.name]));
+        for (const r of rows.values()) {
+          if (r.state !== "pending" || !r.block || !names.has(r.rosterEntryId)) continue;
+          const card = networks.get(r.block) ?? { key: networkKey(r.block), students: [], ...(diagnostics && { block: r.block }) };
+          card.students.push({ rosterEntryId: r.rosterEntryId, name: names.get(r.rosterEntryId)! });
+          networks.set(r.block, card);
+        }
+      }
       return {
         window,
-        present: rows.filter((r) => r.state !== "pending").length,
-        pending: window.state === "open" ? rows.filter((r) => r.state === "pending").length : 0,
-        total: roster.size,
+        present: students.filter((s) => s.status === "present").length,
+        pending: students.filter((s) => s.status === "waiting").length,
+        total: roster.length,
+        networks: [...networks.values()],
+        students,
       };
     },
-
     forStudent(sessionId, rosterEntryId) {
       const row = record(sessionId, rosterEntryId);
       const window = windowView(sessionId).state;

@@ -366,3 +366,53 @@ describe("Manual marks", () => {
     ]);
   });
 });
+
+describe("The console's Who's here lists and network cards", () => {
+  beforeEach(() => attendance().openWindow(session.id, LECTURER));
+
+  it("puts every Roster entry in one list: waiting for approval, not here yet or present", () => {
+    t.fakes.clock.set("2026-11-30T08:18:00.000Z");
+    checkIn(dana, "147.235.10.21");
+    checkIn(omar, "2.54.1.1");
+    const { students } = attendance().forLecturer(session.id);
+    expect(students).toEqual([
+      { rosterEntryId: dana.id, name: "Dana Levi", studentId: "1001", status: "present", mark: null, at: "2026-11-30T08:18:00.000Z" },
+      { rosterEntryId: irina.id, name: "Irina Petrova", studentId: "1003", status: "absent", mark: null, at: null },
+      { rosterEntryId: omar.id, name: "Omar Haddad", studentId: "1002", status: "waiting", mark: null, at: "2026-11-30T08:18:00.000Z" },
+    ]);
+  });
+
+  it("shows which way a Manual mark went, and Pending as not here once the window closes", () => {
+    checkIn(omar, "2.54.1.1");
+    attendance().mark(session.id, dana.id, false);
+    attendance().mark(session.id, irina.id, true);
+    attendance().closeWindow(session.id);
+    const byName = Object.fromEntries(attendance().forLecturer(session.id).students.map((s) => [s.name, s]));
+    expect(byName["Dana Levi"]).toMatchObject({ status: "absent", mark: "absent" });
+    expect(byName["Irina Petrova"]).toMatchObject({ status: "present", mark: "present" });
+    expect(byName["Omar Haddad"]).toMatchObject({ status: "absent", mark: null });
+  });
+
+  it("groups Pending check-ins into one card per network, in Check-in order, while the window is open", () => {
+    checkIn(omar, "2.54.1.1");
+    checkIn(irina, "31.154.9.9");
+    checkIn(dana, "2.54.1.200");
+    const { networks } = attendance().forLecturer(session.id);
+    expect(networks.map((n) => n.students.map((s) => s.name))).toEqual([["Omar Haddad", "Dana Levi"], ["Irina Petrova"]]);
+    expect(new Set(networks.map((n) => n.key)).size).toBe(2);
+    attendance().closeWindow(session.id);
+    expect(attendance().forLecturer(session.id).networks).toEqual([]);
+  });
+
+  it("names no IP address, block or device ID unless Diagnostics is on", () => {
+    checkIn(dana, "147.235.10.21", "device-1001");
+    checkIn(omar, "2.54.1.1");
+    const calm = JSON.stringify(attendance().forLecturer(session.id));
+    for (const leak of ["147.235", "2.54.1", "/24", "2a5a80", '"ip"', '"block"', '"deviceId"']) expect(calm).not.toContain(leak);
+    const diag = attendance().forLecturer(session.id, { diagnostics: true });
+    expect(diag.networks[0]).toMatchObject({ block: "2.54.1.0/24" });
+    expect(diag.students.find((s) => s.rosterEntryId === dana.id)).toMatchObject({
+      diagnostics: { ip: "147.235.10.21", block: "147.235.10.0/24", deviceId: "2a5a80" },
+    });
+  });
+});
