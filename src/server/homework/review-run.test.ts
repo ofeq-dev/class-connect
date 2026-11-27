@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DomainError } from "../errors";
 import { aCourse, anAssignmentWithCriteria, aRoster, makeTestApp, type TestApp } from "../testing";
-import type { ReviewSubmissionInput } from "./review-task";
+import { reviewSubmission, type ReviewSubmissionInput } from "./review-task";
 
 let t: TestApp;
 let courseId: number;
@@ -122,6 +122,10 @@ describe("Draft Reviews", () => {
       criteria: ["Actors", "Goals", "Main flow", "Alternative flows"],
       text: TEXTS[0],
     });
+  });
+
+  it("asks the pinned Review model first (the gateway falls back to the shared list after it)", () => {
+    expect(reviewSubmission(4).model).toBe("review");
   });
 
   it("lets the Lecturer edit any draft Review", async () => {

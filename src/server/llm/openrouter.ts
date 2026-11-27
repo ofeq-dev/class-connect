@@ -17,6 +17,8 @@ export interface OpenRouterDeps {
   apiKey: string;
   /** The fallback list, tried in order. Model ids live in config, not code. */
   models: string[];
+  /** The pinned structured-output model for Reviews, tried before the fallback list. */
+  reviewModel?: string;
   /** The free embedding model for similarity. */
   embeddingModel: string;
   fetch?: typeof fetch;
@@ -45,7 +47,8 @@ export function readJson(content: string): unknown {
 }
 
 /**
- * The OpenRouter adapter (#2, #4, #10): free models in fallback order, a per-task timeout per
+ * The OpenRouter adapter (#2, #4, #10): free models in fallback order (Reviews try the pinned
+ * Review model first), a per-task timeout per
  * request, one schema fix-up retry per model, one call at a time at most ~15 a minute, and every
  * request counted in `llm_usage` against the daily limit. Providers may not keep prompts
  * (`data_collection: "deny"`).
@@ -132,7 +135,8 @@ export function createOpenRouterGateway(deps: OpenRouterDeps): LlmGateway {
     if (!apiKey) return fail("all-models-failed", "No OpenRouter API key is set.");
     if (usage.today() >= dailyLimit) return fail("daily-limit", dailyLimitMessage(dailyLimit));
     const failures: ModelFailure[] = [];
-    for (const model of models) {
+    const tried = task.model === "review" && deps.reviewModel ? [deps.reviewModel, ...models] : models;
+    for (const model of tried) {
       try {
         return { ok: true, value: await tryModel(model, task, input) };
       } catch (error) {

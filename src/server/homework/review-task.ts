@@ -31,6 +31,7 @@ const LEVEL_WORDS: Record<string, Level> = { "not yet": "not-yet", partly: "part
 export function reviewSubmission(criteriaCount: number): LlmTask<ReviewSubmissionInput, ReviewDraft> {
   return {
     name: "reviewSubmission",
+    model: "review",
     timeoutMs: 2 * 60_000,
     prompt: ({ instructions, criteria, text }) =>
       [
