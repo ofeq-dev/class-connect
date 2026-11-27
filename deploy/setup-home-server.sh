@@ -242,6 +242,21 @@ healthz() { curl -fsS --max-time 8 "$APP_URL/healthz" 2>/dev/null || true; }
 # http_code URL prints the HTTP status of URL (000 when nothing answers).
 http_code() { curl -s -o /dev/null --max-time 8 -w '%{http_code}' "$1" 2>/dev/null || true; }
 
+# tunnel_probe succeeds when $APP_URL reaches 127.0.0.1:3000 on the server. Before the first
+# deploy nothing listens there, and with WSL's mirrored networking a closed localhost port times
+# out instead of refusing, so Cloudflare just hangs. To get a clear answer, the probe serves a
+# one-off token on 127.0.0.1:3000 for a few seconds and fetches it through the tunnel.
+tunnel_probe() {
+  if remote 'systemctl is-active --quiet class-connect.service'; then
+    [[ "$(http_code "$APP_URL/healthz")" == 200 ]]; return
+  fi
+  local token="tunnel-probe-$RANDOM$RANDOM" body
+  remote "d=\$(mktemp -d) && echo $token > \$d/healthz && cd \$d \
+    && (timeout 20 python3 -m http.server 3000 --bind 127.0.0.1 </dev/null >/dev/null 2>&1 &) && sleep 1"
+  body="$(curl -fsS --max-time 15 "$APP_URL/healthz" 2>/dev/null || true)"
+  [[ "$body" == "$token" ]]
+}
+
 ACCEPT=()         # acceptance results for the closing summary
 MERGED_SHA=""
 
@@ -543,9 +558,9 @@ pause "Press Enter to continue"
 
 # ── 9 ─────────────────────────────────────────────────────────────────────
 stage "Cloudflare Tunnel route for cc.ofeq.dev"
-code="$(http_code "$APP_URL/healthz")"
-if [[ "$code" != 000 && "$code" != 530 ]]; then
-  step "$APP_URL already answers through the tunnel (HTTP $code) ✓"
+say "Checking whether $APP_URL already reaches 127.0.0.1:3000 on $SERVER…"
+if tunnel_probe; then
+  step "$APP_URL reaches 127.0.0.1:3000 on $SERVER through the tunnel ✓"
 else
   say "The tunnel on $SERVER is managed from the Cloudflare dashboard (cloudflared runs with a token)."
   open_url "https://one.dash.cloudflare.com/"
@@ -554,14 +569,16 @@ else
   step "Tab 'Public Hostname' (newer UI: 'Published application routes') → Add."
   step "Subdomain: cc   Domain: ofeq.dev   Path: (empty)"
   step "Service type: HTTP   URL: localhost:3000   → Save."
-  note "Before the first deploy, a 502 from Cloudflare is expected: the route works, the app isn't running yet."
+  note "The check serves a test page on 127.0.0.1:3000 for a few seconds, since the app isn't deployed yet."
   while :; do
     pause "Press Enter once it's saved to check"
-    code="$(http_code "$APP_URL/healthz")"
-    case "$code" in
-      000) warn "Nothing answers at $APP_URL yet (DNS can take a minute)." ;;
+    if tunnel_probe; then
+      step "$APP_URL reaches 127.0.0.1:3000 on $SERVER through the tunnel ✓"; break
+    fi
+    case "$(http_code "$APP_URL/healthz")" in
+      000) warn "No answer from $APP_URL (DNS not there yet, or the route points somewhere else)." ;;
       530) warn "Cloudflare answered 530: the hostname exists but isn't reaching a running tunnel." ;;
-      *)   step "$APP_URL answers through the tunnel (HTTP $code) ✓"; break ;;
+      *)   warn "$APP_URL answers, but not from 127.0.0.1:3000. Check the route's URL is localhost:3000." ;;
     esac
     confirm "Check again?" || { SKIPPED+=("Cloudflare route cc.ofeq.dev → http://localhost:3000"); break; }
   done
@@ -604,7 +621,8 @@ if [[ "$pr_state" == MERGED ]]; then
     fail "/healthz answered '${body:-nothing}', not $MERGED_SHA."
   fi
 else
-  warn "PR #43 is $pr_state, not merged, so there's no deploy to check."
+  warn "PR #43 is $pr_state, not merged, so nothing is deployed: cc.ofeq.dev has no app behind it,"
+  warn "and the rollback drill and first backup can't run either. Rerun the wizard to merge."
   SKIPPED+=("merge PR #43 and confirm /healthz shows the merged SHA (rerun the wizard)")
 fi
 pause "Press Enter to continue"
@@ -649,12 +667,17 @@ pause "Press Enter to continue"
 
 # ── 12 ────────────────────────────────────────────────────────────────────
 stage "Backups: timer active and a first backup on D:"
-note "sudo will ask for your password to run one backup now."
-sudo_script backup.sh <<'EOF'
-set -euo pipefail
-sudo systemctl start class-connect-backup.service
-journalctl -u class-connect-backup.service -n 3 --no-pager -o cat || true
+if ! remote 'test -e /srv/class-connect/current'; then
+  # The backup runs dist/server/backup.js from the live release, so it can't run before a deploy.
+  warn "Skipped the backup run: nothing is deployed yet (no /srv/class-connect/current)."
+else
+  note "sudo will ask for your password to run one backup now."
+  sudo_script backup.sh <<'EOF' || warn "The backup failed; its log is above."
+sudo systemctl start class-connect-backup.service || status=$?
+journalctl -u class-connect-backup.service -n 5 --no-pager -o cat || true
+exit "${status:-0}"
 EOF
+fi
 timer_state="$(remote 'systemctl is-active class-connect-backup.timer' || true)"
 remote 'systemctl list-timers class-connect-backup.timer --no-pager' | sed 's/^/    /' || true
 backups="$(remote 'ls -1t /mnt/d/class-connect-backups 2>/dev/null | grep -v "^\." || true')"
