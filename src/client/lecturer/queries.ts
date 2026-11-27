@@ -73,6 +73,7 @@ export const SUMMARY_STATE_LABEL = {
   summarising: "Summarising…",
   failed: "Failed",
   draft: "Draft",
+  published: "Published",
 } as const;
 
 export function useAssignments(courseId: string) {

@@ -136,6 +136,18 @@ export function studentRoutes(deps: AppDeps) {
       },
     )
 
+    // Published Session summaries of this phone's Course, and one to read.
+    .get("/summaries", (c) => c.json(deps.summaries.listForStudent(c.var.deviceToken)))
+    .get("/summaries/:sessionId", (c) => {
+      const published = deps.summaries.forStudent(
+        c.var.deviceToken,
+        Number(c.req.param("sessionId")),
+        c.req.query("lang"),
+      );
+      if (!published) throw new NotFoundError("Session summary");
+      return c.json(published);
+    })
+
     .get("/events", (c) => {
       const viewer = deps.course.whoIs(c.var.deviceToken);
       if (!viewer) return c.json({ error: "unclaimed", message: "Scan your Session's QR code first." }, 401);

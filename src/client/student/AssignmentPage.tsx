@@ -22,7 +22,7 @@ export function AssignmentPage() {
 
   return (
     <>
-      <Link className="bd-back" to="/">← Today</Link>
+      <Link className="st-back" to="/">← Today</Link>
       {assignment.error && <p className="err">{assignment.error.message}</p>}
       {a && (
         <>

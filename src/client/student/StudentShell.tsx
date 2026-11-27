@@ -1,7 +1,15 @@
-import { Link, NavLink, Route, Routes, useLocation } from "react-router";
+import { Link, NavLink, Route, Routes, useLocation, useParams } from "react-router";
 import { useLiveEvents } from "../live";
+import { SummaryView } from "../markdown/SummaryView";
 import { AssignmentPage } from "./AssignmentPage";
-import { dueLabel, longDate, useStudentAssignments, useStudentMe } from "./queries";
+import {
+  dueLabel,
+  longDate,
+  useStudentAssignments,
+  useStudentMe,
+  useStudentSummaries,
+  useStudentSummary,
+} from "./queries";
 
 const TABS = [
   { path: "/", key: "today", label: "Today" },
@@ -60,6 +68,7 @@ export function StudentShell() {
             }
           />
           <Route path="assignments/:assignmentId" element={<AssignmentPage />} />
+          <Route path="summaries/:sessionId" element={<SummaryRead />} />
           <Route path="*" element={<Today me={me.data} />} />
         </Routes>
       </main>
@@ -106,6 +115,7 @@ function Today({ me }: { me: Me }) {
           <span>With your name or anonymously</span>
         </Link>
       </div>
+      <Summaries />
       <p className="bd-who">
         This phone is set up for <b>{me.me.name}</b>.
       </p>
@@ -135,6 +145,45 @@ function Assignments() {
         ))}
       </ul>
     </section>
+  );
+}
+
+/** Published Session summaries, newest first; hidden until there is one. */
+function Summaries() {
+  const list = useStudentSummaries();
+  if (!list.data?.length) return null;
+  return (
+    <section className="st-summaries">
+      <h2 className="st-h2">Session summaries</h2>
+      <div className="quick">
+        {list.data.map((s) => (
+          <Link key={s.sessionId} className="qa" to={`/summaries/${s.sessionId}`}>
+            <b>{longDate(s.date)}</b>
+            <span>Session at {s.start}</span>
+          </Link>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/** A plain read page for one published Session summary. */
+function SummaryRead() {
+  const sessionId = Number(useParams().sessionId);
+  const summary = useStudentSummary(sessionId);
+  return (
+    <>
+      <Link className="st-back" to="/">← Today</Link>
+      {summary.isPending ? null : summary.error ? (
+        <p className="empty">This summary isn’t available.</p>
+      ) : (
+        <>
+          <p className="bd-course">Session summary</p>
+          <h1 className="bd-title">{longDate(summary.data.date)}</h1>
+          <SummaryView markdown={summary.data.markdown} />
+        </>
+      )}
+    </>
   );
 }
 

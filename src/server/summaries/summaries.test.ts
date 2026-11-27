@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { DomainError } from "../errors";
-import { aCourse, aSession, makeTestApp, type TestApp } from "../testing";
+import { aClaimedStudent, aCourse, aSession, makeTestApp, type TestApp } from "../testing";
 import { NO_TIMESTAMPS_WARNING } from ".";
 
 let t: TestApp;
@@ -230,6 +230,144 @@ describe("Generate", () => {
     expect(summaryNotices()).toHaveLength(4);
     expect(summaryNotices().every((n) => n.courseId === courseId && n.audience === "lecturer")).toBe(true);
     expect(summaryNotices().every((n) => n.notice.id === sessionId)).toBe(true);
+  });
+});
+
+describe("Versions", () => {
+  beforeEach(async () => {
+    await summaries().uploadTranscript(sessionId, { fileName: "class.vtt", text: VTT });
+    t.fakes.llm.reply("summarise", A_REPLY);
+    summaries().generate(sessionId);
+    await t.jobs.runDue();
+    t.fakes.events.clear();
+  });
+
+  it("adds a version by the Lecturer for each saved edit", () => {
+    t.fakes.clock.advance(60_000);
+    summaries().saveEdit(sessionId, "## Overview\n\nFixed by hand.");
+    const view = summaries().saveEdit(sessionId, "## Overview\n\nFixed again.");
+    expect(view.versions.map((v) => [v.number, v.author, v.markdown])).toEqual([
+      [3, "lecturer", "## Overview\n\nFixed again."],
+      [2, "lecturer", "## Overview\n\nFixed by hand."],
+      [1, "ai", expect.stringContaining("introduced requirements")],
+    ]);
+    expect(view.versions[0]!.createdAt).toBe(t.fakes.clock.now().toISOString());
+    expect(summaryNotices()).toEqual([
+      { courseId, audience: "lecturer", notice: { type: "summary.changed", id: sessionId } },
+      { courseId, audience: "lecturer", notice: { type: "summary.changed", id: sessionId } },
+    ]);
+  });
+
+  it("refuses an empty edit", () => {
+    expect(() => summaries().saveEdit(sessionId, "  \n ")).toThrow(DomainError);
+  });
+
+  it("restores an old version by copying it as the newest", () => {
+    const v1 = summaries().forLecturer(sessionId).versions[0]!;
+    summaries().saveEdit(sessionId, "A Lecturer edit.");
+    const view = summaries().restore(sessionId, v1.id);
+    expect(view.versions.map((v) => [v.number, v.author])).toEqual([
+      [3, "lecturer"],
+      [2, "lecturer"],
+      [1, "ai"],
+    ]);
+    expect(view.versions[0]!.markdown).toBe(v1.markdown);
+  });
+
+  it("refuses to restore a version of another Session's summary", async () => {
+    const other = aSession(t, courseId, { date: "2026-12-07" }).id;
+    summaries().saveEdit(other, "Other notes.");
+    const foreign = summaries().forLecturer(other).versions[0]!;
+    expect(() => summaries().restore(sessionId, foreign.id)).toThrow(DomainError);
+  });
+
+  it("deleting the summary deletes its history", () => {
+    summaries().saveEdit(sessionId, "A Lecturer edit.");
+    summaries().deleteSummary(sessionId);
+    expect(summaries().forLecturer(sessionId)).toMatchObject({ state: "ready", versions: [], publishedVersionId: null });
+    // A fresh edit starts the history again at version 1.
+    expect(summaries().saveEdit(sessionId, "New start.").versions.map((v) => v.number)).toEqual([1]);
+  });
+});
+
+describe("Publishing and forStudent", () => {
+  let device: string;
+  beforeEach(async () => {
+    device = aClaimedStudent(t, courseId).deviceToken;
+    await summaries().uploadTranscript(sessionId, { fileName: "class.vtt", text: VTT });
+    t.fakes.llm.reply("summarise", A_REPLY);
+    summaries().generate(sessionId);
+    await t.jobs.runDue();
+    t.fakes.events.clear();
+  });
+
+  it("shows Students nothing before publishing", () => {
+    expect(summaries().forStudent(device, sessionId)).toBeNull();
+    expect(summaries().listForStudent(device)).toEqual([]);
+  });
+
+  it("shows only the published version, even after later edits", () => {
+    const v1 = summaries().forLecturer(sessionId).versions[0]!;
+    const view = summaries().publish(sessionId, v1.id);
+    expect(view).toMatchObject({ state: "published", publishedVersionId: v1.id });
+    summaries().saveEdit(sessionId, "An unpublished edit.");
+
+    const session = t.modules.course.readSession(sessionId);
+    expect(summaries().forStudent(device, sessionId)).toEqual({
+      sessionId,
+      date: session.date,
+      start: session.start,
+      markdown: v1.markdown,
+    });
+    expect(summaries().listForStudent(device)).toEqual([{ sessionId, date: session.date, start: session.start }]);
+    expect(summaries().forCourse(courseId)).toEqual([{ sessionId, state: "published", error: null }]);
+  });
+
+  it("publishing another version replaces what Students see", () => {
+    const edited = summaries().saveEdit(sessionId, "The approved text.").versions[0]!;
+    summaries().publish(sessionId, summaries().forLecturer(sessionId).versions[1]!.id);
+    summaries().publish(sessionId, edited.id);
+    expect(summaries().forStudent(device, sessionId)?.markdown).toBe("The approved text.");
+  });
+
+  it("notifies the Lecturer and the Students of the Course on publish", () => {
+    summaries().publish(sessionId, summaries().forLecturer(sessionId).versions[0]!.id);
+    expect(summaryNotices()).toEqual([
+      { courseId, audience: "all", notice: { type: "summary.changed", id: sessionId } },
+    ]);
+  });
+
+  it("refuses to publish a version of another Session's summary", () => {
+    const other = aSession(t, courseId, { date: "2026-12-07" }).id;
+    const foreign = summaries().saveEdit(other, "Other notes.").versions[0]!;
+    expect(() => summaries().publish(sessionId, foreign.id)).toThrow(DomainError);
+  });
+
+  it("lists published summaries newest Session first", () => {
+    const later = aSession(t, courseId, { date: "2026-12-14" }).id;
+    const earlier = aSession(t, courseId, { date: "2026-11-23" }).id;
+    for (const id of [later, earlier]) {
+      summaries().publish(id, summaries().saveEdit(id, `Notes ${id}.`).versions[0]!.id);
+    }
+    summaries().publish(sessionId, summaries().forLecturer(sessionId).versions[0]!.id);
+    expect(summaries().listForStudent(device).map((s) => s.sessionId)).toEqual([later, sessionId, earlier]);
+  });
+
+  it("gives a phone without a Claim on the Course nothing", () => {
+    summaries().publish(sessionId, summaries().forLecturer(sessionId).versions[0]!.id);
+    const otherCourse = aCourse(t, "Databases").id;
+    const outsider = aClaimedStudent(t, otherCourse, "2001").deviceToken;
+    for (const token of [undefined, "never-claimed", outsider]) {
+      expect(summaries().forStudent(token, sessionId)).toBeNull();
+    }
+    expect(summaries().listForStudent("never-claimed")).toEqual([]);
+    expect(summaries().listForStudent(outsider)).toEqual([]);
+  });
+
+  it("deleting a published summary withdraws it from Students", () => {
+    summaries().publish(sessionId, summaries().forLecturer(sessionId).versions[0]!.id);
+    summaries().deleteSummary(sessionId);
+    expect(summaries().forStudent(device, sessionId)).toBeNull();
   });
 });
 

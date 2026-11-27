@@ -53,5 +53,23 @@ export function dueLabel(iso: string): string {
     month: "short",
     hour: "2-digit",
     minute: "2-digit",
+
+  });
+}
+
+/** The published Session summaries of this phone's Course, newest Session first. */
+export function useStudentSummaries() {
+  return useQuery({
+    queryKey: ["student", "summaries"],
+    queryFn: async () => ok(await api.api.student.summaries.$get()),
+  });
+}
+
+/** One published Session summary; refetched when the Lecturer publishes another version. */
+export function useStudentSummary(sessionId: number) {
+  return useQuery({
+    queryKey: ["student", "summary", sessionId],
+    queryFn: async () =>
+      ok(await api.api.student.summaries[":sessionId"].$get({ param: { sessionId: String(sessionId) } })),
   });
 }
