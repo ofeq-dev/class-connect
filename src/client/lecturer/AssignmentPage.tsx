@@ -3,7 +3,8 @@ import { useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { api, ok } from "../api";
 import { TrashIcon } from "./icons";
-import { ASSIGNMENT_STATE_LABEL, formatInstant, useAssignment, useCourse, useCourseLive } from "./queries";
+import { ASSIGNMENT_STATE_LABEL, useAssignment, useCourse, useCourseLive } from "./queries";
+import { ReviewRun } from "./ReviewRun";
 
 const MIN = 3;
 const MAX = 5;
@@ -25,7 +26,7 @@ function localInput(iso: string): string {
 
 /**
  * The Assignment screen (apricot), minimal: title, instructions, due date and the Criteria
- * editor with "Draft with AI"; then the Submissions table. The review run comes later.
+ * editor with "Draft with AI"; then the Submissions and, after the due date, the review run.
  */
 export function AssignmentPage() {
   const { courseId = "", assignmentId } = useParams();
@@ -64,35 +65,7 @@ export function AssignmentPage() {
           />
         )}
 
-        {data && (
-          <section className="sec" data-s="hw">
-            <div className="sec-head">
-              <h2><span className="hl">Submissions</span></h2>
-              <span className="muted small num">{data.submissions.length} handed in</span>
-            </div>
-            {data.submissions.length === 0 ? (
-              <p className="empty">Nothing handed in yet. Students hand in from the Assignment on their phone’s Today tab.</p>
-            ) : (
-              <table className="table">
-                <thead>
-                  <tr><th>Student</th><th>Handed in</th><th>Late</th></tr>
-                </thead>
-                <tbody>
-                  {data.submissions.map((s) => (
-                    <tr key={s.id}>
-                      <td>
-                        {s.studentName} <span className="muted small num">{s.studentId}</span>
-                        {s.fileName && <span className="muted small"> · {s.fileName}</span>}
-                      </td>
-                      <td className="num">{formatInstant(s.submittedAt)}</td>
-                      <td>{s.late && <span className="chip c-warn">Late</span>}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </section>
-        )}
+        {data && <ReviewRun courseId={courseId} data={data} />}
       </div>
     </div>
   );

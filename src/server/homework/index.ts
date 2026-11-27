@@ -120,6 +120,8 @@ export interface LecturerSubmission {
   submittedAt: string;
   late: boolean;
   fileName: string | null;
+  /** The pasted or extracted text, for reviewing by hand. */
+  text: string;
   review: LecturerReview;
 }
 
@@ -427,6 +429,7 @@ export function createHomeworkModule({ db, clock, course, llm, files, events, jo
         submittedAt: s.submittedAt.toISOString(),
         late: s.submittedAt >= row.dueAt,
         fileName: s.fileName,
+        text: s.text,
         review,
       };
     });

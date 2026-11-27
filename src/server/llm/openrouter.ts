@@ -155,7 +155,7 @@ export function createOpenRouterGateway(deps: OpenRouterDeps): LlmGateway {
     try {
       await takeSlot();
     } catch (error) {
-      if (error instanceof DailyLimitReached) throw new Error(dailyLimitMessage(dailyLimit));
+      if (error instanceof DailyLimitReached) throw new Error(dailyLimitMessage(dailyLimit), { cause: error });
       throw error;
     }
     const model = deps.embeddingModel;
@@ -182,7 +182,9 @@ export function createOpenRouterGateway(deps: OpenRouterDeps): LlmGateway {
       }
       return out;
     } catch (error) {
-      if (controller.signal.aborted) throw new Error(`${model}: timed out after ${EMBED_TIMEOUT_MS} ms`);
+      if (controller.signal.aborted) {
+        throw new Error(`${model}: timed out after ${EMBED_TIMEOUT_MS} ms`, { cause: error });
+      }
       throw error;
     } finally {
       clearTimeout(timer);

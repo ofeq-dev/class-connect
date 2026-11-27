@@ -108,4 +108,9 @@ export function formatInstant(iso: string): string {
   });
 }
 
-export const ASSIGNMENT_STATE_LABEL = { open: "Open", due: "Due" } as const;
+export const ASSIGNMENT_STATE_LABEL = {
+  open: "Open",
+  due: "Due",
+  reviewing: "Reviewing",
+  reviewed: "Reviewed",
+} as const;
