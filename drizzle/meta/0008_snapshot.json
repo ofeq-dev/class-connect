@@ -1,9 +1,56 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "568a5526-2cc0-4222-8795-0e5b1638f4ef",
+  "id": "411abcf4-4f83-4f18-84dd-0f34126fd9cb",
   "prevId": "156e3981-1dfa-40f9-836d-f436fa083a97",
   "tables": {
+    "approved_network": {
+      "name": "approved_network",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "session_id": {
+          "name": "session_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "block": {
+          "name": "block",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "approved_at": {
+          "name": "approved_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "approved_network_session_block": {
+          "name": "approved_network_session_block",
+          "columns": [
+            "session_id",
+            "block"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
     "attendance": {
       "name": "attendance",
       "columns": {
@@ -33,6 +80,13 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true,
+          "autoincrement": false
+        },
+        "check_in_state": {
+          "name": "check_in_state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
           "autoincrement": false
         },
         "ip": {
@@ -462,27 +516,6 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
-        },
-        "released_at": {
-          "name": "released_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "match_deadline": {
-          "name": "match_deadline",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "matched_at": {
-          "name": "matched_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
         }
       },
       "indexes": {
@@ -600,194 +633,6 @@
           "tableTo": "assignment",
           "columnsFrom": [
             "assignment_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
-    "help_match": {
-      "name": "help_match",
-      "columns": {
-        "help_request_id": {
-          "name": "help_request_id",
-          "type": "integer",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "help_offer_id": {
-          "name": "help_offer_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        }
-      },
-      "indexes": {
-        "help_match_offer": {
-          "name": "help_match_offer",
-          "columns": [
-            "help_offer_id"
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {
-        "help_match_help_request_id_help_request_id_fk": {
-          "name": "help_match_help_request_id_help_request_id_fk",
-          "tableFrom": "help_match",
-          "tableTo": "help_request",
-          "columnsFrom": [
-            "help_request_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "help_match_help_offer_id_help_offer_id_fk": {
-          "name": "help_match_help_offer_id_help_offer_id_fk",
-          "tableFrom": "help_match",
-          "tableTo": "help_offer",
-          "columnsFrom": [
-            "help_offer_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
-    "help_offer": {
-      "name": "help_offer",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "integer",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "criterion_id": {
-          "name": "criterion_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "roster_entry_id": {
-          "name": "roster_entry_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        }
-      },
-      "indexes": {
-        "help_offer_criterion_student": {
-          "name": "help_offer_criterion_student",
-          "columns": [
-            "criterion_id",
-            "roster_entry_id"
-          ],
-          "isUnique": true
-        }
-      },
-      "foreignKeys": {
-        "help_offer_criterion_id_criterion_id_fk": {
-          "name": "help_offer_criterion_id_criterion_id_fk",
-          "tableFrom": "help_offer",
-          "tableTo": "criterion",
-          "columnsFrom": [
-            "criterion_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
-    "help_request": {
-      "name": "help_request",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "integer",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "criterion_id": {
-          "name": "criterion_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "roster_entry_id": {
-          "name": "roster_entry_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "level": {
-          "name": "level",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        }
-      },
-      "indexes": {
-        "help_request_criterion_student": {
-          "name": "help_request_criterion_student",
-          "columns": [
-            "criterion_id",
-            "roster_entry_id"
-          ],
-          "isUnique": true
-        }
-      },
-      "foreignKeys": {
-        "help_request_criterion_id_criterion_id_fk": {
-          "name": "help_request_criterion_id_criterion_id_fk",
-          "tableFrom": "help_request",
-          "tableTo": "criterion",
-          "columnsFrom": [
-            "criterion_id"
           ],
           "columnsTo": [
             "id"

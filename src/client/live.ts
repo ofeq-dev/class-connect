@@ -26,6 +26,10 @@ export const noticeQueryKeys: { [T in NoticeType]: (id: number) => QueryKey[] } 
     ["student", "entry"],
     ["projector"],
   ],
+  // Topic lists (the Student's Comment tab too) and the Comments that show Topic names.
+  "topic.changed": () => [["topics"], ["comments"], ["student", "topics"]],
+  // Lecturer scope only: the console's column, the Course desk section, the all-comments screen.
+  "comment.changed": () => [["comments"]],
   "assignment.changed": (id) => [["assignment", id], ["assignments"], ["student", "assignment", id], ["student", "assignments"]],
   // Lecturer only: a review run moved on (and may have spent LLM requests).
   "job.progress": (assignmentId) => [["assignment", assignmentId], ["assignments"], ["llm-usage"]],

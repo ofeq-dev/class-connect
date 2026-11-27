@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Route, Routes } from "react-router";
 import { api, ApiError, ok } from "../api";
 import { AssignmentPage } from "./AssignmentPage";
+import { CommentsPage } from "./CommentsPage";
 import { CourseDesk } from "./CourseDesk";
 import { CourseSettingsPage } from "./CourseSettingsPage";
 import { CoursesPage } from "./CoursesPage";
@@ -9,6 +10,7 @@ import { LiveConsole } from "./LiveConsole";
 import { RosterPage } from "./RosterPage";
 import { SignInPage } from "./SignInPage";
 import { SummaryPage } from "./SummaryPage";
+import { TopicsPage } from "./TopicsPage";
 
 export function LecturerApp() {
   const me = useQuery({
@@ -25,6 +27,8 @@ export function LecturerApp() {
       <Route path="courses/:courseId" element={<CourseDesk />} />
       <Route path="courses/:courseId/roster" element={<RosterPage />} />
       <Route path="courses/:courseId/settings" element={<CourseSettingsPage />} />
+      <Route path="courses/:courseId/comments" element={<CommentsPage />} />
+      <Route path="courses/:courseId/topics" element={<TopicsPage />} />
       <Route path="courses/:courseId/sessions/:sessionId/live" element={<LiveConsole />} />
       <Route path="courses/:courseId/sessions/:sessionId/summary" element={<SummaryPage />} />
       <Route path="courses/:courseId/assignments/new" element={<AssignmentPage />} />

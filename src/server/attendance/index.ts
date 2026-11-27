@@ -1,13 +1,13 @@
 import { createHash } from "node:crypto";
 import { isIPv4, isIPv6 } from "node:net";
-import { and, desc, eq, gte, inArray, isNull } from "drizzle-orm";
+import { and, desc, eq, gte, isNull } from "drizzle-orm";
 import { nextLocalMidnight, type Clock } from "../clock";
 import type { CourseModule } from "../course";
 import type { Db } from "../db";
-import { DomainError } from "../errors";
+import { DomainError, NotFoundError } from "../errors";
 import type { LiveEvents } from "../live-events";
 import { blockOf } from "./network";
-import { attendance, checkInWindow } from "./schema";
+import { approvedNetwork, attendance, checkInWindow } from "./schema";
 
 export type CheckInResult = "present" | "pending";
 
@@ -37,6 +37,40 @@ export interface LecturerAttendance {
   pending: number;
   /** Roster size. */
   total: number;
+  /** One card per network with Pending check-ins, while the window is open; first Check-in first. */
+  networks: PendingNetwork[];
+  /** Every Roster entry, by name: the "Who's here" lists. */
+  students: WhoRow[];
+}
+
+/** What only the Diagnostics flag shows (FR-LC-6). */
+export interface Diagnostics {
+  ip: string | null;
+  block: string | null;
+  /** The first 6 characters of the stored device-token hash; the raw token is never stored. */
+  deviceId: string | null;
+}
+
+/** A network with Pending check-ins, named by an opaque key so the console never sees its block. */
+export interface PendingNetwork {
+  key: string;
+  students: { rosterEntryId: number; name: string }[];
+  /** Only with Diagnostics on. */
+  block?: string;
+}
+
+/** One Roster entry in "Who's here": present, waiting for approval, or absent (not here yet). */
+export interface WhoRow {
+  rosterEntryId: number;
+  name: string;
+  studentId: string;
+  status: "present" | "waiting" | "absent";
+  /** The Lecturer's Manual mark, when that is what counts. */
+  mark: "present" | "absent" | null;
+  /** When the counting Check-in or mark happened. */
+  at: string | null;
+  /** Only with Diagnostics on. */
+  diagnostics?: Diagnostics;
 }
 
 /** One Session's attendance record for a Roster entry, as Diagnostics shows it. */
@@ -69,8 +103,19 @@ export interface AttendanceModule {
    */
   checkIn(sessionId: number, rosterEntryId: number, ip: string, deviceToken: string): CheckInResult;
   isPresent(sessionId: number, rosterEntryId: number): boolean;
-  forLecturer(sessionId: number): LecturerAttendance;
+  /** The console's Attendance column. IPs, blocks and device IDs only with `diagnostics`. */
+  forLecturer(sessionId: number, options?: { diagnostics?: boolean }): LecturerAttendance;
   forStudent(sessionId: number, rosterEntryId: number): StudentCheckIn;
+  /**
+   * Network approval: makes a block a Classroom network for this Session only. Its Pending
+   * check-ins turn Present, and so do later Check-ins from it this Session.
+   */
+  approveNetwork(sessionId: number, block: string): void;
+  /**
+   * Manual mark: present (true) or absent (false), with the window open, closed or never opened;
+   * it replaces whatever was recorded. null clears the mark back to the Student's own Check-in.
+   */
+  mark(sessionId: number, rosterEntryId: number, present: boolean | null): void;
   /** Every recorded Check-in and mark for a Session, latest action per Roster entry. */
   checkIns(sessionId: number): CheckInRecord[];
   /** The earliest scheduled change after an instant: an open window's midnight close. */
@@ -86,6 +131,9 @@ export interface AttendanceDeps {
 }
 
 const tokenHash = (token: string) => createHash("sha256").update(token).digest("hex");
+
+/** An opaque name for a network block, so the console can ask to approve it without seeing it. */
+export const networkKey = (block: string) => createHash("sha256").update(block).digest("hex").slice(0, 12);
 const DAY = 24 * 60 * 60 * 1000;
 const PRESENT = ["present", "manual-present"] as const;
 
@@ -152,6 +200,20 @@ export function createAttendanceModule({ db, clock, events, course, timeZone }: 
       .get();
   }
 
+  function isApproved(sessionId: number, block: string) {
+    return !!db
+      .select({ id: approvedNetwork.id })
+      .from(approvedNetwork)
+      .where(and(eq(approvedNetwork.sessionId, sessionId), eq(approvedNetwork.block, block)))
+      .get();
+  }
+
+  function requireOpen(sessionId: number, message: string) {
+    const window = openWindowRow(sessionId);
+    if (!window) throw new DomainError("check-in.closed", message);
+    return window;
+  }
+
   return {
     openWindow(sessionId, lecturer) {
       const values = { ipv4: address(lecturer.ipv4, 4), ipv6: address(lecturer.ipv6, 6) };
@@ -174,13 +236,10 @@ export function createAttendanceModule({ db, clock, events, course, timeZone }: 
     },
 
     checkIn(sessionId, rosterEntryId, ip, deviceToken) {
-      const window = openWindowRow(sessionId);
-      if (!window) {
-        throw new DomainError("check-in.closed", "Check-in is closed — ask the Lecturer to mark you present.");
-      }
+      const window = requireOpen(sessionId, "Check-in is closed — ask the Lecturer to mark you present.");
       const mine = blockOf(ip);
       const reference = [blockOf(window.lecturerIpv4), blockOf(window.lecturerIpv6)];
-      const onNetwork = !!mine && reference.some((r) => r?.block === mine.block);
+      const onNetwork = !!mine && (reference.some((r) => r?.block === mine.block) || isApproved(sessionId, mine.block));
       const state: CheckInResult = onNetwork ? "present" : "pending";
       const existing = record(sessionId, rosterEntryId);
       // A Student already present stays present from their first Check-in; scanning again changes nothing.
@@ -188,36 +247,108 @@ export function createAttendanceModule({ db, clock, events, course, timeZone }: 
         changed(sessionId, "lecturer", false);
         return "present";
       }
-      const row = { state, ip, block: mine?.block ?? null, deviceTokenHash: tokenHash(deviceToken), at: clock.now() };
+      const row = { state, checkInState: state, ip, block: mine?.block ?? null, deviceTokenHash: tokenHash(deviceToken), at: clock.now() };
       if (existing) db.update(attendance).set(row).where(eq(attendance.id, existing.id)).run();
       else db.insert(attendance).values({ sessionId, rosterEntryId, ...row }).run();
       changed(sessionId, "lecturer", state === "present");
       return state;
     },
 
+    approveNetwork(sessionId, block) {
+      // Once the window closes, Pending check-ins read as Absent; Manual marks fix anyone after that.
+      requireOpen(sessionId, "Check-in is closed — mark Students present by hand instead.");
+      db.transaction(() => {
+        db.insert(approvedNetwork)
+          .values({ sessionId, block, approvedAt: clock.now() })
+          .onConflictDoNothing()
+          .run();
+        const fromBlock = and(eq(attendance.sessionId, sessionId), eq(attendance.block, block));
+        // A Manual mark stays; the Check-in under it is approved too, for when the mark is cleared.
+        db.update(attendance).set({ checkInState: "present" }).where(and(fromBlock, eq(attendance.checkInState, "pending"))).run();
+        db.update(attendance).set({ state: "present" }).where(and(fromBlock, eq(attendance.state, "pending"))).run();
+      });
+      changed(sessionId, "all", true);
+    },
+    mark(sessionId, rosterEntryId, present) {
+      const { courseId } = course.readSession(sessionId);
+      if (!course.listRoster(courseId).some((e) => e.id === rosterEntryId)) throw new NotFoundError("Roster entry");
+      const existing = record(sessionId, rosterEntryId);
+      if (present === null) {
+        if (existing?.checkInState) {
+          db.update(attendance).set({ state: existing.checkInState }).where(eq(attendance.id, existing.id)).run();
+        } else if (existing) {
+          db.delete(attendance).where(eq(attendance.id, existing.id)).run();
+        }
+      } else {
+        const state = present ? "manual-present" : "manual-absent";
+        if (existing) db.update(attendance).set({ state, at: clock.now() }).where(eq(attendance.id, existing.id)).run();
+        else db.insert(attendance).values({ sessionId, rosterEntryId, state, at: clock.now() }).run();
+      }
+      changed(sessionId, "all", true);
+    },
     isPresent(sessionId, rosterEntryId) {
       const row = record(sessionId, rosterEntryId);
       return !!row && (PRESENT as readonly string[]).includes(row.state);
     },
 
-    forLecturer(sessionId) {
+    forLecturer(sessionId, { diagnostics = false } = {}) {
       const { courseId } = course.readSession(sessionId);
-      const roster = new Set(course.listRoster(courseId).map((e) => e.id));
+      const roster = course.listRoster(courseId);
       const window = windowView(sessionId);
-      const rows = db
-        .select({ rosterEntryId: attendance.rosterEntryId, state: attendance.state })
-        .from(attendance)
-        .where(and(eq(attendance.sessionId, sessionId), inArray(attendance.state, ["present", "manual-present", "pending"])))
-        .all()
-        .filter((r) => roster.has(r.rosterEntryId));
+      const open = window.state === "open";
+      const rows = new Map(
+        db
+          .select()
+          .from(attendance)
+          .where(eq(attendance.sessionId, sessionId))
+          .orderBy(attendance.at, attendance.id)
+          .all()
+          .map((r) => [r.rosterEntryId, r]),
+      );
+      const students: WhoRow[] = roster
+        .map((entry): WhoRow => {
+          const r = rows.get(entry.id);
+          const status: WhoRow["status"] =
+            r && (PRESENT as readonly string[]).includes(r.state)
+              ? "present"
+              : r?.state === "pending" && open
+                ? "waiting"
+                : "absent";
+          const mark: WhoRow["mark"] = r?.state === "manual-present" ? "present" : r?.state === "manual-absent" ? "absent" : null;
+          const counted = status !== "absent" || mark !== null;
+          return {
+            rosterEntryId: entry.id,
+            name: entry.name,
+            studentId: entry.studentId,
+            status,
+            mark,
+            at: counted && r ? r.at.toISOString() : null,
+            ...(diagnostics && {
+              diagnostics: { ip: r?.ip ?? null, block: r?.block ?? null, deviceId: r?.deviceTokenHash?.slice(0, 6) ?? null },
+            }),
+          };
+        })
+        .sort((a, b) => a.name.localeCompare(b.name));
+
+      const networks = new Map<string, PendingNetwork>();
+      if (open) {
+        const names = new Map(roster.map((e) => [e.id, e.name]));
+        for (const r of rows.values()) {
+          if (r.state !== "pending" || !r.block || !names.has(r.rosterEntryId)) continue;
+          const card = networks.get(r.block) ?? { key: networkKey(r.block), students: [], ...(diagnostics && { block: r.block }) };
+          card.students.push({ rosterEntryId: r.rosterEntryId, name: names.get(r.rosterEntryId)! });
+          networks.set(r.block, card);
+        }
+      }
       return {
         window,
-        present: rows.filter((r) => r.state !== "pending").length,
-        pending: window.state === "open" ? rows.filter((r) => r.state === "pending").length : 0,
-        total: roster.size,
+        present: students.filter((s) => s.status === "present").length,
+        pending: students.filter((s) => s.status === "waiting").length,
+        total: roster.length,
+        networks: [...networks.values()],
+        students,
       };
     },
-
     forStudent(sessionId, rosterEntryId) {
       const row = record(sessionId, rosterEntryId);
       const window = windowView(sessionId).state;

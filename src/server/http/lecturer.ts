@@ -4,6 +4,7 @@ import { createMiddleware } from "hono/factory";
 import { validator } from "hono/validator";
 import type { ProjectorMode, SessionChanges } from "../course";
 import { NotFoundError } from "../errors";
+import type { CommentFilter, CommentStatus, Timing } from "../feedback";
 import { verifyPassword } from "../lecturer-auth";
 import { streamLiveEvents } from "../live-events";
 import type { Level } from "../homework";
@@ -32,6 +33,9 @@ const assignmentBody = (b: Body) => ({
   criteria: Array.isArray(b.criteria) ? b.criteria.map(str) : [],
 });
 
+/** The Diagnostics flag on attendance routes: ?diagnostics=1 adds IPs, blocks and device IDs. */
+const diagnosticsFlag = validator("query", (q) => ({ diagnostics: q.diagnostics === "1" ? ("1" as const) : undefined }));
+
 const reviewBody = (b: Body) => ({
   levels: (Array.isArray(b.levels) ? b.levels : []).map((l) => {
     const o = (l && typeof l === "object" ? l : {}) as Body;
@@ -46,6 +50,23 @@ const reviewBody = (b: Body) => ({
 
 const sessionTimes = (b: Body) => ({ date: str(b.date), start: str(b.start), end: str(b.end) });
 
+const STATUSES: readonly string[] = ["new", "pinned", "addressed", "ignored"];
+const TIMINGS: readonly string[] = ["before", "during", "after"];
+const status = (v: unknown) => (STATUSES.includes(str(v)) ? (str(v) as CommentStatus) : undefined);
+
+/** The all-comments screen's query string; anything unrecognised is no filter. */
+type CommentQuery = { topicId?: string; author?: string; status?: string; timing?: string };
+
+function commentFilter(q: CommentQuery): CommentFilter {
+  const n = (v: string | undefined) => (v && Number.isInteger(Number(v)) ? Number(v) : undefined);
+  return {
+    topicId: n(q.topicId),
+    author: q.author === "anonymous" ? "anonymous" : n(q.author),
+    status: status(q.status),
+    timing: TIMINGS.includes(q.timing ?? "") ? (q.timing as Timing) : undefined,
+  };
+}
+
 function idParam(c: Context, name: string): number {
   const id = Number(c.req.param(name));
   if (!Number.isInteger(id) || id <= 0) throw new NotFoundError(name);
@@ -53,6 +74,10 @@ function idParam(c: Context, name: string): number {
 }
 
 export function lecturerRoutes(deps: AppDeps) {
+  /** The console's Attendance glance; Diagnostics (?diagnostics=1) adds IPs, blocks and device IDs. */
+  const glance = (c: Context, sessionId: number) =>
+    deps.attendance.forLecturer(sessionId, { diagnostics: c.req.query("diagnostics") === "1" });
+
   const requireLecturer = createMiddleware<{ Variables: { lecturerId: number } }>(
     async (c, next) => {
       const value = await getSignedCookie(c, deps.cookieSecret, LECTURER_COOKIE);
@@ -181,25 +206,86 @@ export function lecturerRoutes(deps: AppDeps) {
       return c.json({ ok: true });
     })
 
-    // Attendance: the Check-in window and the live count
-    .get("/courses/:courseId/sessions/:sessionId/attendance", requireLecturer, (c) =>
-      c.json(deps.attendance.forLecturer(ownSession(c).id)),
+    // Attendance: the Check-in window, the live count, Network approval and Manual marks.
+    // Every route answers with the console's glance; IPs only with ?diagnostics=1 (FR-LC-6).
+    .get("/courses/:courseId/sessions/:sessionId/attendance", requireLecturer, diagnosticsFlag, (c) =>
+      c.json(glance(c, ownSession(c).id)),
     )
     .post(
       "/courses/:courseId/sessions/:sessionId/attendance/window/open",
-      requireLecturer,
+      requireLecturer, diagnosticsFlag,
       json((b) => ({ ipv4: optStr(b.ipv4) ?? null, ipv6: optStr(b.ipv6) ?? null })),
       (c) => {
         const sessionId = ownSession(c).id;
         deps.attendance.openWindow(sessionId, c.req.valid("json"));
-        return c.json(deps.attendance.forLecturer(sessionId));
+        return c.json(glance(c, sessionId));
       },
     )
-    .post("/courses/:courseId/sessions/:sessionId/attendance/window/close", requireLecturer, (c) => {
+    .post("/courses/:courseId/sessions/:sessionId/attendance/window/close", requireLecturer, diagnosticsFlag, (c) => {
       const sessionId = ownSession(c).id;
       deps.attendance.closeWindow(sessionId);
-      return c.json(deps.attendance.forLecturer(sessionId));
+      return c.json(glance(c, sessionId));
     })
+    .post("/courses/:courseId/sessions/:sessionId/attendance/networks/:key/approve", requireLecturer, diagnosticsFlag, (c) => {
+      const sessionId = ownSession(c).id;
+      // The console names a network by its card's opaque key; the block is looked up here.
+      const card = deps.attendance
+        .forLecturer(sessionId, { diagnostics: true })
+        .networks.find((n) => n.key === c.req.param("key"));
+      if (!card?.block) throw new NotFoundError("Network");
+      deps.attendance.approveNetwork(sessionId, card.block);
+      return c.json(glance(c, sessionId));
+    })
+    .post(
+      "/courses/:courseId/sessions/:sessionId/attendance/marks/:rosterEntryId",
+      requireLecturer, diagnosticsFlag,
+      json((b) => ({ present: typeof b.present === "boolean" ? b.present : null })),
+      (c) => {
+        const sessionId = ownSession(c).id;
+        deps.attendance.mark(sessionId, idParam(c, "rosterEntryId"), c.req.valid("json").present);
+        return c.json(glance(c, sessionId));
+      },
+    )
+
+    // Topics and Comments
+    .get(
+      "/courses/:courseId/topics",
+      requireLecturer,
+      validator("query", (q: { archived?: string }) => ({ archived: q.archived })),
+      (c) => c.json(deps.feedback.listTopics(ownCourse(c).id, { includeArchived: c.req.valid("query").archived === "1" })),
+    )
+    .post("/courses/:courseId/topics", requireLecturer, json((b) => ({ name: str(b.name) })), (c) =>
+      c.json(deps.feedback.addTopic(ownCourse(c).id, c.req.valid("json").name), 201),
+    )
+    .patch("/courses/:courseId/topics/:topicId", requireLecturer, json((b) => ({ name: str(b.name) })), (c) =>
+      c.json(deps.feedback.renameTopic(ownCourse(c).id, idParam(c, "topicId"), c.req.valid("json").name)),
+    )
+    .post("/courses/:courseId/topics/:topicId/archive", requireLecturer, (c) =>
+      c.json(deps.feedback.archiveTopic(ownCourse(c).id, idParam(c, "topicId"))),
+    )
+    .get(
+      "/courses/:courseId/comments",
+      requireLecturer,
+      validator("query", (q: CommentQuery) => ({ topicId: q.topicId, author: q.author, status: q.status, timing: q.timing })),
+      (c) => c.json(deps.feedback.listComments(ownCourse(c).id, commentFilter(c.req.valid("query")))),
+    )
+    .post(
+      "/courses/:courseId/comments/status",
+      requireLecturer,
+      json((b) => ({
+        ids: Array.isArray(b.ids) ? b.ids.filter((id): id is number => Number.isInteger(id)) : [],
+        status: status(b.status),
+      })),
+      (c) => {
+        const { ids, status: next } = c.req.valid("json");
+        if (!next) return c.json({ error: "comment.bad-status", message: "Choose a status." }, 400);
+        deps.feedback.setStatus(ownCourse(c).id, ids, next);
+        return c.json({ ok: true });
+      },
+    )
+    .get("/courses/:courseId/sessions/:sessionId/comments", requireLecturer, (c) =>
+      c.json(deps.feedback.inbox(ownSession(c).id)),
+    )
 
     // Session summaries
     .get("/courses/:courseId/summaries", requireLecturer, (c) =>

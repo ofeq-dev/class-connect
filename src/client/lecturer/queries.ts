@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { api, ok } from "../api";
+import { diagnosticsQuery, useDiagnostics } from "./diagnostics";
 import { useLiveEvents } from "../live";
 
 /** Opens the Course-scoped Live events stream for a Course page. */
@@ -40,14 +41,19 @@ export function formatDate(date: string): string {
   });
 }
 
-/** The console's Attendance glance; attendance.changed refetches it. */
+/** The console's Attendance query key; attendance.changed refetches every variant by prefix. */
+export const attendanceKey = (sessionId: string, diagnostics: boolean) => ["attendance", Number(sessionId), diagnostics];
+
+/** The console's Attendance glance; IPs, blocks and device IDs only while Diagnostics is on. */
 export function useAttendance(courseId: string, sessionId: string) {
+  const diagnostics = useDiagnostics();
   return useQuery({
-    queryKey: ["attendance", Number(sessionId)],
+    queryKey: attendanceKey(sessionId, diagnostics),
     queryFn: async () =>
       ok(
         await api.api.lecturer.courses[":courseId"].sessions[":sessionId"].attendance.$get({
           param: { courseId, sessionId },
+          query: diagnosticsQuery(diagnostics),
         }),
       ),
   });
@@ -129,6 +135,69 @@ export const ASSIGNMENT_STATE_LABEL = {
   released: "Released",
   matched: "Matched",
 } as const;
+
+/** The Course's Topics; with archived ones on the Topics screen. */
+export function useTopics(courseId: string, includeArchived = false) {
+  return useQuery({
+    queryKey: ["topics", Number(courseId), includeArchived],
+    queryFn: async () =>
+      ok(
+        await api.api.lecturer.courses[":courseId"].topics.$get({
+          param: { courseId },
+          query: { archived: includeArchived ? "1" : undefined },
+        }),
+      ),
+  });
+}
+
+/** The console's Comments column for one Session; comment.changed refetches it. */
+export function useInbox(courseId: string, sessionId: string) {
+  return useQuery({
+    queryKey: ["comments", "inbox", Number(sessionId)],
+    queryFn: async () =>
+      ok(
+        await api.api.lecturer.courses[":courseId"].sessions[":sessionId"].comments.$get({
+          param: { courseId, sessionId },
+        }),
+      ),
+  });
+}
+
+export interface CommentQuery {
+  topicId?: string;
+  author?: string;
+  status?: string;
+  timing?: string;
+}
+
+/** The all-comments screen and the Course desk's section. */
+export function useComments(courseId: string, filter: CommentQuery = {}) {
+  const query = {
+    topicId: filter.topicId || undefined,
+    author: filter.author || undefined,
+    status: filter.status || undefined,
+    timing: filter.timing || undefined,
+  };
+  return useQuery({
+    queryKey: ["comments", "list", Number(courseId), query],
+    queryFn: async () =>
+      ok(await api.api.lecturer.courses[":courseId"].comments.$get({ param: { courseId }, query })),
+  });
+}
+
+export type CommentStatus = "new" | "pinned" | "addressed" | "ignored";
+
+export const STATUS_LABEL: Record<CommentStatus, string> = {
+  new: "New",
+  pinned: "Pinned",
+  addressed: "Addressed",
+  ignored: "Ignored",
+};
+
+/** "10:19" for an instant, in the browser's time zone. */
+export function formatTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+}
 
 /** The Course's projector link and what the class sees; projector.changed and attendance.changed refetch it. */
 export function useProjector(courseId: string) {
