@@ -49,6 +49,20 @@ const reviewBody = (b: Body) => ({
 
 const sessionTimes = (b: Body) => ({ date: str(b.date), start: str(b.start), end: str(b.end) });
 
+const XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+/**
+ * A Content-Disposition for a download: the name as typed (any script) in filename*, and a
+ * plain-ASCII fallback for old clients. Characters file systems refuse are dropped from both.
+ */
+function attachment(fileName: string) {
+  const clean = (s: string) => s.replace(/\s+/g, " ").trim();
+  const name = clean(fileName.replace(/[\\/:*?"<>|\p{Cc}]/gu, ""));
+  const ascii = clean(name.replace(/[^\x20-\x7e]/g, ""));
+  const encoded = encodeURIComponent(name).replace(/['()*]/g, (ch) => `%${ch.charCodeAt(0).toString(16).toUpperCase()}`);
+  return `attachment; filename="${ascii}"; filename*=UTF-8''${encoded}`;
+}
+
 function idParam(c: Context, name: string): number {
   const id = Number(c.req.param(name));
   if (!Number.isInteger(id) || id <= 0) throw new NotFoundError(name);
@@ -186,6 +200,16 @@ export function lecturerRoutes(deps: AppDeps) {
       deps.summaries.deleteSummary(id);
       deps.course.deleteSession(id);
       return c.json({ ok: true });
+    })
+
+    // The Attendance sheet (FR-ATT-14), as a file to save.
+    .get("/courses/:courseId/attendance.xlsx", requireLecturer, async (c) => {
+      const course = ownCourse(c);
+      const bytes = await deps.attendance.exportXlsx(course.id);
+      return c.body(bytes, 200, {
+        "content-type": XLSX,
+        "content-disposition": attachment(`${course.name} attendance ${deps.course.today()}.xlsx`),
+      });
     })
 
     // Attendance: the Check-in window, the live count, Network approval and Manual marks.
