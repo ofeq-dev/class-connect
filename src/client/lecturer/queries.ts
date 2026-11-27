@@ -131,7 +131,9 @@ export const ASSIGNMENT_STATE_LABEL = {
   open: "Open",
   due: "Due",
   reviewing: "Reviewing",
-  reviewed: "Reviewed",
+  reviewed: "Ready to Release",
+  released: "Released",
+  matched: "Matched",
 } as const;
 
 /** The Course's Topics; with archived ones on the Topics screen. */

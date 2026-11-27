@@ -157,7 +157,7 @@ function Assignments() {
               <span>
                 Due {dueLabel(a.dueAt)}
                 {" · "}
-                {a.submitted ? "Handed in" : a.state === "due" ? "Not handed in" : "To do"}
+                {a.submitted ? "Handed in" : a.state !== "open" ? "Not handed in" : "To do"}
                 {a.late && <span className="hw-late">Late</span>}
               </span>
             </Link>

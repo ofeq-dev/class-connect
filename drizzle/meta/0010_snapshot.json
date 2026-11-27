@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "6c626a10-c354-4c52-905c-4d3e3e833eff",
+  "id": "268628cf-835d-4548-9e21-38f9884d4b2e",
   "prevId": "56b13564-104e-4a8e-8fe6-fe0deda0eec0",
   "tables": {
     "approved_network": {
@@ -568,155 +568,6 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
-    "poll": {
-      "name": "poll",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "integer",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "topic_id": {
-          "name": "topic_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "question": {
-          "name": "question",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "scheduled_open_at": {
-          "name": "scheduled_open_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "close_after_minutes": {
-          "name": "close_after_minutes",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "opened_at": {
-          "name": "opened_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "closed_at": {
-          "name": "closed_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        }
-      },
-      "indexes": {
-        "poll_topic": {
-          "name": "poll_topic",
-          "columns": [
-            "topic_id"
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {
-        "poll_topic_id_topic_id_fk": {
-          "name": "poll_topic_id_topic_id_fk",
-          "tableFrom": "poll",
-          "tableTo": "topic",
-          "columnsFrom": [
-            "topic_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
-    "poll_option": {
-      "name": "poll_option",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "integer",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "poll_id": {
-          "name": "poll_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "label": {
-          "name": "label",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "position": {
-          "name": "position",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        }
-      },
-      "indexes": {
-        "poll_option_poll": {
-          "name": "poll_option_poll",
-          "columns": [
-            "poll_id",
-            "position"
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {
-        "poll_option_poll_id_poll_id_fk": {
-          "name": "poll_option_poll_id_poll_id_fk",
-          "tableFrom": "poll_option",
-          "tableTo": "poll",
-          "columnsFrom": [
-            "poll_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
     "topic": {
       "name": "topic",
       "columns": {
@@ -777,87 +628,6 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
-    "vote": {
-      "name": "vote",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "integer",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "poll_id": {
-          "name": "poll_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "roster_entry_id": {
-          "name": "roster_entry_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "option_id": {
-          "name": "option_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "at": {
-          "name": "at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        }
-      },
-      "indexes": {
-        "vote_one_per_entry": {
-          "name": "vote_one_per_entry",
-          "columns": [
-            "poll_id",
-            "roster_entry_id"
-          ],
-          "isUnique": true
-        }
-      },
-      "foreignKeys": {
-        "vote_poll_id_poll_id_fk": {
-          "name": "vote_poll_id_poll_id_fk",
-          "tableFrom": "vote",
-          "tableTo": "poll",
-          "columnsFrom": [
-            "poll_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "vote_option_id_poll_option_id_fk": {
-          "name": "vote_option_id_poll_option_id_fk",
-          "tableFrom": "vote",
-          "tableTo": "poll_option",
-          "columnsFrom": [
-            "option_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
     "assignment": {
       "name": "assignment",
       "columns": {
@@ -901,6 +671,27 @@
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
+          "autoincrement": false
+        },
+        "released_at": {
+          "name": "released_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "match_deadline": {
+          "name": "match_deadline",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "matched_at": {
+          "name": "matched_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
           "autoincrement": false
         }
       },
@@ -1019,6 +810,194 @@
           "tableTo": "assignment",
           "columnsFrom": [
             "assignment_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "help_match": {
+      "name": "help_match",
+      "columns": {
+        "help_request_id": {
+          "name": "help_request_id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "help_offer_id": {
+          "name": "help_offer_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "help_match_offer": {
+          "name": "help_match_offer",
+          "columns": [
+            "help_offer_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "help_match_help_request_id_help_request_id_fk": {
+          "name": "help_match_help_request_id_help_request_id_fk",
+          "tableFrom": "help_match",
+          "tableTo": "help_request",
+          "columnsFrom": [
+            "help_request_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "help_match_help_offer_id_help_offer_id_fk": {
+          "name": "help_match_help_offer_id_help_offer_id_fk",
+          "tableFrom": "help_match",
+          "tableTo": "help_offer",
+          "columnsFrom": [
+            "help_offer_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "help_offer": {
+      "name": "help_offer",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "criterion_id": {
+          "name": "criterion_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "roster_entry_id": {
+          "name": "roster_entry_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "help_offer_criterion_student": {
+          "name": "help_offer_criterion_student",
+          "columns": [
+            "criterion_id",
+            "roster_entry_id"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "help_offer_criterion_id_criterion_id_fk": {
+          "name": "help_offer_criterion_id_criterion_id_fk",
+          "tableFrom": "help_offer",
+          "tableTo": "criterion",
+          "columnsFrom": [
+            "criterion_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "help_request": {
+      "name": "help_request",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "criterion_id": {
+          "name": "criterion_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "roster_entry_id": {
+          "name": "roster_entry_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "level": {
+          "name": "level",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "help_request_criterion_student": {
+          "name": "help_request_criterion_student",
+          "columns": [
+            "criterion_id",
+            "roster_entry_id"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "help_request_criterion_id_criterion_id_fk": {
+          "name": "help_request_criterion_id_criterion_id_fk",
+          "tableFrom": "help_request",
+          "tableTo": "criterion",
+          "columnsFrom": [
+            "criterion_id"
           ],
           "columnsTo": [
             "id"

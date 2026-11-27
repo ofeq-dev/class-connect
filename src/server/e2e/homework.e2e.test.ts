@@ -181,3 +181,73 @@ describe("The review run over HTTP", () => {
     studentStream.close();
   });
 });
+
+describe("Release and Help over HTTP", () => {
+  it("Releases, takes a Help request and an offer from phones, matches now and tells each phone", async () => {
+    const assignmentId = anAssignmentWithCriteria(t, courseId).id;
+    const dana = `cc_device=${aClaimedStudent(t, courseId, "1001").deviceToken}`;
+    const omar = `cc_device=${aClaimedStudent(t, courseId, "1002").deviceToken}`;
+    await call("POST", `/student/assignments/${assignmentId}/submission`, { text: "Dana's use cases." }, dana);
+    await call("POST", `/student/assignments/${assignmentId}/submission`, { text: "Omar's use cases." }, omar);
+    t.fakes.clock.set("2026-12-08T08:00:00.000Z");
+    const base = `/lecturer/courses/${courseId}/assignments/${assignmentId}`;
+
+    const refused = await call("POST", `${base}/release`, {});
+    expect(refused.status).toBe(400);
+    expect(await refused.json()).toMatchObject({ error: "release.blocked", message: expect.stringMatching(/2 Submissions/) });
+
+    const v = (await (await call("GET", base)).json()) as {
+      criteria: { id: number }[];
+      submissions: { id: number; studentName: string }[];
+    };
+    const byName = (n: string) => v.submissions.find((s) => s.studentName === n)!.id;
+    const write = (level: string) => v.criteria.map((c) => ({ criterionId: c.id, level, evidence: "", feedback: "Ok." }));
+    await call("PUT", `${base}/submissions/${byName("Dana Levi")}/review`, { levels: write("not-yet") });
+    await call("PUT", `${base}/submissions/${byName("Omar Haddad")}/review`, { levels: write("secure") });
+
+    const studentStream = await openSse(`${server.url}/api/student/events`, dana);
+    const released = await call("POST", `${base}/release`, { matchDeadline: "2026-12-09T08:00:00.000Z" });
+    expect(await released.json()).toMatchObject({ state: "released", matchDeadline: "2026-12-09T08:00:00.000Z" });
+    expect(await studentStream.nextMessage()).toEqual({ type: "assignment.changed", id: assignmentId });
+
+    const q1 = v.criteria[0]!.id;
+    const asked = await call("POST", `/student/assignments/${assignmentId}/help/${q1}/request`, {}, dana);
+    expect(await asked.json()).toMatchObject({ help: [{ criterionId: q1, state: { kind: "asked" } }, {}, {}, {}] });
+    expect((await call("POST", `/student/assignments/${assignmentId}/help/${q1}/offer`, {}, dana)).status).toBe(400);
+    await call("POST", `/student/assignments/${assignmentId}/help/${q1}/offer`, {}, omar);
+
+    expect((await call("POST", `${base}/match-now`)).status).toBe(200);
+    await t.jobs.runDue();
+    expect(await studentStream.nextMessage()).toEqual({ type: "assignment.changed", id: assignmentId });
+    const mine = (await (await call("GET", `/student/assignments/${assignmentId}`, undefined, dana)).json()) as {
+      help: { state: unknown }[];
+    };
+    expect(mine.help[0]!.state).toEqual({ kind: "paired", with: ["Omar Haddad"] });
+    const omars = await (await call("GET", `/student/assignments/${assignmentId}`, undefined, omar)).text();
+    expect(omars).toContain("Dana Levi");
+    expect(omars).not.toContain("not-yet");
+    expect(await (await call("GET", base)).json()).toMatchObject({
+      state: "matched",
+      help: { matches: [{ student: { name: "Dana Levi" }, helper: { name: "Omar Haddad" } }] },
+    });
+    studentStream.close();
+  });
+
+  it("releases a Late Submission's Review on its own", async () => {
+    const assignmentId = anAssignmentWithCriteria(t, courseId).id;
+    t.fakes.clock.set("2026-12-08T08:00:00.000Z");
+    const base = `/lecturer/courses/${courseId}/assignments/${assignmentId}`;
+    await call("POST", `${base}/release`, {});
+    const dana = `cc_device=${aClaimedStudent(t, courseId, "1001").deviceToken}`;
+    await call("POST", `/student/assignments/${assignmentId}/submission`, { text: "Late work." }, dana);
+    const v = (await (await call("GET", base)).json()) as { criteria: { id: number }[]; submissions: { id: number }[] };
+    const levels = v.criteria.map((c) => ({ criterionId: c.id, level: "partly", evidence: "", feedback: "Ok." }));
+    const sub = v.submissions[0]!.id;
+    await call("PUT", `${base}/submissions/${sub}/review`, { levels });
+    const out = await call("POST", `${base}/submissions/${sub}/review/release`);
+    expect(await out.json()).toMatchObject({ submissions: [{ review: { releasedAt: "2026-12-08T08:00:00.000Z" } }] });
+    expect(await (await call("GET", `/student/assignments/${assignmentId}`, undefined, dana)).json()).toMatchObject({
+      review: { levels: [{ level: "partly" }, {}, {}, {}] },
+    });
+  });
+});

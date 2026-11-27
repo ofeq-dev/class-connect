@@ -75,8 +75,15 @@
     {
       "idx": 10,
       "version": "6",
-      "when": 1795739908505,
-      "tag": "0010_polls_and_votes",
+      "when": 1795740051725,
+      "tag": "0010_release_and_help",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1795759621815,
+      "tag": "0011_polls_and_votes",
       "breakpoints": true
     }
   ]

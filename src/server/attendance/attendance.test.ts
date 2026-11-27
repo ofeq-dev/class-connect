@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { RosterEntry, Session } from "../course";
+import ExcelJS from "exceljs";
 import { DomainError } from "../errors";
-import { aCourse, aRoster, aSession, makeTestApp, type TestApp } from "../testing";
+import type { AttendanceSheet, SheetMark } from ".";
+import { aClaimedStudent, aCourse, aRoster, aSession, makeTestApp, type TestApp } from "../testing";
 
 let t: TestApp;
 let courseId: number;
@@ -427,4 +429,145 @@ describe("The console's Who's here lists and network cards", () => {
       diagnostics: { ip: "147.235.10.21", block: "147.235.10.0/24", deviceId: "2a5a80" },
     });
   });
+});
+
+describe("The Attendance sheet", () => {
+  // Three Sessions on three days; the fake Clock's day (Mon 2026-11-30) is the last.
+  let monday: Session;
+  let tuesday: Session;
+  const sheet = () => attendance().sheet(courseId);
+
+  beforeEach(() => {
+    monday = aSession(t, courseId, { date: "2026-11-23" });
+    tuesday = aSession(t, courseId, { date: "2026-11-24" });
+  });
+
+  it("has a row for every Roster entry by name, claimed or not, and a column per Session in date order", () => {
+    aClaimedStudent(t, courseId, omar.studentId);
+    const late = aSession(t, courseId, { date: "2026-11-23", start: "14:00", end: "15:30" });
+    expect(sheet().students.map((s) => [s.studentId, s.name])).toEqual([
+      ["1001", "Dana Levi"],
+      ["1003", "Irina Petrova"],
+      ["1002", "Omar Haddad"],
+    ]);
+    expect(sheet().sessions).toEqual([
+      { id: monday.id, date: "2026-11-23", start: "10:00", end: "11:30" },
+      { id: late.id, date: "2026-11-23", start: "14:00", end: "15:30" },
+      { id: tuesday.id, date: "2026-11-24", start: "10:00", end: "11:30" },
+      { id: session.id, date: "2026-11-30", start: "10:00", end: "11:30" },
+    ]);
+  });
+
+  it("leaves out Sessions that haven't happened yet", () => {
+    aSession(t, courseId, { date: "2026-12-01" });
+    expect(sheet().sessions.map((s) => s.date)).toEqual(["2026-11-23", "2026-11-24", "2026-11-30"]);
+  });
+
+  it("shows Present for a Check-in, Manual for a Manual mark present, and Absent otherwise", () => {
+    attendance().mark(monday.id, dana.id, true);
+    attendance().mark(monday.id, omar.id, false);
+    attendance().openWindow(tuesday.id, LECTURER);
+    attendance().checkIn(tuesday.id, dana.id, "147.235.10.21", "device-1001");
+    attendance().checkIn(tuesday.id, omar.id, "2.54.1.1", "device-1002"); // Pending, never approved
+    attendance().checkIn(tuesday.id, irina.id, "147.235.10.22", "device-1003");
+    attendance().mark(tuesday.id, irina.id, false);
+    attendance().closeWindow(tuesday.id);
+    expect(sheet().students.map((s) => s.marks)).toEqual([
+      ["manual", "present", "absent"],
+      ["absent", "absent", "absent"],
+      ["absent", "absent", "absent"],
+    ]);
+  });
+
+  it("totals each Student's attendance, counting Manual, with a percentage of the Sessions", () => {
+    attendance().mark(monday.id, dana.id, true);
+    attendance().openWindow(tuesday.id, LECTURER);
+    attendance().checkIn(tuesday.id, dana.id, "147.235.10.21", "device-1001");
+    attendance().checkIn(tuesday.id, omar.id, "147.235.10.22", "device-1002");
+    expect(sheet().students.map((s) => [s.attended, s.percent])).toEqual([
+      [2, 67],
+      [0, 0],
+      [1, 33],
+    ]);
+  });
+
+  it("counts heads per Session, Manual included", () => {
+    attendance().mark(monday.id, dana.id, true);
+    attendance().mark(monday.id, irina.id, true);
+    attendance().openWindow(session.id, LECTURER);
+    checkIn(omar, "147.235.10.22");
+    expect(sheet().headcount).toEqual([2, 0, 1]);
+  });
+
+  it("reads 0% for everyone before the Course has any Sessions", () => {
+    const empty = aCourse(t, "Algorithms").id;
+    aRoster(t, empty, 1);
+    expect(attendance().sheet(empty)).toMatchObject({
+      courseName: "Algorithms",
+      sessions: [],
+      headcount: [],
+      students: [{ marks: [], attended: 0, percent: 0 }],
+    });
+  });
+
+  it("is unchanged by a Claim reset: attendance belongs to the Roster entry", () => {
+    aClaimedStudent(t, courseId, dana.studentId);
+    attendance().openWindow(session.id, LECTURER);
+    checkIn(dana, "147.235.10.21");
+    const before = sheet();
+    t.modules.course.resetClaim(courseId, dana.id);
+    expect(sheet()).toEqual(before);
+  });
+
+  it("exports an xlsx that reads back, with the same library, as the sheet", async () => {
+    attendance().mark(monday.id, dana.id, true);
+    attendance().openWindow(tuesday.id, LECTURER);
+    attendance().checkIn(tuesday.id, omar.id, "147.235.10.22", "device-1002");
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load((await attendance().exportXlsx(courseId)).buffer);
+    const rows = workbook.worksheets[0]!.getSheetValues().slice(1) as unknown[][];
+    expect(rows.map((r) => r.slice(1))).toEqual([
+      ["Student ID", "Name", "Mon 23 Nov 2026", "Tue 24 Nov 2026", "Mon 30 Nov 2026", "Attended", "%"],
+      ["1001", "Dana Levi", "Manual", "Absent", "Absent", 1, 1 / 3],
+      ["1003", "Irina Petrova", "Absent", "Absent", "Absent", 0, 0],
+      ["1002", "Omar Haddad", "Absent", "Present", "Absent", 1, 1 / 3],
+      [undefined, "Headcount", 1, 1, 0],
+    ]);
+    expect(readBack(workbook)).toEqual(comparable(sheet()));
+  });
+
+  it("titles two Sessions on one day by their start times in the xlsx", async () => {
+    aSession(t, courseId, { date: "2026-11-23", start: "14:00", end: "15:30" });
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load((await attendance().exportXlsx(courseId)).buffer);
+    expect((workbook.worksheets[0]!.getRow(1).values as unknown[]).slice(3, 7)).toEqual([
+      "Mon 23 Nov 2026 10:00",
+      "Mon 23 Nov 2026 14:00",
+      "Tue 24 Nov 2026",
+      "Mon 30 Nov 2026",
+    ]);
+  });
+});
+
+const MARK_TEXT: Record<string, SheetMark> = { Present: "present", Manual: "manual", Absent: "absent" };
+
+/** What an exported workbook says, in the sheet's own terms (the file has no Session ids). */
+function readBack(workbook: ExcelJS.Workbook) {
+  const rows = workbook.worksheets[0]!.getSheetValues().slice(2) as unknown[][];
+  const headcountRow = rows.pop()!;
+  const n = headcountRow.length - 3;
+  return {
+    students: rows.map((r) => ({
+      studentId: r[1],
+      name: r[2],
+      marks: r.slice(3, 3 + n).map((v) => MARK_TEXT[String(v)]),
+      attended: r[3 + n],
+      percent: Math.round(Number(r[4 + n]) * 100),
+    })),
+    headcount: headcountRow.slice(3),
+  };
+}
+const comparable = (s: AttendanceSheet) => ({
+  students: s.students.map(({ studentId, name, marks, attended, percent }) => ({ studentId, name, marks, attended, percent })),
+  headcount: s.headcount,
 });

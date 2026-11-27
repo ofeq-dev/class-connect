@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { isIPv4, isIPv6 } from "node:net";
-import { and, desc, eq, gte, isNull } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull } from "drizzle-orm";
 import { nextLocalMidnight, type Clock } from "../clock";
 import type { CourseModule } from "../course";
 import type { Db } from "../db";
@@ -8,6 +8,9 @@ import { DomainError, NotFoundError } from "../errors";
 import type { LiveEvents } from "../live-events";
 import { blockOf } from "./network";
 import { approvedNetwork, attendance, checkInWindow } from "./schema";
+import { sheetToXlsx, type AttendanceSheet, type SheetMark } from "./sheet";
+
+export type { AttendanceSheet, SheetMark, SheetSession, SheetStudent } from "./sheet";
 
 export type CheckInResult = "present" | "pending";
 
@@ -116,6 +119,13 @@ export interface AttendanceModule {
    * it replaces whatever was recorded. null clears the mark back to the Student's own Check-in.
    */
   mark(sessionId: number, rosterEntryId: number, present: boolean | null): void;
+  /**
+   * The Course's Attendance sheet: every Roster entry against every Session held so far (none
+   * dated after today), each cell Present, Manual or Absent, with totals and headcounts.
+   */
+  sheet(courseId: number): AttendanceSheet;
+  /** The Attendance sheet as an xlsx file. */
+  exportXlsx(courseId: number): Promise<Uint8Array<ArrayBuffer>>;
   /** Every recorded Check-in and mark for a Session, latest action per Roster entry. */
   checkIns(sessionId: number): CheckInRecord[];
   /** The earliest scheduled change after an instant: an open window's midnight close. */
@@ -234,7 +244,45 @@ export function createAttendanceModule({
     return window;
   }
 
+  /** What one attendance row counts as on the sheet. A Pending check-in hasn't counted (yet). */
+  const sheetMark = (state: string | undefined): SheetMark =>
+    state === "present" ? "present" : state === "manual-present" ? "manual" : "absent";
+
+  function sheet(courseId: number): AttendanceSheet {
+    const { name: courseName } = course.courseSummary(courseId);
+    const today = course.today();
+    const sessions = course
+      .listSessions(courseId)
+      .filter((s) => s.date <= today)
+      .map(({ id, date, start, end }) => ({ id, date, start, end }));
+    const rows = sessions.length
+      ? db
+          .select({ sessionId: attendance.sessionId, rosterEntryId: attendance.rosterEntryId, state: attendance.state })
+          .from(attendance)
+          .where(inArray(attendance.sessionId, sessions.map((s) => s.id)))
+          .all()
+      : [];
+    const state = new Map(rows.map((r) => [`${r.sessionId}:${r.rosterEntryId}`, r.state]));
+    const students = course.listRoster(courseId).map((entry) => {
+      const marks = sessions.map((s) => sheetMark(state.get(`${s.id}:${entry.id}`)));
+      const attended = marks.filter((m) => m !== "absent").length;
+      return {
+        rosterEntryId: entry.id,
+        studentId: entry.studentId,
+        name: entry.name,
+        marks,
+        attended,
+        percent: sessions.length ? Math.round((attended / sessions.length) * 100) : 0,
+      };
+    });
+    const headcount = sessions.map((_, i) => students.filter((s) => s.marks[i] !== "absent").length);
+    return { courseName, sessions, students, headcount };
+  }
+
   return {
+    sheet,
+    exportXlsx: (courseId) => sheetToXlsx(sheet(courseId)),
+
     openWindow(sessionId, lecturer) {
       const values = { ipv4: address(lecturer.ipv4, 4), ipv6: address(lecturer.ipv6, 6) };
       course.readSession(sessionId);

@@ -88,6 +88,12 @@ export function studentRoutes(deps: AppDeps) {
     return id;
   };
 
+  const criterionParam = (c: Context) => {
+    const id = Number(c.req.param("criterionId"));
+    if (!Number.isInteger(id) || id <= 0) throw new NotFoundError("Criterion");
+    return id;
+  };
+
   const qrSession = (c: Context) => deps.course.readSession(c.req.param("code") ?? "");
 
   return new Hono<Vars>()
@@ -173,6 +179,18 @@ export function studentRoutes(deps: AppDeps) {
         return c.json(await deps.homework.submit(assignmentParam(c), viewer.rosterEntry.id, input));
       },
     )
+
+    // Help: ask on a Criterion at Not yet / Partly, offer at Secure, until matching.
+    .post("/assignments/:assignmentId/help/:criterionId/request", (c) => {
+      const viewer = student(c);
+      if (!viewer) return unclaimed(c);
+      return c.json(deps.homework.requestHelp(assignmentParam(c), criterionParam(c), viewer.rosterEntry.id));
+    })
+    .post("/assignments/:assignmentId/help/:criterionId/offer", (c) => {
+      const viewer = student(c);
+      if (!viewer) return unclaimed(c);
+      return c.json(deps.homework.offerHelp(assignmentParam(c), criterionParam(c), viewer.rosterEntry.id));
+    })
 
     // Topics to comment on, Comments, and the Student's own (Mine)
     .get("/topics", (c) => {
