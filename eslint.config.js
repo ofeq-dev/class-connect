@@ -13,6 +13,7 @@ export default tseslint.config(
     plugins: { local: boundaries },
     rules: {
       "local/module-boundaries": "error",
+      "local/no-raw-sql-in-tests": "error",
       "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
     },
   },

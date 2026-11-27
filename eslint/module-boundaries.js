@@ -1,5 +1,6 @@
 // @ts-check
 import path from "node:path";
+import { noRawSqlInTests } from "./no-raw-sql-in-tests.js";
 
 /**
  * Keeps modules deep (docs/diagrams/class-diagram.md):
@@ -70,4 +71,4 @@ export const moduleBoundaries = {
   },
 };
 
-export default { rules: { "module-boundaries": moduleBoundaries } };
+export default { rules: { "module-boundaries": moduleBoundaries, "no-raw-sql-in-tests": noRawSqlInTests } };

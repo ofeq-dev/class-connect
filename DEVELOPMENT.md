@@ -14,7 +14,8 @@ Open `http://localhost:5173/lecturer` and sign in.
 
 | Command | What it does |
 |---|---|
-| `npm run check` | Type check, lint (including the module-boundary rule), every test. CI runs it on each PR. |
+| `npm run check` | Type check, lint (including the module-boundary and test-SQL rules), migration snapshot check, every test. |
+| `npm run check:ci` | `check` plus the production build. CI runs it on each PR and push; run it before merging into `dev`. |
 | `npm test` | Vitest in watch mode. |
 | `npm run build` | Front end to `dist/client`, server bundle to `dist/server`. |
 | `npm start` | Runs the built server (migrations apply at startup, then it listens on `127.0.0.1`). |
@@ -22,6 +23,7 @@ Open `http://localhost:5173/lecturer` and sign in.
 | `npm run deploy -- <sha>` | Runs `scripts/deploy.sh <sha>` on the home server over `ssh wsl` (the manual fallback). |
 | `npm run seed:demo -- --date <YYYY-MM-DD> --start <HH:MM> --end <HH:MM> [--replace]` | Builds the demo Course in `DATABASE_PATH` through module operations, with the canned fake LLM (README, Rehearsing the demo). |
 | `npm run db:generate -- --name <name>` | Generates a migration from the module schema files. Migrations are additive only. |
+| `npm run db:rebase [-- <base>]` | After merging `dev` (or `<base>`) in: keeps its migrations, regenerates this branch's on top with the next free number, refuses if the SQL changed, and checks fresh and upgrade migration. Use it whenever two branches took the same migration number. |
 
 ## Where things go
 

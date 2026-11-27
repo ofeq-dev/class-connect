@@ -1,3 +1,4 @@
+/* eslint-disable local/no-raw-sql-in-tests -- a test-only `test_result` table proves a handler's write commits with the job; it is no module's table. */
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { openDatabase, type OpenedDatabase } from "../db";
