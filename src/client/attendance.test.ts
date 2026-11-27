@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checkInLine, lecturerAddresses, markAfterTap, networkCard, undoMark, whoGroups, windowButton } from "./attendance";
+import { checkInLine, heldKey, heldPopup, lecturerAddresses, markAfterTap, networkCard, undoMark, whoGroups, windowButton } from "./attendance";
 
 /** A fetch that answers each ipify host with a body, or fails it. */
 function fakeFetch(answers: Record<string, string | Error>): typeof fetch {
@@ -44,6 +44,13 @@ describe("the Student's Check-in line on Today", () => {
     expect(checkInLine({ status: "pending", at }, time).title).toBe(
       "Checked in — waiting for your Lecturer to confirm",
     );
+  });
+
+  it("says a held scan is waiting for the Lecturer too, in the same tone, without blaming the network", () => {
+    const held = checkInLine({ status: "held", at }, time);
+    expect(held.title).toBe("Checked in — waiting for your Lecturer to confirm");
+    expect(held.tone).toBe(checkInLine({ status: "pending", at }, time).tone);
+    expect(held.detail).not.toMatch(/network/);
   });
 
   it("tells a Student to ask the Lecturer once the window has closed", () => {
@@ -97,6 +104,26 @@ describe("Who's here", () => {
 
   it("leaves out an empty group", () => {
     expect(whoGroups([row("Dana", "present")]).map((g) => g.title)).toEqual(["Present"]);
+  });
+});
+
+describe("the held-scan popup", () => {
+  const dana = { rosterEntryId: 1, name: "Dana Levi", at: "2026-11-30T08:18:00.000Z" };
+  const omar = { rosterEntryId: 2, name: "Omar Haddad", at: "2026-11-30T08:19:00.000Z" };
+
+  it("names the first held Student the Lecturer hasn't dismissed", () => {
+    expect(heldPopup([dana, omar], new Set())).toBe(dana);
+    expect(heldPopup([dana, omar], new Set([heldKey(dana)]))).toBe(omar);
+  });
+
+  it("pops up again for a Student held anew after the Lecturer dismissed an earlier hold", () => {
+    const again = { ...dana, at: "2026-11-30T09:00:00.000Z" };
+    expect(heldPopup([again], new Set([heldKey(dana)]))).toBe(again);
+  });
+
+  it("shows nothing once every held Student is dismissed, or none is held", () => {
+    expect(heldPopup([dana, omar], new Set([heldKey(dana), heldKey(omar)]))).toBeNull();
+    expect(heldPopup([], new Set())).toBeNull();
   });
 });
 

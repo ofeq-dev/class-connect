@@ -86,10 +86,11 @@ There is exactly one Lecturer account. It can run several Courses.
 | FR-ATT-8 | A Network approval must last for that Session only. No number of Pending check-ins approves a block automatically. |
 | FR-ATT-9 | A Pending check-in still unapproved when the window closes must read as Absent. |
 | FR-ATT-10 | A Check-in while the window is closed must be refused, telling the Student to ask the Lecturer to mark them present. |
-| FR-ATT-11 | The Lecturer must be able to Manual mark any Student present or absent for a Session at any time, window open or closed; the latest action wins. |
+| FR-ATT-11 | The Lecturer must be able to Manual mark any Student present or absent for a Session at any time, window open or closed; a mark replaces whatever was recorded. A later Check-in never replaces a mark: after ✓ it changes nothing, and after ✕ it is a Held scan (FR-ATT-15). |
 | FR-ATT-12 | Attendance must belong to the Roster entry, never the phone. Each Check-in record logs the Roster entry, IP address, block and device token. |
 | FR-ATT-13 | The Lecturer must see attendance live: a count ("19 of 32 present") and lists of present, not here yet and waiting for approval. |
 | FR-ATT-14 | The Lecturer must be able to download the per-Course Attendance sheet as xlsx: one row per Roster entry (including Students who never claimed), one column per Session by date, each cell Present, Manual or Absent; a per-Student total (count and %, Manual counting as attended) and a per-Session headcount row. Check-in times are stored but not shown. |
+| FR-ATT-15 | A Check-in from a Student Manual marked absent for the Session must be a Held scan: it leaves them Absent, is logged like any Check-in (Roster entry, time, IP, block, device token), and shows the Student "Checked in — waiting for your Lecturer to confirm". The Lecturer's console must pop up the Student's name live with **Allow** (Present from the scan's time) and **Keep absent** (the mark stands), both logged. A dismissed or unanswered Held scan stays listed beside the Pending check-ins and can be allowed after the window closes; until then it reads as Absent on the Attendance sheet. |
 
 ### 3.3 Comments and Polls — [#7](https://github.com/ofeq-dev/class-connect/issues/7), [#11](https://github.com/ofeq-dev/class-connect/issues/11), [#17](https://github.com/ofeq-dev/class-connect/issues/17)
 
@@ -230,7 +231,7 @@ There is exactly one Lecturer account. It can run several Courses.
 The data each module owns is drawn table by table in the [class diagram](diagrams/class-diagram.md#tables-each-module-owns). Rules that cut across it:
 
 - Time-dependent states are worked out from timestamps and the Clock when read, never stored: whether a Poll is open, whether the Check-in window has closed at midnight, whether a Submission is Late.
-- Attendance is one row per Session per Roster entry, overwritten so the latest action wins; Absent is the absence of a row or an unapproved Pending row after the window closed.
+- Attendance is one row per Session per Roster entry, overwritten by each Check-in and Manual mark, except that a Check-in never replaces a Manual mark; Absent is the absence of a row, an unapproved Pending row after the window closed, or a Manual absent row (whether or not a Held scan waits on it). Held scans are logged in their own table with the Lecturer's decision.
 - Uploaded files are stored on disk under their content hash; their extracted text is stored in the database.
 - The server stores the author of an anonymous Comment and the voter of every Vote, but no read model shows them to the Lecturer.
 

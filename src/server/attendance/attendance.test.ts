@@ -327,11 +327,12 @@ describe("Manual marks", () => {
     expect(present(dana)).toBe(false);
   });
 
-  it("give way to a later Check-in, which is the latest action", () => {
+  it("hold a later scan once marked absent, leaving the Student Absent", () => {
     attendance().openWindow(session.id, LECTURER);
     mark(dana, false);
-    expect(checkIn(dana, "147.235.10.21")).toBe("present");
-    expect(present(dana)).toBe(true);
+    expect(checkIn(dana, "147.235.10.21")).toBe("held");
+    expect(present(dana)).toBe(false);
+    expect(attendance().forLecturer(session.id)).toMatchObject({ present: 0, pending: 0 });
   });
 
   it("stand against a later scan once marked present, keeping the mark", () => {
@@ -390,6 +391,158 @@ describe("Manual marks", () => {
       { courseId, audience: "all", notice: { type: "attendance.changed", id: session.id } },
       { courseId, audience: "projector", notice: { type: "attendance.changed", id: session.id } },
     ]);
+  });
+});
+
+describe("Held scans", () => {
+  const mark = (entry: RosterEntry, value: boolean | null) => attendance().mark(session.id, entry.id, value);
+  const held = () => attendance().forLecturer(session.id).held;
+  const present = (entry: RosterEntry) => attendance().isPresent(session.id, entry.id);
+  beforeEach(() => attendance().openWindow(session.id, LECTURER));
+
+  it("list each Student once for the console, first scan first, and stay listed after the window closes", () => {
+    mark(dana, false);
+    mark(omar, false);
+    t.fakes.clock.set("2026-11-30T08:18:00.000Z");
+    checkIn(omar, "2.54.1.1");
+    t.fakes.clock.set("2026-11-30T08:19:00.000Z");
+    checkIn(dana, "147.235.10.21");
+    checkIn(omar, "147.235.10.22");
+    expect(held()).toEqual([
+      { rosterEntryId: omar.id, name: "Omar Haddad", at: "2026-11-30T08:18:00.000Z" },
+      { rosterEntryId: dana.id, name: "Dana Levi", at: "2026-11-30T08:19:00.000Z" },
+    ]);
+    attendance().closeWindow(session.id);
+    expect(held().map((h) => h.name)).toEqual(["Omar Haddad", "Dana Levi"]);
+  });
+
+  it("log every scan's Roster entry, time, IP, block and short device ID, never the token", () => {
+    mark(dana, false);
+    t.fakes.clock.set("2026-11-30T08:18:00.000Z");
+    checkIn(dana, "147.235.10.21", "device-1001");
+    checkIn(dana, "2.54.1.1", "device-1001");
+    const log = attendance().heldScans(session.id);
+    expect(log).toEqual([
+      { rosterEntryId: dana.id, at: "2026-11-30T08:18:00.000Z", ip: "147.235.10.21", block: "147.235.10.0/24", deviceId: "2a5a80", decision: null, decidedAt: null },
+      expect.objectContaining({ ip: "2.54.1.1", block: "2.54.1.0/24", decision: null }),
+    ]);
+    expect(JSON.stringify(log)).not.toContain("device-100");
+  });
+
+  it("tell only the Lecturer of a scan, and not the Projector: the count doesn't change", () => {
+    mark(dana, false);
+    t.fakes.events.clear();
+    checkIn(dana, "147.235.10.21");
+    expect(t.fakes.events.published).toEqual([
+      { courseId, audience: "lecturer", notice: { type: "attendance.changed", id: session.id } },
+    ]);
+  });
+
+  it("are allowed: the Student is Present from their first held scan, and every scan is logged as allowed", () => {
+    mark(dana, false);
+    t.fakes.clock.set("2026-11-30T08:18:00.000Z");
+    checkIn(dana, "2.54.1.1");
+    t.fakes.clock.set("2026-11-30T08:19:00.000Z");
+    checkIn(dana, "147.235.10.21");
+    t.fakes.clock.set("2026-11-30T08:25:00.000Z");
+    attendance().allowHeld(session.id, dana.id);
+    expect(present(dana)).toBe(true);
+    expect(attendance().forStudent(session.id, dana.id)).toEqual({ status: "present", at: "2026-11-30T08:18:00.000Z" });
+    expect(attendance().forLecturer(session.id).students.find((s) => s.rosterEntryId === dana.id)).toMatchObject({
+      status: "present",
+      mark: null,
+      at: "2026-11-30T08:18:00.000Z",
+    });
+    expect(held()).toEqual([]);
+    expect(attendance().heldScans(session.id).map((h) => [h.decision, h.decidedAt])).toEqual([
+      ["allowed", "2026-11-30T08:25:00.000Z"],
+      ["allowed", "2026-11-30T08:25:00.000Z"],
+    ]);
+  });
+
+  it("are kept absent: the ✕ stands, and the decision is logged", () => {
+    mark(dana, false);
+    checkIn(dana, "147.235.10.21");
+    attendance().keepAbsent(session.id, dana.id);
+    expect(present(dana)).toBe(false);
+    expect(attendance().forLecturer(session.id).students.find((s) => s.rosterEntryId === dana.id)).toMatchObject({ mark: "absent" });
+    expect(held()).toEqual([]);
+    expect(attendance().heldScans(session.id)).toEqual([expect.objectContaining({ decision: "kept-absent" })]);
+  });
+
+  it("are held again on a scan after Keep absent", () => {
+    mark(dana, false);
+    checkIn(dana, "147.235.10.21");
+    attendance().keepAbsent(session.id, dana.id);
+    expect(checkIn(dana, "147.235.10.21")).toBe("held");
+    expect(held().map((h) => h.name)).toEqual(["Dana Levi"]);
+  });
+
+  it("can still be allowed after the window closes, and the sheet then counts the Student Present", () => {
+    mark(dana, false);
+    mark(omar, false);
+    checkIn(dana, "147.235.10.21");
+    checkIn(omar, "147.235.10.22");
+    attendance().closeWindow(session.id);
+    attendance().allowHeld(session.id, dana.id);
+    const { students } = attendance().sheet(courseId);
+    const cell = (entry: RosterEntry) => students.find((s) => s.rosterEntryId === entry.id)!.marks[0];
+    expect(cell(dana)).toBe("present");
+    expect(cell(omar)).toBe("absent"); // never answered
+  });
+
+  it("refuse Allow or Keep absent with nothing held", () => {
+    expect(() => attendance().allowHeld(session.id, dana.id)).toThrow(/not found/i);
+    expect(() => attendance().keepAbsent(session.id, dana.id)).toThrow(/not found/i);
+  });
+
+  it("tell everyone and the Projector when allowed, and only the Lecturer when kept absent", () => {
+    mark(dana, false);
+    mark(omar, false);
+    checkIn(dana, "147.235.10.21");
+    checkIn(omar, "147.235.10.22");
+    const notice = { type: "attendance.changed", id: session.id };
+    t.fakes.events.clear();
+    attendance().allowHeld(session.id, dana.id);
+    attendance().keepAbsent(session.id, omar.id);
+    expect(t.fakes.events.published).toEqual([
+      { courseId, audience: "all", notice },
+      { courseId, audience: "projector", notice },
+      { courseId, audience: "all", notice },
+    ]);
+  });
+
+  it("are settled by a later Manual mark ✓ or a cleared mark, but not by another ✕", () => {
+    mark(dana, false);
+    mark(omar, false);
+    checkIn(dana, "147.235.10.21");
+    checkIn(omar, "2.54.1.1");
+    mark(dana, false);
+    expect(held().map((h) => h.name)).toEqual(["Dana Levi", "Omar Haddad"]);
+    mark(dana, true);
+    mark(omar, null);
+    expect(held()).toEqual([]);
+    expect(attendance().heldScans(session.id).map((h) => h.decision)).toEqual(["replaced", "replaced"]);
+    // Clearing the ✕ falls back to the held scan's own Check-in, like any Check-in under a mark.
+    expect(attendance().forStudent(session.id, omar.id).status).toBe("pending");
+  });
+
+  it("show the Student a held line, with the window open or closed, until the Lecturer decides", () => {
+    mark(dana, false);
+    t.fakes.clock.set("2026-11-30T08:18:00.000Z");
+    checkIn(dana, "147.235.10.21");
+    expect(attendance().forStudent(session.id, dana.id)).toEqual({ status: "held", at: "2026-11-30T08:18:00.000Z" });
+    attendance().closeWindow(session.id);
+    expect(attendance().forStudent(session.id, dana.id)).toEqual({ status: "held", at: "2026-11-30T08:18:00.000Z" });
+    attendance().keepAbsent(session.id, dana.id);
+    expect(attendance().forStudent(session.id, dana.id)).toEqual({ status: "closed", at: null });
+  });
+
+  it("don't happen after a Manual mark present, or with no mark", () => {
+    mark(dana, true);
+    expect(checkIn(dana, "147.235.10.21")).toBe("present");
+    expect(checkIn(omar, "147.235.10.22")).toBe("present");
+    expect(held()).toEqual([]);
   });
 });
 

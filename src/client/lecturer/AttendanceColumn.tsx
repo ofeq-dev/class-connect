@@ -1,9 +1,9 @@
 import { clockTime } from "../time";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import type { LecturerAttendance, WhoRow } from "../../server/attendance";
+import type { HeldStudent, LecturerAttendance, WhoRow } from "../../server/attendance";
 import { api, ok } from "../api";
-import { lecturerAddresses, markAfterTap, networkCard, undoMark, whoGroups, windowButton } from "../attendance";
+import { heldKey, heldPopup, lecturerAddresses, markAfterTap, networkCard, undoMark, whoGroups, windowButton } from "../attendance";
 import { diagnosticsQuery, useDiagnostics } from "./diagnostics";
 import { CheckIcon, ChevronIcon, CrossIcon } from "./icons";
 import { attendanceKey, useAttendance } from "./queries";
@@ -21,8 +21,9 @@ interface Undo {
 /**
  * The console's Attendance column: the big "19 of 32 present", whether Check-in is open with its
  * one Open / Close / Reopen button, one orange card per network with Pending check-ins
- * (Approve network), and "Who's here" with ✓ / ✕ Manual mark icons and Undo. Every Check-in sends
- * attendance.changed to the Lecturer's stream, which refetches it.
+ * (Approve network), held scans (a scan after a Manual ✕: a popup, then a list kept for after
+ * class, each with Allow / Keep absent), and "Who's here" with ✓ / ✕ Manual mark icons and Undo.
+ * Every Check-in sends attendance.changed to the Lecturer's stream, which refetches it.
  */
 export function AttendanceColumn({ courseId, sessionId }: { courseId: string; sessionId: string }) {
   const client = useQueryClient();
@@ -33,6 +34,8 @@ export function AttendanceColumn({ courseId, sessionId }: { courseId: string; se
   const route = api.api.lecturer.courses[":courseId"].sessions[":sessionId"].attendance;
   const [whoOpen, setWhoOpen] = useState(false);
   const [undo, setUndo] = useState<Undo | null>(null);
+  /** Held Students whose popup the Lecturer closed; they stay in the held list. */
+  const [dismissed, setDismissed] = useState<ReadonlySet<string>>(new Set());
 
   useEffect(() => {
     if (!undo) return;
@@ -54,6 +57,15 @@ export function AttendanceColumn({ courseId, sessionId }: { courseId: string; se
   const approve = useMutation({
     mutationFn: async (key: string) =>
       ok(await route.networks[":key"].approve.$post({ param: { ...param, key }, query })),
+    onSuccess: store,
+  });
+
+  const decide = useMutation({
+    mutationFn: async ({ rosterEntryId, allow }: { rosterEntryId: number; allow: boolean }) => {
+      const held = route.held[":rosterEntryId"];
+      const options = { param: { ...param, rosterEntryId: String(rosterEntryId) }, query };
+      return ok(await (allow ? held.allow.$post(options) : held["keep-absent"].$post(options)));
+    },
     onSuccess: store,
   });
 
@@ -102,7 +114,28 @@ export function AttendanceColumn({ courseId, sessionId }: { courseId: string; se
   const noNetwork = open && a?.window.lecturer && !a.window.lecturer.ipv4 && !a.window.lecturer.ipv6;
   const groups = a ? whoGroups(a.students) : [];
   const count = (status: WhoRow["status"]) => a?.students.filter((s) => s.status === status).length ?? 0;
-  const error = toggle.error ?? approve.error ?? mark.error;
+  const error = toggle.error ?? approve.error ?? decide.error ?? mark.error;
+  const popup = a ? heldPopup(a.held, dismissed) : null;
+  const decideButtons = (h: HeldStudent) => (
+    <>
+      <button
+        type="button"
+        className="btn btn-sm"
+        disabled={decide.isPending}
+        onClick={() => decide.mutate({ rosterEntryId: h.rosterEntryId, allow: true })}
+      >
+        Allow
+      </button>
+      <button
+        type="button"
+        className="btn-line btn-sm"
+        disabled={decide.isPending}
+        onClick={() => decide.mutate({ rosterEntryId: h.rosterEntryId, allow: false })}
+      >
+        Keep absent
+      </button>
+    </>
+  );
 
   return (
     <section className="sec" data-s="att" aria-busy={!a}>
@@ -143,6 +176,43 @@ export function AttendanceColumn({ courseId, sessionId }: { courseId: string; se
           </button>
         </div>
       ))}
+
+      {a && a.held.length > 0 && (
+        <div className="held-card" role="group" aria-label="Scanned after you marked them absent">
+          <p>Scanned after you marked them absent</p>
+          <ul className="list">
+            {a.held.map((h) => (
+              <li key={h.rosterEntryId}>
+                <span className="grow">
+                  <span className="who-name">{h.name}</span> <span className="muted small num">{clockTime(h.at)}</span>
+                </span>
+                {decideButtons(h)}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {popup && (
+        <div className="held-pop" role="alertdialog" aria-labelledby="held-pop-title" aria-describedby="held-pop-detail">
+          <p id="held-pop-title" className="held-pop-title">
+            {popup.name} scanned in
+          </p>
+          <p id="held-pop-detail" className="small">
+            You marked them absent. Allow the Check-in?
+          </p>
+          <div className="held-pop-actions">
+            {decideButtons(popup)}
+            <button
+              type="button"
+              className="link"
+              onClick={() => setDismissed(new Set(dismissed).add(heldKey(popup)))}
+            >
+              Later
+            </button>
+          </div>
+        </div>
+      )}
 
       {noNetwork && (
         <p className="report has-problems" role="status">

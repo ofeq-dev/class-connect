@@ -63,7 +63,11 @@ Interface: `openWindow(session, {ipv4, ipv6})`, `closeWindow`, `checkIn → Pres
   - No number of Pending check-ins from one block approves it; only the Lecturer does.
   - When the window closes, Pending check-ins still unapproved read as Absent.
 - **Manual marks**:
-  - A Manual mark works whether the window is open or closed. The latest action wins, both ways (a Manual absent over a Check-in, and a Check-in over a Manual absent while the window is open).
+  - A Manual mark works whether the window is open or closed, and replaces a Check-in. A later Check-in never replaces a mark: after ✓ nothing changes, and after ✕ it is a Held scan.
+- **Held scans**:
+  - A scan after a Manual ✕ leaves the Student Absent, is logged, and tells only the Lecturer's stream.
+  - Allow makes the Student Present from their first held scan, window open or closed; Keep absent leaves the ✕; both are logged.
+  - An unanswered Held scan reads as Absent on the Attendance sheet. A later ✓ or a cleared mark settles it.
   - Each Check-in record logs the Roster entry, the IP, the block and the device token.
 - **Attendance sheet**:
   - Rows are every Roster entry, including unclaimed Students. Columns are Sessions in date order.

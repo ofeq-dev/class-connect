@@ -35,3 +35,7 @@ So a block can stand for "in this room" only on the day someone sees it there:
 - **Network approval is manual and lasts for one Session.** It is not remembered for the Course, so the next Session starts again from the Lecturer's own block.
 
 Consequence: if the Lecturer opens the Check-in window over mobile data or a hotspot, their carrier `/24` becomes the reference for that Session. Accepted: the Lecturer opens the window on the classroom Wi-Fi.
+
+## Amendment: a scan after a Manual absent is held (2026-11-27)
+
+Resolved in [Hold a QR scan after a Manual absent mark for the Lecturer to allow](https://github.com/ofeq-dev/class-connect/issues/59). Between a Check-in and a Manual mark, the latest action no longer simply wins. A Check-in never replaces a Manual mark. After ✓ it changes nothing. After ✕ it is a **Held scan**: the Student stays Absent, and the Lecturer's console pops up their name with **Allow** or **Keep absent**. We changed this because a Student the Lecturer had just marked absent could otherwise undo the mark by scanning, in front of the class. A Held scan is logged like any Check-in. One the Lecturer doesn't answer stays listed, can still be allowed after the window closes, and counts as Absent until then.

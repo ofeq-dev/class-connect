@@ -47,8 +47,12 @@ The Lecturer making a network a Classroom network for one Session, with one tap;
 _Avoid_: Whitelisting, IP approval
 
 **Manual mark**:
-The Lecturer setting a Student's attendance for a Session directly, present or absent, at any time; it replaces whatever was recorded before.
+The Lecturer setting a Student's attendance for a Session directly, present or absent, at any time; it replaces whatever was recorded before. A later Check-in never replaces a Manual mark: after ✓ it changes nothing, and after ✕ it becomes a Held scan.
 _Avoid_: Override, manual check-in
+
+**Held scan**:
+A Check-in from a Student the Lecturer has Manual marked absent for this Session. It leaves the Student Absent and waits for the Lecturer: **Allow** makes them Present from the time they scanned, **Keep absent** leaves the mark. Like a Pending check-in it is held back for the Lecturer, but for a different reason, and it can still be allowed after the Check-in window closes; until then it counts as Absent.
+_Avoid_: Blocked check-in, override
 
 **Check-in window**:
 The period during which a Session accepts Check-ins, opened and closed by the Lecturer (and closed automatically at midnight); it may be reopened. Manual marks work whether it is open or not.

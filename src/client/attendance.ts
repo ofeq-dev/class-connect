@@ -1,5 +1,5 @@
 import { clockTime } from "./time";
-import type { PendingNetwork, StudentCheckIn, WhoRow, WindowState } from "../server/attendance";
+import type { HeldStudent, PendingNetwork, StudentCheckIn, WhoRow, WindowState } from "../server/attendance";
 
 const IPV4 = /^\d{1,3}(\.\d{1,3}){3}$/;
 const LOOKUP_TIMEOUT = 4000;
@@ -48,6 +48,12 @@ export function checkInLine(
         detail: "Your phone isn’t on the classroom network. Your Lecturer can approve it.",
         tone: "wait",
       };
+    case "held":
+      return {
+        title: "Checked in — waiting for your Lecturer to confirm",
+        detail: "Your Lecturer marked you absent earlier, so they’ll confirm this Check-in.",
+        tone: "wait",
+      };
     case "closed":
       return {
         title: "Check-in is closed — ask the Lecturer to mark you present",
@@ -90,6 +96,14 @@ const GROUPS = [
 /** "Who's here" expanded: waiting for approval, not here yet, present; empty groups left out. */
 export function whoGroups<R extends Pick<WhoRow, "status">>(rows: R[]) {
   return GROUPS.map((g) => ({ ...g, rows: rows.filter((r) => r.status === g.status) })).filter((g) => g.rows.length);
+}
+
+/** What a dismissed popup is remembered by: the Student and their first held scan, so a new hold pops up again. */
+export const heldKey = (h: HeldStudent) => `${h.rosterEntryId}@${h.at}`;
+
+/** Who the held-scan popup names: the first held Student the Lecturer hasn't dismissed, or no one. */
+export function heldPopup(held: HeldStudent[], dismissed: ReadonlySet<string>): HeldStudent | null {
+  return held.find((h) => !dismissed.has(heldKey(h))) ?? null;
 }
 
 type Mark = WhoRow["mark"];
