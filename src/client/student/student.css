@@ -228,3 +228,39 @@
 .st .toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: 84px; z-index: 30; width: min(496px, calc(100vw - 24px)); background: var(--ink); color: var(--surface); border-radius: 8px; padding: 11px 14px; display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 15px; }
 .st .toast .link { color: var(--surface); }
 @media (prefers-reduced-motion: reduce) { .switch::after { transition: none; } }
+
+/* Polls */
+.st-poll { background: var(--card); border: 1.5px solid var(--line); border-radius: 4px; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+.st-poll-meta { display: flex; gap: 10px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
+.st-poll-meta .live { color: var(--ink); font-weight: 700; }
+.st-poll-q { font-family: var(--font-display); font-size: 19px; font-weight: 700; line-height: 1.25; }
+.st-poll .opts { display: flex; flex-direction: column; gap: 8px; }
+.st-poll .opt {
+  display: flex; align-items: center; gap: 10px; text-align: start; padding: 12px 14px; min-height: 48px;
+  border-radius: 4px; border: 1.5px solid var(--line); background: var(--surface); color: var(--ink); font: inherit; font-weight: 500;
+}
+.st-poll .opt .radio { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--muted); flex: none; }
+.st-poll .opt[aria-checked="true"] { border-color: var(--ink); background: color-mix(in srgb, var(--hl-polls) 30%, var(--surface)); }
+.st-poll .opt[aria-checked="true"] .radio { border: 5px solid var(--ink); }
+.st-poll .res {
+  position: relative; display: flex; justify-content: space-between; gap: 8px; padding: 10px 12px; border-radius: 4px;
+  background: var(--surface); border: 1px solid var(--line); overflow: hidden; font-variant-numeric: tabular-nums;
+}
+.st-poll .res .bar { position: absolute; inset: 0 auto 0 0; background: var(--line); }
+.st-poll .res.mine .bar { background: var(--hl-mark); }
+.st-poll .res span, .st-poll .res b { position: relative; }
+.st-poll .res.mine span { font-weight: 700; }
+.st-poll-foot { font-size: 13px; color: var(--muted); }
+.tab { position: relative; }
+.tab .badge {
+  position: absolute; top: 4px; right: 6px; min-width: 18px; padding: 0 5px; border-radius: 999px;
+  background: var(--ink); color: var(--surface); font-family: var(--font-body); font-size: 11px; line-height: 18px;
+}
+.st-banner {
+  position: fixed; left: 50%; transform: translateX(-50%); top: calc(10px + env(safe-area-inset-top, 0px)); z-index: 30;
+  width: min(496px, calc(100vw - 24px)); background: var(--hl-polls); color: #20272e; border-radius: 4px;
+  padding: 11px 14px; display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 15px;
+  box-shadow: 0 4px 14px rgb(0 0 0 / 0.25);
+}
+.st-banner a { color: inherit; text-decoration: none; flex: 1; min-width: 0; }
+.st-banner .link { color: #20272e; }
