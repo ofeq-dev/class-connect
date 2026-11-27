@@ -424,6 +424,9 @@ export function lecturerRoutes(deps: AppDeps) {
     .post("/courses/:courseId/assignments/:assignmentId/review-run", requireLecturer, (c) =>
       c.json(deps.homework.startReviewRun(ownAssignment(c).id)),
     )
+    .post("/courses/:courseId/assignments/:assignmentId/review-run/retry", requireLecturer, (c) =>
+      c.json(deps.homework.retryReviewRun(ownAssignment(c).id)),
+    )
     .post("/courses/:courseId/assignments/:assignmentId/submissions/:submissionId/review/retry", requireLecturer, (c) =>
       c.json(deps.homework.retryReview(ownAssignment(c).id, idParam(c, "submissionId"))),
     )

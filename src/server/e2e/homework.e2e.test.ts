@@ -170,6 +170,7 @@ describe("The review run over HTTP", () => {
     expect(await edited.json()).toMatchObject({ submissions: [{ review: { levels: [{ level: "secure" }, {}, {}, {}] } }, {}] });
     const retry = await call("POST", `${base}/submissions/${v.submissions[0]!.id}/review/retry`);
     expect(retry.status).toBe(400);
+    expect((await call("POST", `${base}/review-run/retry`)).status).toBe(400);
 
     for (const path of [`/student/assignments/${assignmentId}`, "/student/assignments"]) {
       const body = await (await call("GET", path, undefined, dana)).text();

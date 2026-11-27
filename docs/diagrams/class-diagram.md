@@ -77,6 +77,7 @@ classDiagram
       +submit(assignment, rosterEntry, textOrPdf) Submission
       +startReviewRun(assignment)
       +retryReview(submission)
+      +retryReviewRun(assignment)
       +editReview(review, levels)
       +release(assignment, matchDeadline)
       +releaseReview(review)

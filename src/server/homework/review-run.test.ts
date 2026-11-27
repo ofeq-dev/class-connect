@@ -327,6 +327,29 @@ describe("Similar pairs", () => {
   });
 });
 
+describe("Retrying a failed comparison", () => {
+  it("queues compare again, which then queues the class summary", async () => {
+    // A reply without one vector per Submission breaks the comparison on every attempt.
+    const embed = vi.spyOn(t.fakes.llm, "embed").mockResolvedValue([]);
+    homework().startReviewRun(assignmentId);
+    await t.jobs.runDue();
+    expect(view().reviewRun).toMatchObject({ compare: "failed", classSummary: null });
+    expect(view().reviewRun!.error).toBeTruthy();
+
+    embed.mockRestore();
+    expect(homework().retryReviewRun(assignmentId).reviewRun).toMatchObject({ compare: "queued" });
+    await t.jobs.runDue();
+    expect(view().reviewRun).toMatchObject({ compare: "done", classSummary: "done", error: null });
+    expect(view().classSummary).toMatchObject({ reviewCount: 3 });
+  });
+
+  it("is refused when neither compare nor the class summary failed", async () => {
+    homework().startReviewRun(assignmentId);
+    await t.jobs.runDue();
+    expect(() => homework().retryReviewRun(assignmentId)).toThrow(DomainError);
+  });
+});
+
 describe("The class summary", () => {
   it("counts levels per Criterion and asks the LLM for common mistakes from anonymised Reviews", async () => {
     t.fakes.llm.reply("reviewSubmission", (input: ReviewSubmissionInput) =>
@@ -360,6 +383,22 @@ describe("The class summary", () => {
     expect(v.state).toBe("reviewed");
     expect(v.submissions.every((s) => s.review.status === "drafted")).toBe(true);
     expect(t.fakes.events.published.at(-1)!.notice).toEqual({ type: "assignment.changed", id: assignmentId });
+  });
+
+  it("can be retried once failed, and then writes the class summary", async () => {
+    t.fakes.llm.fail("classSummary", "all-models-failed", "Every model failed.");
+    homework().startReviewRun(assignmentId);
+    await t.jobs.runDue();
+    expect(view().reviewRun).toMatchObject({ classSummary: "failed" });
+
+    t.fakes.llm.reply("classSummary", { commonMistakes: ["Goals missing."] });
+    const retried = homework().retryReviewRun(assignmentId);
+    expect(retried.state).toBe("reviewing");
+    expect(retried.reviewRun).toMatchObject({ classSummary: "queued", error: null });
+    await t.jobs.runDue();
+    const v = view();
+    expect(v.reviewRun).toMatchObject({ compare: "done", classSummary: "done", error: null });
+    expect(v.classSummary!.commonMistakes).toEqual(["Goals missing."]);
   });
 
   it("tells the Lecturer when compare and the class summary are done", async () => {

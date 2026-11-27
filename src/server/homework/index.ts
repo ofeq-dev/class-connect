@@ -280,6 +280,8 @@ export interface HomeworkModule {
   startReviewRun(assignmentId: number): LecturerAssignment;
   /** Queues a failed draft again with fresh attempts. */
   retryReview(assignmentId: number, submissionId: number): LecturerAssignment;
+  /** Queues the latest run's failed comparison or class summary again with fresh attempts. */
+  retryReviewRun(assignmentId: number): LecturerAssignment;
   /**
    * The Lecturer's Review of a Submission: a level, evidence and feedback for every Criterion.
    * Edits a draft, or writes one by hand (e.g. for a failed draft).
@@ -1210,6 +1212,20 @@ export function createHomeworkModule({ db, clock, course, llm, files, events, jo
       jobs.retry(jobId);
       const runId = db.select({ runId: reviewJob.runId }).from(reviewJob).where(eq(reviewJob.jobId, jobId)).get()!.runId;
       publishProgress(row.courseId, assignmentId, runId);
+      lecturerChanged(row.courseId, assignmentId);
+      return lecturerView(assignmentId);
+    },
+
+    retryReviewRun(assignmentId) {
+      const row = assignmentRow(assignmentId);
+      const run = latestRun(assignmentId);
+      const failed = [run?.compareJobId, run?.classSummaryJobId].find(
+        (id): id is number => !!id && jobs.read(id).status === "failed",
+      );
+      if (!failed) {
+        throw new DomainError("review.nothing-to-retry", "Neither the comparison nor the class summary failed.");
+      }
+      jobs.retry(failed);
       lecturerChanged(row.courseId, assignmentId);
       return lecturerView(assignmentId);
     },

@@ -32,7 +32,8 @@ function useRoutes(courseId: string, assignmentId: number) {
 
 /**
  * The Assignment screen after the due date (minimal): Start review run with its `n of m`
- * progress, the Submissions with their Review status, Retry on a failed draft, a Review editor
+ * progress, the Submissions with their Review status, Retry on a failed draft (and on a failed
+ * comparison or class summary), a Review editor
  * per Submission ("Write by hand" for a failed one), the Similar pairs panel and the class
  * summary preview.
  */
@@ -51,6 +52,10 @@ export function ReviewRun({ courseId, data }: { courseId: string; data: Assignme
           param: { ...param, submissionId: String(submissionId) },
         }),
       ),
+    onSuccess: settle,
+  });
+  const retryRun = useMutation({
+    mutationFn: async () => ok(await routes["review-run"].retry.$post({ param })),
     onSuccess: settle,
   });
   const releaseOne = useMutation({
@@ -100,7 +105,15 @@ export function ReviewRun({ courseId, data }: { courseId: string; data: Assignme
             )}
           </div>
         )}
-        {run?.error && <p className="error">{run.error}</p>}
+        {run?.error && (
+          <p className="error row">
+            <span className="grow">{run.error}</span>
+            <button className="btn-line" disabled={retryRun.isPending} onClick={() => retryRun.mutate()}>
+              Retry
+            </button>
+          </p>
+        )}
+        {retryRun.error && <p className="error">{retryRun.error.message}</p>}
         {start.error && <p className="error">{start.error.message}</p>}
         {retry.error && <p className="error">{retry.error.message}</p>}
         {releaseOne.error && <p className="error">{releaseOne.error.message}</p>}
