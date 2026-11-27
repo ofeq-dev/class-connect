@@ -120,6 +120,8 @@ export interface AttendanceModule {
   checkIns(sessionId: number): CheckInRecord[];
   /** The earliest scheduled change after an instant: an open window's midnight close. */
   nextMoment(after: Date): Date | null;
+  /** Publishes attendance.changed for every midnight close in (since, until]; changes nothing. */
+  announce(since: Date, until: Date): void;
 }
 
 export interface AttendanceDeps {
@@ -128,6 +130,8 @@ export interface AttendanceDeps {
   events: LiveEvents;
   course: CourseModule;
   timeZone: string;
+  /** Told when a window's midnight close may have moved, so the next-event timer recomputes. */
+  scheduleChanged?: () => void;
 }
 
 const tokenHash = (token: string) => createHash("sha256").update(token).digest("hex");
@@ -144,7 +148,14 @@ function address(raw: string | null, family: 4 | 6): string | null {
   throw new DomainError("check-in.bad-address", `"${ip}" isn't an IPv${family} address.`);
 }
 
-export function createAttendanceModule({ db, clock, events, course, timeZone }: AttendanceDeps): AttendanceModule {
+export function createAttendanceModule({
+  db,
+  clock,
+  events,
+  course,
+  timeZone,
+  scheduleChanged = () => {},
+}: AttendanceDeps): AttendanceModule {
   type WindowRow = typeof checkInWindow.$inferSelect;
 
   function latestWindow(sessionId: number): WindowRow | undefined {
@@ -163,6 +174,15 @@ export function createAttendanceModule({ db, clock, events, course, timeZone }: 
   function openWindowRow(sessionId: number) {
     const w = latestWindow(sessionId);
     return isOpen(w) ? w : null;
+  }
+
+  /** Windows never closed by hand; one closes by the midnight after it opened, so only the last two days matter. */
+  function unclosedSince(after: Date): WindowRow[] {
+    return db
+      .select()
+      .from(checkInWindow)
+      .where(and(isNull(checkInWindow.closedAt), gte(checkInWindow.openedAt, new Date(after.getTime() - 2 * DAY))))
+      .all();
   }
 
   function closeRow(w: WindowRow) {
@@ -226,6 +246,7 @@ export function createAttendanceModule({ db, clock, events, course, timeZone }: 
           .run();
       });
       changed(sessionId, "all", true);
+      scheduleChanged();
     },
 
     closeWindow(sessionId) {
@@ -233,6 +254,7 @@ export function createAttendanceModule({ db, clock, events, course, timeZone }: 
       if (!current) return;
       closeRow(current);
       changed(sessionId, "all", true);
+      scheduleChanged();
     },
 
     checkIn(sessionId, rosterEntryId, ip, deviceToken) {
@@ -377,14 +399,15 @@ export function createAttendanceModule({ db, clock, events, course, timeZone }: 
     },
 
     nextMoment(after) {
-      // A window closes by the midnight after it opened, so only the last two days can matter.
-      const open = db
-        .select()
-        .from(checkInWindow)
-        .where(and(isNull(checkInWindow.closedAt), gte(checkInWindow.openedAt, new Date(after.getTime() - 2 * DAY))))
-        .all();
-      const closes = open.map(midnightOf).filter((m) => m > after);
+      const closes = unclosedSince(after).map(midnightOf).filter((m) => m > after);
       return closes.length ? new Date(Math.min(...closes.map((m) => m.getTime()))) : null;
+    },
+
+    announce(since, until) {
+      for (const w of unclosedSince(since)) {
+        const midnight = midnightOf(w);
+        if (midnight > since && midnight <= until) changed(w.sessionId, "all", true);
+      }
     },
   };
 }

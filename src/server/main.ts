@@ -8,7 +8,7 @@ import { createCourseModule } from "./course";
 import { openDatabase } from "./db";
 import { createApp } from "./http";
 import { createDiskFileStore } from "./files";
-import { createJobs } from "./jobs";
+import { createJobs, createNextEventTimer, type NextEventTimer } from "./jobs";
 import { createLiveEvents } from "./live-events";
 import { createOpenRouterGateway, createScriptedGateway } from "./llm";
 import { createFeedbackModule } from "./feedback";
@@ -29,6 +29,9 @@ function commitSha(): string {
 // Migrations run before the server listens (#19).
 const database = openDatabase(config.databasePath, config.migrationsDir);
 const events = createLiveEvents();
+// Modules report schedule changes to the next-event timer, which is made once they exist.
+let timer: NextEventTimer | null = null;
+const scheduleChanged = () => timer?.recompute();
 const course = createCourseModule({
   db: database.db,
   clock: systemClock,
@@ -42,6 +45,7 @@ const attendance = createAttendanceModule({
   events,
   course,
   timeZone: config.timeZone,
+  scheduleChanged,
 });
 const feedback = createFeedbackModule({
   db: database.db,
@@ -50,7 +54,9 @@ const feedback = createFeedbackModule({
   course,
   attendance,
   timeZone: config.timeZone,
+  scheduleChanged,
 });
+timer = createNextEventTimer({ clock: systemClock, sources: [attendance, feedback] });
 const jobs = createJobs({
   db: database.db,
   clock: systemClock,
@@ -89,6 +95,8 @@ const app = createApp({
 // Jobs left running by the last process go back to the queue; then the worker starts (#18).
 jobs.recover();
 jobs.start();
+// Scheduled Poll opens and closes and midnight window closes reach every screen on time.
+timer.start();
 
 // Bound to loopback only: the Cloudflare Tunnel is the only way in (ADR 0003).
 serve({ fetch: app.fetch, port: config.port, hostname: "127.0.0.1" }, (info) => {

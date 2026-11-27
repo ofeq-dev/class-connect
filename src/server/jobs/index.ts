@@ -323,3 +323,5 @@ export function createJobs({ db, clock, setTimer = realTimer, onError }: JobsDep
     idle: () => current ?? Promise.resolve(),
   };
 }
+
+export { createNextEventTimer, type MomentSource, type NextEventTimer } from "./next-event-timer";
