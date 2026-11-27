@@ -1,0 +1,56 @@
+/* The Projector window: always light whatever the room or the OS theme, 16:9, sized in container
+   units (cqw) so the console's thumbnail is the same picture at any size. */
+.proj {
+  container-type: inline-size;
+  aspect-ratio: 16 / 9;
+  width: 100%;
+  background: #fff;
+  color: #111;
+  color-scheme: light;
+  font-family: var(--font-display);
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 6cqw;
+  padding: 5cqw 6cqw;
+  overflow: hidden;
+}
+.proj .qr { width: 36cqw; aspect-ratio: 1; }
+.proj .qr svg { display: block; width: 100%; height: 100%; }
+.proj .col { display: flex; flex-direction: column; gap: 1.8cqw; min-width: 0; }
+.proj h1 { font-size: 4.4cqw; line-height: 1.08; font-weight: 800; letter-spacing: -0.01em; margin: 0; }
+.proj .p-time { font-variant-numeric: tabular-nums; }
+.proj .p-course { font-size: 2.2cqw; font-weight: 700; color: #555; }
+.proj .p-say { font-family: var(--font-body); font-size: 2.3cqw; }
+.proj .p-count { display: flex; align-items: baseline; gap: 1.6cqw; }
+.proj .p-big { font-size: 10cqw; font-weight: 800; line-height: 1; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.proj .p-hl {
+  padding: 0 0.12em;
+  margin: 0 -0.12em;
+  background: linear-gradient(100deg, transparent 0.05em, #ffe14d 0.15em, #ffe14d calc(100% - 0.15em), transparent calc(100% - 0.05em)) 0 85% / 100% 60% no-repeat;
+}
+.proj .p-url { font: 1.9cqw ui-monospace, monospace; color: #555; }
+.proj.poll { grid-template-columns: 1fr; }
+.proj.poll .pq { font-size: 5cqw; font-weight: 800; line-height: 1.1; }
+.proj.poll .po { display: flex; flex-direction: column; gap: 1.4cqw; font-size: 2.8cqw; }
+.proj.poll .po div {
+  position: relative; padding: 1cqw 2cqw; border: 0.3cqw solid #111; border-radius: 1cqw;
+  display: flex; justify-content: space-between; overflow: hidden;
+}
+.proj.poll .po i { position: absolute; inset: 0 auto 0 0; background: #ff9dc4; }
+.proj.poll .po span, .proj.poll .po b { position: relative; }
+.proj.blank { display: grid; place-items: center; grid-template-columns: 1fr; }
+.proj.blank span { font-size: 2cqw; font-weight: 700; color: #d6d6d6; }
+
+/* The window itself: black letterbox around the 16:9 picture. */
+.projector-page { position: fixed; inset: 0; background: #000; display: grid; place-items: center; }
+.projector-page .frame { width: min(100vw, 177.78vh); }
+.projector-page .fs {
+  position: fixed; top: 10px; right: 10px; z-index: 2;
+  font: 13px var(--font-body); background: #222; color: #fff; border: 0; border-radius: 6px; padding: 7px 12px;
+  opacity: 0.6;
+}
+.projector-page .fs:hover, .projector-page .fs:focus-visible { opacity: 1; }
+.projector-page .gone { background: #fff; color: #111; }
+.projector-page .gone h1 { font-size: 3.4cqw; }
+.projector-page .gone p { font-family: var(--font-body); font-size: 2.2cqw; color: #555; margin: 0; }

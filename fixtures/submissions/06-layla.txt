@@ -1,0 +1,15 @@
+Actors. Rider: a student or staff member who wants to get across campus. Technician: keeps the fleet working. Card Processor: an outside system that charges payments. The docks and the app are inside the system, so they are not actors.
+
+UC1 Borrow a bike (Rider)
+1. Rider holds their card to a dock.
+2. System confirms the Rider is in good standing.
+3. System releases the bike and records the start time.
+Extensions: 2a Rider is suspended: system shows why and ends. 2b Card unreadable: Rider enters their ID number instead, continue at 2. 3a Bike fails its self check: system keeps it locked, flags it, and releases the next bike.
+
+UC2 Return a bike (Rider)
+1. Rider docks the bike. 2. System locks it and shows the trip cost. 3. System charges the Card Processor.
+Extensions: 1a All docks full: system shows the nearest free dock and adds ten free minutes. 3a Charge declined: system adds the fee to the Rider's account.
+
+UC3 Repair a flagged bike (Technician)
+1. Technician opens flagged bikes. 2. System lists them by station. 3. Technician repairs one and clears the flag.
+Extensions: 3a Bike cannot be repaired: Technician retires it.

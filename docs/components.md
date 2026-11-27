@@ -101,7 +101,7 @@ Injected into the feature modules so that tests pass in fakes (see the [testing 
 | Module | What it does | Real adapter | Fake |
 |---|---|---|---|
 | **LLM gateway** | `generate({task, input, schema})` → typed result or `LlmError`; `embed(texts)` | OpenRouter: fallback list of free models, per-task timeouts (3 min for summaries), schema validation with one fix-up retry, one call at a time (~15/min), `llm_usage` count against 1000/day | Scripted adapter (`LLM_ADAPTER=fake`), also used to rehearse the demo |
-| **Jobs** | Durable background work and scheduled wake-ups | `job` table worked by one in-process worker, plus the next-event timer | `FakeJobs` (run due jobs on demand) |
+| **Jobs** | Durable background work and scheduled wake-ups | `job` table worked by one in-process worker, plus the next-event timer | the real worker with its timer off (tests call `runDue()`) |
 | **Live events** | "Something changed" notices to open pages | In-process bus feeding one SSE stream per page, scoped by Course and role, heartbeat ~25 s | `RecordingEvents` |
 | **Clock** | The only source of time | System time | `FakeClock` |
 | **File store** | Uploaded files (Roster CSV, Transcripts, PDFs) | Files on disk under their content hash | `MemoryFileStore` |

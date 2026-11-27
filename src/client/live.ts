@@ -1,0 +1,69 @@
+import { useQueryClient, type QueryClient, type QueryKey } from "@tanstack/react-query";
+import { useEffect } from "react";
+import type { Notice, NoticeType } from "../shared/notices";
+
+/**
+ * Which queries each notice makes stale. Typed over every NoticeType, so a notice the server
+ * can publish without an entry here fails the type check.
+ */
+export const noticeQueryKeys: { [T in NoticeType]: (id: number) => QueryKey[] } = {
+  "course.changed": (id) => [["courses"], ["course", id]],
+  "roster.changed": (courseId) => [["roster", courseId]],
+  "session.changed": (id) => [["sessions"], ["session", id], ["student"]],
+  // A summary change may also have spent LLM requests. Students hear of it on publish.
+  "summary.changed": (sessionId) => [
+    ["summary", sessionId],
+    ["summaries"],
+    ["llm-usage"],
+    ["student", "summaries"],
+    ["student", "summary", sessionId],
+  ],
+  // The console's count, the Student's own Check-in line (window opened or closed), and the
+  // checked-in count on the Projector window and the console's thumbnail of it.
+  "attendance.changed": (sessionId) => [
+    ["attendance", sessionId],
+    ["sessions"], // the Course desk's headcounts
+    ["student", "me"],
+    ["student", "entry"],
+    ["projector"],
+  ],
+  // Topic lists (the Student's Comment tab too) and the Comments that show Topic names.
+  "topic.changed": () => [["topics"], ["comments"], ["student", "topics"]],
+  // Lecturer scope only: the console's column, the Course desk section, the all-comments screen.
+  "comment.changed": () => [["comments"]],
+  "assignment.changed": (id) => [["assignment", id], ["assignments"], ["student", "assignment", id], ["student", "assignments"]],
+  // Lecturer only: a review run moved on (and may have spent LLM requests).
+  "job.progress": (assignmentId) => [["assignment", assignmentId], ["assignments"], ["llm-usage"]],
+  // A Poll opened, closed (Students and projector too), changed as a draft or got a Vote (Lecturer and projector).
+  "poll.changed": () => [["polls"], ["student", "polls"], ["projector"]],
+  // What the Projector window shows, or its link, changed: the window and the console thumbnail.
+  "projector.changed": () => [["projector"]],
+};
+
+export function applyNotice(client: QueryClient, notice: Notice): void {
+  const keys = noticeQueryKeys[notice.type]?.(notice.id) ?? [];
+  for (const queryKey of keys) void client.invalidateQueries({ queryKey });
+}
+
+/** After a reconnect the stream has no backlog, so everything may be stale. */
+export function applyReconnect(client: QueryClient): void {
+  void client.invalidateQueries();
+}
+
+/** Opens the page's SSE stream and refetches on each notice. */
+export function useLiveEvents(url: string | null): void {
+  const client = useQueryClient();
+  useEffect(() => {
+    if (!url) return;
+    const source = new EventSource(url, { withCredentials: true });
+    let opened = false;
+    source.onopen = () => {
+      if (opened) applyReconnect(client);
+      opened = true;
+    };
+    source.onmessage = (event: MessageEvent<string>) => {
+      applyNotice(client, JSON.parse(event.data) as Notice);
+    };
+    return () => source.close();
+  }, [url, client]);
+}

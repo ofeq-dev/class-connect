@@ -1,0 +1,97 @@
+{
+  "replies": [
+    {
+      "transcript": "clip-5min.vtt",
+      "reply": {
+        "overview": "A short introduction to sequence diagrams: how they draw the steps of a use case's main flow as messages between participants over time, using the library's Borrow a book example.",
+        "outline": [
+          {
+            "start": "00:00:02",
+            "topic": "From use cases to sequence diagrams"
+          },
+          {
+            "start": "00:00:40",
+            "topic": "Lifelines, messages and replies"
+          },
+          {
+            "start": "00:01:50",
+            "topic": "Worked example: borrowing a book"
+          },
+          {
+            "start": "00:03:00",
+            "topic": "Alternative flows with alt and loop fragments"
+          },
+          {
+            "start": "00:04:10",
+            "topic": "Common mistakes and the task for Thursday"
+          }
+        ],
+        "keyPoints": [
+          "Participants sit across the top; each has a lifeline, and time runs downwards.",
+          "A labelled solid arrow is a synchronous message; a dashed arrow is its reply.",
+          "The order of the messages follows the steps of the main flow.",
+          "Alternative flows become alt fragments with a condition on each part.",
+          "The database is not an actor, and every arrow needs a label."
+        ],
+        "reviewQuestions": [
+          "What does a lifeline show, and which way does time run?",
+          "How do you draw the case where the copy is already lent out?",
+          "Why is the database not an actor in a sequence diagram?"
+        ]
+      }
+    },
+    {
+      "transcript": "lecture-90min.vtt",
+      "reply": {
+        "overview": "This Session covered use cases from start to finish: finding actors, naming use cases after their primary actor's goal, writing a short main flow and its alternative flows, a worked library example, and the brief for Assignment 2.",
+        "outline": [
+          {
+            "start": "00:00:00",
+            "topic": "Announcements and the plan for today"
+          },
+          {
+            "start": "00:07:00",
+            "topic": "Recap: eliciting and testable requirements"
+          },
+          {
+            "start": "00:18:00",
+            "topic": "Actors: roles outside the system"
+          },
+          {
+            "start": "00:35:00",
+            "topic": "Goals: naming use cases at the right level"
+          },
+          {
+            "start": "00:52:00",
+            "topic": "Writing the main flow"
+          },
+          {
+            "start": "01:06:00",
+            "topic": "Alternative flows and extensions"
+          },
+          {
+            "start": "01:15:00",
+            "topic": "Worked example: Borrow a book"
+          },
+          {
+            "start": "01:25:00",
+            "topic": "Assignment 2 brief and wrap-up"
+          }
+        ],
+        "keyPoints": [
+          "An actor is a role outside the system boundary that wants something from it; the database is not an actor.",
+          "Name each use case after the primary actor's goal, as a verb phrase such as Borrow a book.",
+          "A main flow is three to nine numbered steps at one level, with no user interface details.",
+          "Alternative flows are numbered after the step they branch from and say where the flow continues.",
+          "Assignment 2 is assessed on actors, goals, main flow and alternative flows."
+        ],
+        "reviewQuestions": [
+          "What makes something an actor, and why is the database not one?",
+          "Why is Log in rarely a good use case name?",
+          "How many steps should a main flow usually have, and what should it leave out?",
+          "How do you number and end an alternative flow?"
+        ]
+      }
+    }
+  ]
+}

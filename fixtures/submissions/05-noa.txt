@@ -1,0 +1,13 @@
+Use cases for the campus bike-share system
+
+Actors: Rider, Station Operator, Payment Service (external).
+
+Rent a bike - primary actor Rider.
+Main flow: 1. The Rider selects a station in the app. 2. The system lists the bikes at that station with their battery level. 3. The Rider reserves a bike. 4. The system holds it for ten minutes. 5. The Rider unlocks it with the app and the rental starts.
+Alternative flows: 4a. The Rider does not arrive in ten minutes: the hold is released.
+
+Rebalance stations - primary actor Station Operator.
+Main flow: 1. The Operator opens the map of stations. 2. The system highlights stations that are empty or full. 3. The Operator moves bikes and confirms each move. 4. The system updates the counts.
+
+Pay a monthly pass - primary actor Rider, supporting actor Payment Service.
+Main flow: 1. The Rider chooses a monthly pass. 2. The system sends the amount to the Payment Service. 3. The Payment Service confirms. 4. The system activates the pass.

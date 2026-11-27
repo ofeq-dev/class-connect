@@ -1,0 +1,31 @@
+# Class Connect app server (#19, ADR 0003). Installed by #23:
+#   sudo cp deploy/class-connect.service /etc/systemd/system/ && sudo systemctl daemon-reload
+#   sudo systemctl enable --now class-connect.service
+#
+# /etc/class-connect.env (root-owned, readable by josh) holds the secrets and settings:
+#   LECTURER_PASSWORD_HASH=...   COOKIE_SECRET=...   OPENROUTER_API_KEY=...   LLM_ADAPTER=...
+# The deploy script restarts this unit with `sudo -n systemctl restart class-connect.service`,
+# so josh needs a NOPASSWD sudoers rule for exactly that (and stop/start for a backup restore).
+
+[Unit]
+Description=Class Connect
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=josh
+WorkingDirectory=/srv/class-connect/current
+Environment=NODE_ENV=production
+Environment=PORT=3000
+Environment=DATABASE_PATH=/var/lib/class-connect/app.db
+Environment=FILES_DIR=/var/lib/class-connect/files
+EnvironmentFile=/etc/class-connect.env
+# Migrations apply at startup, then it listens on 127.0.0.1 only; the tunnel is the only way in.
+# Adjust the node path if Node is not installed at /usr/bin/node.
+ExecStart=/usr/bin/node dist/server/main.js
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

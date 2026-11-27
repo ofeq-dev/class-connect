@@ -1,0 +1,14 @@
+# Runs class-connect-backup.service every night. Installed by #23:
+#   sudo cp deploy/class-connect-backup.* /etc/systemd/system/ && sudo systemctl daemon-reload
+#   sudo systemctl enable --now class-connect-backup.timer
+
+[Unit]
+Description=Nightly Class Connect database backup
+
+[Timer]
+OnCalendar=*-*-* 03:30:00
+Persistent=true
+RandomizedDelaySec=10m
+
+[Install]
+WantedBy=timers.target

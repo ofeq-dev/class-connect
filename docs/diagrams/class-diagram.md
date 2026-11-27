@@ -56,9 +56,11 @@ classDiagram
       +createPoll(topic, question, options, schedule) Poll
       +openPoll(poll)
       +closePoll(poll)
+      +copyPoll(poll) Poll
       +vote(poll, rosterEntry, option)
       +results(poll, viewer) PollResults
       +nextMoment(after) Instant
+      +announce(since, until)
     }
     class Summaries {
       <<module>>
@@ -75,6 +77,7 @@ classDiagram
       +submit(assignment, rosterEntry, textOrPdf) Submission
       +startReviewRun(assignment)
       +retryReview(submission)
+      +retryReviewRun(assignment)
       +editReview(review, levels)
       +release(assignment, matchDeadline)
       +releaseReview(review)
@@ -151,8 +154,8 @@ Solid arrows are calls between modules; dotted arrows are injected infrastructur
 
 | Interface | Real adapter | Test / rehearsal adapter |
 |---|---|---|
-| LLM gateway | OpenRouter: fallback list of free models, per-task timeouts, schema validation with one fix-up retry, one call at a time (~15/min), `llm_usage` count against 1000/day | scripted fake (`LLM_ADAPTER=fake`) |
-| Jobs | durable `job` table worked by one in-process worker, plus the next-event timer | run-inline fake |
+| LLM gateway | OpenRouter: fallback list of free models (Reviews try the pinned Review model first), per-task timeouts, schema validation with one fix-up retry, one call at a time (~15/min), `llm_usage` count against 1000/day | scripted fake (`LLM_ADAPTER=fake`) |
+| Jobs | durable `job` table worked by one in-process worker, plus the next-event timer | the real worker, timer off (`runDue()` on demand) |
 | Live events | in-process bus feeding one SSE stream per page (Course × role), heartbeat ~25 s | recording fake |
 | Clock | system time | settable fake |
 | File store | files on disk under their content hash | in-memory map |
@@ -293,7 +296,7 @@ classDiagram
     topic_id
     question
     scheduled_open_at
-    scheduled_close_at
+    close_after_minutes
     opened_at
     closed_at
   }
@@ -411,10 +414,25 @@ classDiagram
     file_hash
     submitted_at
   }
+  class review_run {
+    <<table>>
+    id
+    assignment_id
+    started_at
+    compare_job_id
+    class_summary_job_id
+  }
+  class review_job {
+    <<table>>
+    run_id
+    submission_id
+    job_id
+  }
   class review {
     <<table>>
     id
     submission_id
+    author : ai, lecturer
     edited_at
     released_at
   }
@@ -465,6 +483,8 @@ classDiagram
   assignment "1" --> "*" submission
   roster_entry "1" --> "*" submission : at most one per Assignment
   submission ..> file : PDF, text extracted in-app
+  assignment "1" --> "*" review_run
+  review_run "1" --> "*" review_job : one review.submission job per Submission
   submission "1" --> "0..1" review
   review "1" --> "*" review_level : one per Criterion
   assignment "1" --> "0..1" class_summary

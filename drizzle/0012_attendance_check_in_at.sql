@@ -1,0 +1,1 @@
+ALTER TABLE `attendance` ADD `check_in_at` integer;

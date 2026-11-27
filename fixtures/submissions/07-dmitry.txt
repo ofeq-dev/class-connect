@@ -1,0 +1,11 @@
+Use case 1: Take bike
+Actor: student
+The student wants a bike. He goes to the station. The system shows bikes. He takes one. The system records it and the trip begins. He uses the bike for his trip to the library or to the dorms.
+
+Use case 2: Give back bike
+Actor: student
+The student brings the bike back to a station and the system ends the trip and shows the price.
+
+Use case 3: Pay
+Actor: student, bank
+The student pays with the bank for the trips of the month.

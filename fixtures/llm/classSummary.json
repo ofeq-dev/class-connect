@@ -1,0 +1,8 @@
+{
+  "commonMistakes": [
+    "The database or the system itself is named as an actor.",
+    "Use cases are named after screens or features (Login, Book management) instead of an actor's goal.",
+    "Main flows mix in user interface details such as buttons and screens.",
+    "Alternative flows are missing, or don't say where the flow continues."
+  ]
+}

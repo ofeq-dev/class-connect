@@ -1,0 +1,97 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1795724310823,
+      "tag": "0000_lecturer_and_course",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1795725417690,
+      "tag": "0001_roster_and_session",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1795726911819,
+      "tag": "0002_jobs_llm_and_summaries",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1795727675021,
+      "tag": "0003_homework_assignments",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1795738088962,
+      "tag": "0004_checkin_window_and_attendance",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1795738388796,
+      "tag": "0005_summary_translations",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1795738961570,
+      "tag": "0006_projector",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1795739291231,
+      "tag": "0007_homework_review_run",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1795739518423,
+      "tag": "0008_approved_network_and_marks",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1795739659279,
+      "tag": "0009_comments_and_topics",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1795740051725,
+      "tag": "0010_release_and_help",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1795759621815,
+      "tag": "0011_polls_and_votes",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1795761501151,
+      "tag": "0012_attendance_check_in_at",
+      "breakpoints": true
+    }
+  ]
+}
