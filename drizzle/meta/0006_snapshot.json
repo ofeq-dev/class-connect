@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "e3cbf76b-8726-4c1c-a778-c501bf1d20d3",
+  "id": "548a40b7-4ce4-4b42-9f4c-451103816e59",
   "prevId": "e9dad2b2-9212-4e85-8acb-535b31534d3b",
   "tables": {
     "attendance": {
@@ -172,6 +172,13 @@
           "autoincrement": false,
           "default": "'[]'"
         },
+        "projector_secret": {
+          "name": "projector_secret",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "integer",
@@ -181,7 +188,15 @@
           "default": "(unixepoch() * 1000)"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "course_projector_secret": {
+          "name": "course_projector_secret",
+          "columns": [
+            "projector_secret"
+          ],
+          "isUnique": true
+        }
+      },
       "foreignKeys": {
         "course_lecturer_id_lecturer_id_fk": {
           "name": "course_lecturer_id_lecturer_id_fk",
@@ -344,6 +359,27 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
+        },
+        "projector_mode": {
+          "name": "projector_mode",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "projected_poll_id": {
+          "name": "projected_poll_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "projector_set_at": {
+          "name": "projector_set_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
         }
       },
       "indexes": {
@@ -442,58 +478,6 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
-    "class_summary": {
-      "name": "class_summary",
-      "columns": {
-        "assignment_id": {
-          "name": "assignment_id",
-          "type": "integer",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "counts": {
-          "name": "counts",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "common_mistakes": {
-          "name": "common_mistakes",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "class_summary_assignment_id_assignment_id_fk": {
-          "name": "class_summary_assignment_id_assignment_id_fk",
-          "tableFrom": "class_summary",
-          "tableTo": "assignment",
-          "columnsFrom": [
-            "assignment_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
     "criterion": {
       "name": "criterion",
       "columns": {
@@ -543,421 +527,6 @@
           "tableTo": "assignment",
           "columnsFrom": [
             "assignment_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
-    "review": {
-      "name": "review",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "integer",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "submission_id": {
-          "name": "submission_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "author": {
-          "name": "author",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "edited_at": {
-          "name": "edited_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "released_at": {
-          "name": "released_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        }
-      },
-      "indexes": {
-        "review_submission_id_unique": {
-          "name": "review_submission_id_unique",
-          "columns": [
-            "submission_id"
-          ],
-          "isUnique": true
-        }
-      },
-      "foreignKeys": {
-        "review_submission_id_submission_id_fk": {
-          "name": "review_submission_id_submission_id_fk",
-          "tableFrom": "review",
-          "tableTo": "submission",
-          "columnsFrom": [
-            "submission_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
-    "review_job": {
-      "name": "review_job",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "integer",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "run_id": {
-          "name": "run_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "submission_id": {
-          "name": "submission_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "job_id": {
-          "name": "job_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        }
-      },
-      "indexes": {
-        "review_job_run": {
-          "name": "review_job_run",
-          "columns": [
-            "run_id"
-          ],
-          "isUnique": false
-        },
-        "review_job_submission": {
-          "name": "review_job_submission",
-          "columns": [
-            "submission_id"
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {
-        "review_job_run_id_review_run_id_fk": {
-          "name": "review_job_run_id_review_run_id_fk",
-          "tableFrom": "review_job",
-          "tableTo": "review_run",
-          "columnsFrom": [
-            "run_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "review_job_submission_id_submission_id_fk": {
-          "name": "review_job_submission_id_submission_id_fk",
-          "tableFrom": "review_job",
-          "tableTo": "submission",
-          "columnsFrom": [
-            "submission_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
-    "review_level": {
-      "name": "review_level",
-      "columns": {
-        "review_id": {
-          "name": "review_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "criterion_id": {
-          "name": "criterion_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "level": {
-          "name": "level",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "evidence": {
-          "name": "evidence",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "feedback": {
-          "name": "feedback",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "review_level_review_id_review_id_fk": {
-          "name": "review_level_review_id_review_id_fk",
-          "tableFrom": "review_level",
-          "tableTo": "review",
-          "columnsFrom": [
-            "review_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "review_level_criterion_id_criterion_id_fk": {
-          "name": "review_level_criterion_id_criterion_id_fk",
-          "tableFrom": "review_level",
-          "tableTo": "criterion",
-          "columnsFrom": [
-            "criterion_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {
-        "review_level_review_id_criterion_id_pk": {
-          "columns": [
-            "review_id",
-            "criterion_id"
-          ],
-          "name": "review_level_review_id_criterion_id_pk"
-        }
-      },
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
-    "review_run": {
-      "name": "review_run",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "integer",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "assignment_id": {
-          "name": "assignment_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "started_at": {
-          "name": "started_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "compare_job_id": {
-          "name": "compare_job_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "class_summary_job_id": {
-          "name": "class_summary_job_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        }
-      },
-      "indexes": {
-        "review_run_assignment": {
-          "name": "review_run_assignment",
-          "columns": [
-            "assignment_id"
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {
-        "review_run_assignment_id_assignment_id_fk": {
-          "name": "review_run_assignment_id_assignment_id_fk",
-          "tableFrom": "review_run",
-          "tableTo": "assignment",
-          "columnsFrom": [
-            "assignment_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
-    "similarity_pair": {
-      "name": "similarity_pair",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "integer",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "assignment_id": {
-          "name": "assignment_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "submission_a_id": {
-          "name": "submission_a_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "submission_b_id": {
-          "name": "submission_b_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "score": {
-          "name": "score",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "fingerprint_overlap": {
-          "name": "fingerprint_overlap",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "embedding_similarity": {
-          "name": "embedding_similarity",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "passages": {
-          "name": "passages",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        }
-      },
-      "indexes": {
-        "similarity_pair_assignment": {
-          "name": "similarity_pair_assignment",
-          "columns": [
-            "assignment_id"
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {
-        "similarity_pair_assignment_id_assignment_id_fk": {
-          "name": "similarity_pair_assignment_id_assignment_id_fk",
-          "tableFrom": "similarity_pair",
-          "tableTo": "assignment",
-          "columnsFrom": [
-            "assignment_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "similarity_pair_submission_a_id_submission_id_fk": {
-          "name": "similarity_pair_submission_a_id_submission_id_fk",
-          "tableFrom": "similarity_pair",
-          "tableTo": "submission",
-          "columnsFrom": [
-            "submission_a_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "similarity_pair_submission_b_id_submission_id_fk": {
-          "name": "similarity_pair_submission_b_id_submission_id_fk",
-          "tableFrom": "similarity_pair",
-          "tableTo": "submission",
-          "columnsFrom": [
-            "submission_b_id"
           ],
           "columnsTo": [
             "id"

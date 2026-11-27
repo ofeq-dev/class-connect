@@ -18,11 +18,19 @@ export const noticeQueryKeys: { [T in NoticeType]: (id: number) => QueryKey[] } 
     ["student", "summaries"],
     ["student", "summary", sessionId],
   ],
-  // The console's count, and the Student's own Check-in line (window opened or closed).
-  "attendance.changed": (sessionId) => [["attendance", sessionId], ["student", "me"], ["student", "entry"]],
+  // The console's count, the Student's own Check-in line (window opened or closed), and the
+  // checked-in count on the Projector window and the console's thumbnail of it.
+  "attendance.changed": (sessionId) => [
+    ["attendance", sessionId],
+    ["student", "me"],
+    ["student", "entry"],
+    ["projector"],
+  ],
   "assignment.changed": (id) => [["assignment", id], ["assignments"], ["student", "assignment", id], ["student", "assignments"]],
   // Lecturer only: a review run moved on (and may have spent LLM requests).
   "job.progress": (assignmentId) => [["assignment", assignmentId], ["assignments"], ["llm-usage"]],
+  // What the Projector window shows, or its link, changed: the window and the console thumbnail.
+  "projector.changed": () => [["projector"]],
 };
 
 export function applyNotice(client: QueryClient, notice: Notice): void {

@@ -67,6 +67,17 @@ describe("notice → query keys", () => {
     expect(client.getQueryState(["student", "summary", 6])?.isInvalidated).toBe(false);
   });
 
+  it("projector.changed and attendance.changed refresh what the Projector window and the thumbnail show", () => {
+    const client = clientWith(["projector", "secret-a"], ["projector", "course", "1"]);
+    applyNotice(client, { type: "projector.changed", id: 1 });
+    expect(stale(client, ["projector", "secret-a"])).toBe(true);
+    expect(stale(client, ["projector", "course", "1"])).toBe(true);
+
+    const counted = clientWith(["projector", "secret-a"]);
+    applyNotice(counted, { type: "attendance.changed", id: 5 });
+    expect(stale(counted, ["projector", "secret-a"])).toBe(true);
+  });
+
   it("a reconnect makes every query stale", () => {
     const client = clientWith(["courses"], ["other"]);
     applyReconnect(client);
