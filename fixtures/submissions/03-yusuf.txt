@@ -1,0 +1,12 @@
+The actors in the bike-share system are the Student who rents bikes, the Maintenance Team who repairs them, and the Payment Gateway, which is an external system that takes card payments.
+
+Use case: Rent a bike (Student)
+1. Student scans the QR code on a bike with the app
+2. System checks that the Student has no open rental
+3. System unlocks the bike
+4. Student rides off and the system starts timing the trip
+Alternative: 2a. Student already has a bike out, so the system refuses and shows the open rental. 3a. The lock does not open, so the system marks the bike faulty.
+
+Use case: Pay for a trip (Student). When the bike is locked again the system calculates the price and charges it through the Payment Gateway.
+
+Use case: Fix a bike (Maintenance Team). The team member opens the list of faulty bikes, repairs one and marks it available.

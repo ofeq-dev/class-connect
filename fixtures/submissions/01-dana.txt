@@ -1,0 +1,11 @@
+Actors: Rider (primary), Station Kiosk is part of the system, Payment Provider (supporting system), Maintenance Worker.
+
+Use case 1: Rent a bike. Primary actor: Rider.
+1. The Rider taps their student card on the dock.
+2. The system checks the Rider's account and shows the available bikes.
+3. The Rider picks a bike.
+4. The system unlocks the dock and starts the rental clock.
+Extensions: 1a. The card is not registered: the system offers to register and the use case ends. 2a. The Rider has an unpaid fee: the system asks for payment through the Payment Provider, then continues at step 3. 4a. The dock fails to unlock: the system reports the dock and offers another bike.
+
+Use case 2: Return a bike. Primary actor: Rider. The Rider pushes the bike into any free dock, the system locks it and charges the trip.
+Use case 3: Report a broken bike. Primary actor: Rider. The system opens a repair ticket for the Maintenance Worker.

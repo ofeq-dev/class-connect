@@ -12,7 +12,10 @@ import { draftMarkdown, summarise } from "./summarise-task";
 import { NO_TIMESTAMPS_WARNING, readTranscript } from "./transcript";
 import { translate } from "./translate-task";
 
-export { NO_TIMESTAMPS_WARNING } from "./transcript";
+export { NO_TIMESTAMPS_WARNING, readTranscript } from "./transcript";
+/** The LLM tasks, for the fake adapter's rehearsal fixtures (validated with the same schemas). */
+export { draftMarkdown, summarise, type SummariseInput } from "./summarise-task";
+export { translate, type TranslateInput } from "./translate-task";
 
 export interface Transcript {
   text: string;
