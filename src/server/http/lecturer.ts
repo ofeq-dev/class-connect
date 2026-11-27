@@ -2,12 +2,14 @@ import { Hono, type Context } from "hono";
 import { deleteCookie, getSignedCookie, setSignedCookie } from "hono/cookie";
 import { createMiddleware } from "hono/factory";
 import { validator } from "hono/validator";
+import type { ProjectorMode, SessionChanges } from "../course";
 import { NotFoundError } from "../errors";
 import type { CommentFilter, CommentStatus, Timing } from "../feedback";
 import { verifyPassword } from "../lecturer-auth";
 import { streamLiveEvents } from "../live-events";
 import { DAILY_LIMIT } from "../llm";
 import type { AppDeps } from "./app";
+import { projectorView } from "./projector";
 
 export const LECTURER_COOKIE = "cc_lecturer";
 const THIRTY_DAYS = 60 * 60 * 24 * 30;
@@ -146,6 +148,16 @@ export function lecturerRoutes(deps: AppDeps) {
       return c.json(deps.course.resetClaim(course.id, idParam(c, "entryId")));
     })
 
+    // The Projector window: its link, and what the class sees (the console's thumbnail).
+    .get("/courses/:courseId/projector", requireLecturer, (c) => {
+      const course = ownCourse(c);
+      return c.json({ secret: deps.course.projectorSecret(course.id), view: projectorView(deps, course) });
+    })
+    .post("/courses/:courseId/projector/new-link", requireLecturer, (c) => {
+      const course = ownCourse(c);
+      return c.json({ secret: deps.course.newProjectorLink(course.id), view: projectorView(deps, course) });
+    })
+
     // Sessions
     .get("/courses/:courseId/sessions", requireLecturer, (c) => {
       const course = ownCourse(c);
@@ -158,7 +170,13 @@ export function lecturerRoutes(deps: AppDeps) {
     .patch(
       "/courses/:courseId/sessions/:sessionId",
       requireLecturer,
-      json((b) => ({ date: optStr(b.date), start: optStr(b.start), end: optStr(b.end) })),
+      json((b): SessionChanges => ({
+        date: optStr(b.date),
+        start: optStr(b.start),
+        end: optStr(b.end),
+        // The module refuses a mode it doesn't know.
+        projectorMode: optStr(b.projectorMode) as ProjectorMode | undefined,
+      })),
       (c) => c.json(deps.course.updateSession(ownSession(c).id, c.req.valid("json"))),
     )
     .delete("/courses/:courseId/sessions/:sessionId", requireLecturer, (c) => {
@@ -258,6 +276,18 @@ export function lecturerRoutes(deps: AppDeps) {
     )
     .post("/courses/:courseId/sessions/:sessionId/summary/versions/:versionId/publish", requireLecturer, (c) =>
       c.json(deps.summaries.publish(ownSession(c).id, idParam(c, "versionId"))),
+    )
+    .put(
+      "/courses/:courseId/sessions/:sessionId/summary/translations/:language",
+      requireLecturer,
+      json((b) => ({ markdown: str(b.markdown) })),
+      (c) =>
+        c.json(
+          deps.summaries.saveTranslation(ownSession(c).id, c.req.param("language"), c.req.valid("json").markdown),
+        ),
+    )
+    .post("/courses/:courseId/sessions/:sessionId/summary/translations/:language/retry", requireLecturer, (c) =>
+      c.json(deps.summaries.retryTranslation(ownSession(c).id, c.req.param("language"))),
     )
 
     // Assignments

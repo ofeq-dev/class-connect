@@ -18,13 +18,21 @@ export const noticeQueryKeys: { [T in NoticeType]: (id: number) => QueryKey[] } 
     ["student", "summaries"],
     ["student", "summary", sessionId],
   ],
-  // The console's count, and the Student's own Check-in line (window opened or closed).
-  "attendance.changed": (sessionId) => [["attendance", sessionId], ["student", "me"], ["student", "entry"]],
+  // The console's count, the Student's own Check-in line (window opened or closed), and the
+  // checked-in count on the Projector window and the console's thumbnail of it.
+  "attendance.changed": (sessionId) => [
+    ["attendance", sessionId],
+    ["student", "me"],
+    ["student", "entry"],
+    ["projector"],
+  ],
   // Topic lists (the Student's Comment tab too) and the Comments that show Topic names.
   "topic.changed": () => [["topics"], ["comments"], ["student", "topics"]],
   // Lecturer scope only: the console's column, the Course desk section, the all-comments screen.
   "comment.changed": () => [["comments"]],
   "assignment.changed": (id) => [["assignment", id], ["assignments"], ["student", "assignment", id], ["student", "assignments"]],
+  // What the Projector window shows, or its link, changed: the window and the console thumbnail.
+  "projector.changed": () => [["projector"]],
 };
 
 export function applyNotice(client: QueryClient, notice: Notice): void {

@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import type { Clock } from "../clock";
 import type { CourseModule } from "../course";
 import type { Db } from "../db";
@@ -7,9 +7,10 @@ import type { FileStore } from "../files";
 import type { Job, Jobs } from "../jobs";
 import type { LiveEvents } from "../live-events";
 import type { LlmGateway } from "../llm";
-import { summary, summaryVersion, transcript as transcriptTable } from "./schema";
+import { summary, summaryTranslation, summaryVersion, transcript as transcriptTable } from "./schema";
 import { draftMarkdown, summarise } from "./summarise-task";
 import { NO_TIMESTAMPS_WARNING, readTranscript } from "./transcript";
+import { translate } from "./translate-task";
 
 export { NO_TIMESTAMPS_WARNING } from "./transcript";
 
@@ -45,14 +46,33 @@ export interface LecturerSummary {
   versions: SummaryVersion[];
   /** The version Students see, or null before publishing. */
   publishedVersionId: number | null;
+  /** One per Course language set when it was last published, in the Course's order. */
+  translations: SummaryTranslation[];
 }
 
-/** What a Student reads: the published version only. Translations come with #34. */
+export type TranslationState = "translating" | "failed" | "done";
+
+/** A translation of the published version; edited in place, without history. */
+export interface SummaryTranslation {
+  language: string;
+  state: TranslationState;
+  /** Null until translated. */
+  markdown: string | null;
+  error: string | null;
+  /** The Lecturer has edited it; publishing again overwrites the edit. */
+  edited: boolean;
+}
+
+/** What a Student reads: the published version, or its translation. */
 export interface PublishedSummary {
   sessionId: number;
   date: string;
   start: string;
   markdown: string;
+  /** The translation's language, or null for the source language. */
+  language: string | null;
+  /** The languages a translation is ready in, besides the source. */
+  languages: string[];
 }
 
 export interface PublishedSummaryRow {
@@ -82,13 +102,22 @@ export interface SummariesModule {
   saveEdit(sessionId: number, markdown: string): LecturerSummary;
   /** Copies an old version of this Session's summary as the newest, by the Lecturer. */
   restore(sessionId: number, versionId: number): LecturerSummary;
-  /** Makes this version the one Students see, and tells their phones. */
+  /**
+   * Makes this version the one Students see, tells their phones, and queues one
+   * `summary.translate` per Course language. Publishing again replaces every translation,
+   * Lecturer edits included (the console confirms first).
+   */
   publish(sessionId: number, versionId: number): LecturerSummary;
+  /** Overwrites a finished translation, without history. */
+  saveTranslation(sessionId: number, language: string, markdown: string): LecturerSummary;
+  /** Queues a failed translation again. */
+  retryTranslation(sessionId: number, language: string): LecturerSummary;
   /** Removes the summary with its whole history; the Transcript stays. */
   deleteSummary(sessionId: number): void;
   /**
-   * The published summary for a phone with a Claim on the Session's Course, else null.
-   * `language` is accepted for the translations ticket; for now the source is returned.
+   * The published summary for a phone with a Claim on the Session's Course, else null: in
+   * `language` when that translation is ready (an exact code, else its base, so ar-EG finds ar),
+   * otherwise the source language.
    */
   forStudent(deviceToken: string | undefined, sessionId: number, language?: string): PublishedSummary | null;
   /** The published summaries of the phone's Course, newest Session first; empty when unclaimed. */
@@ -144,6 +173,22 @@ export function createSummariesModule({ db, clock, course, llm, jobs, files, eve
     return { state: hasTranscript ? "ready" : "no-transcript", error: null };
   }
 
+  const translationRows = (summaryId: number) =>
+    db
+      .select()
+      .from(summaryTranslation)
+      .where(eq(summaryTranslation.summaryId, summaryId))
+      .orderBy(asc(summaryTranslation.id)) // inserted in the Course's language order
+      .all();
+
+  function toTranslation(row: typeof summaryTranslation.$inferSelect): SummaryTranslation {
+    const job = jobs.read(row.jobId);
+    const base = { language: row.language, markdown: row.markdown, edited: row.editedAt !== null };
+    if (row.markdown !== null) return { ...base, state: "done", error: null };
+    if (job.status === "failed") return { ...base, state: "failed", error: job.error };
+    return { ...base, state: "translating", error: null };
+  }
+
   function forLecturer(sessionId: number): LecturerSummary {
     course.readSession(sessionId);
     const t = transcriptRow(sessionId);
@@ -169,7 +214,22 @@ export function createSummariesModule({ db, clock, course, llm, jobs, files, eve
       ...state(!!t, row, versions.length),
       versions,
       publishedVersionId: row?.publishedVersionId ?? null,
+      translations: row ? translationRows(row.id).map(toTranslation) : [],
     };
+  }
+
+  /** This Session's translation into the language, or a refusal. */
+  function translationOf(sessionId: number, language: string) {
+    const row = summaryRow(sessionId);
+    const tr = row
+      ? db
+          .select()
+          .from(summaryTranslation)
+          .where(and(eq(summaryTranslation.summaryId, row.id), eq(summaryTranslation.language, language)))
+          .get()
+      : undefined;
+    if (!tr) throw new DomainError("summary.unknown-translation", "There's no translation into that language.");
+    return tr;
   }
 
   /** The Session's summary row, made on first need (a Lecturer may write one by hand). */
@@ -239,7 +299,39 @@ export function createSummariesModule({ db, clock, course, llm, jobs, files, eve
     changed(sessionId);
   }
 
+  async function handleTranslate(job: Job) {
+    const { sessionId, language } = job.payload as { sessionId: number; language: string };
+    const row = summaryRow(sessionId);
+    const tr = row
+      ? db
+          .select()
+          .from(summaryTranslation)
+          .where(and(eq(summaryTranslation.summaryId, row.id), eq(summaryTranslation.language, language)))
+          .get()
+      : undefined;
+    // Published again, or deleted, since this job was queued: a newer job (or none) owns the row.
+    if (!tr || tr.jobId !== job.id) return;
+    const source = db.select().from(summaryVersion).where(eq(summaryVersion.id, tr.sourceVersionId)).get();
+    if (!source) return jobs.fail(job, "The published version is gone.");
+
+    const result = await llm.generate(translate(source.markdown), { markdown: source.markdown, language });
+    if (!result.ok) {
+      jobs.fail(job, result.error.message);
+      changed(sessionId);
+      return;
+    }
+    jobs.complete(job, (tx) =>
+      tx
+        .update(summaryTranslation)
+        .set({ markdown: result.value.markdown, editedAt: null })
+        .where(and(eq(summaryTranslation.id, tr.id), eq(summaryTranslation.jobId, job.id)))
+        .run(),
+    );
+    changed(sessionId, "all");
+  }
+
   jobs.register("summary.generate", handleGenerate);
+  jobs.register("summary.translate", handleTranslate);
 
   return {
     async uploadTranscript(sessionId, input) {
@@ -299,8 +391,44 @@ export function createSummariesModule({ db, clock, course, llm, jobs, files, eve
 
     publish(sessionId, versionId) {
       const { row, version } = versionOf(sessionId, versionId);
-      db.update(summary).set({ publishedVersionId: version.id }).where(eq(summary.id, row.id)).run();
+      const { courseId } = course.readSession(sessionId);
+      const languages = course.translationLanguages(courseId);
+      db.transaction((tx) => {
+        tx.update(summary).set({ publishedVersionId: version.id }).where(eq(summary.id, row.id)).run();
+        // Every translation is made afresh from this version; earlier jobs find their row gone.
+        tx.delete(summaryTranslation).where(eq(summaryTranslation.summaryId, row.id)).run();
+        for (const language of languages) {
+          const job = jobs.enqueue("summary.translate", { sessionId, language });
+          tx.insert(summaryTranslation)
+            .values({ summaryId: row.id, language, sourceVersionId: version.id, jobId: job.id })
+            .run();
+        }
+      });
       changed(sessionId, "all");
+      return forLecturer(sessionId);
+    },
+
+    saveTranslation(sessionId, language, markdown) {
+      if (!markdown.trim()) throw new DomainError("summary.empty", "The translation can't be empty.");
+      const tr = translationOf(sessionId, language);
+      if (tr.markdown === null) {
+        throw new DomainError("summary.translation-not-ready", "Wait for the translation to finish first.");
+      }
+      db.update(summaryTranslation)
+        .set({ markdown, editedAt: clock.now() })
+        .where(eq(summaryTranslation.id, tr.id))
+        .run();
+      changed(sessionId, "all");
+      return forLecturer(sessionId);
+    },
+
+    retryTranslation(sessionId, language) {
+      const tr = translationOf(sessionId, language);
+      if (jobs.read(tr.jobId).status !== "failed") {
+        throw new DomainError("summary.nothing-to-retry", "That translation hasn't failed.");
+      }
+      jobs.retry(tr.jobId);
+      changed(sessionId);
       return forLecturer(sessionId);
     },
 
@@ -311,13 +439,26 @@ export function createSummariesModule({ db, clock, course, llm, jobs, files, eve
       changed(sessionId, row.publishedVersionId ? "all" : "lecturer");
     },
 
-    forStudent(deviceToken, sessionId) {
+    forStudent(deviceToken, sessionId, language) {
       const session = studentSession(deviceToken, sessionId);
       const row = session && summaryRow(sessionId);
       if (!session || !row?.publishedVersionId) return null;
       const version = db.select().from(summaryVersion).where(eq(summaryVersion.id, row.publishedVersionId)).get();
       if (!version) return null;
-      return { sessionId, date: session.date, start: session.start, markdown: version.markdown };
+      const ready = translationRows(row.id).filter((t) => t.markdown !== null);
+      const wanted = language?.trim().toLowerCase();
+      const chosen = wanted
+        ? (ready.find((t) => t.language.toLowerCase() === wanted) ??
+          ready.find((t) => t.language.toLowerCase() === wanted.split("-")[0]))
+        : undefined;
+      return {
+        sessionId,
+        date: session.date,
+        start: session.start,
+        markdown: chosen?.markdown ?? version.markdown,
+        language: chosen?.language ?? null,
+        languages: ready.map((t) => t.language),
+      };
     },
 
     listForStudent(deviceToken) {

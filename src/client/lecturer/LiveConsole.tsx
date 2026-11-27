@@ -5,6 +5,7 @@ import { api, ok } from "../api";
 import { AttendanceColumn } from "./AttendanceColumn";
 import { CommentsColumn } from "./CommentsColumn";
 import { Menu } from "./Menu";
+import { ProjectorControl } from "./ProjectorControl";
 import { formatDate, useCourse, useCourseLive } from "./queries";
 
 function useClock() {
@@ -39,6 +40,7 @@ export function LiveConsole() {
           <span className="title">{s ? `${formatDate(s.date)} · ${s.start}–${s.end}` : " "}</span>
         </div>
         <span className="clock">{clock}</span>
+        <ProjectorControl courseId={courseId} sessionId={sessionId} />
         <Menu label="Console menu">
           <Link to={`/lecturer/courses/${courseId}/roster`}>Roster</Link>
           <Link to={`/lecturer/courses/${courseId}/topics`}>Topics</Link>

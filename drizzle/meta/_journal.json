@@ -40,8 +40,22 @@
     {
       "idx": 5,
       "version": "6",
-      "when": 1795738475456,
-      "tag": "0005_comments_and_topics",
+      "when": 1795738388796,
+      "tag": "0005_summary_translations",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1795738961570,
+      "tag": "0006_projector",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1795739347614,
+      "tag": "0007_comments_and_topics",
       "breakpoints": true
     }
   ]

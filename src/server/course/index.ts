@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import { and, asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, isNotNull } from "drizzle-orm";
 import { localDate, type Clock } from "../clock";
 import type { Db } from "../db";
 import { DomainError, NotFoundError } from "../errors";
@@ -48,6 +48,8 @@ export interface Session {
   start: string;
   end: string;
   qrCode: string;
+  /** What the Projector window shows while this is the Course's projected Session; null until set. */
+  projectorMode: ProjectorMode | null;
 }
 
 export interface SessionInput {
@@ -55,6 +57,20 @@ export interface SessionInput {
   start: string;
   end: string;
 }
+
+/** "qr" shows the QR code, Session and checked-in count; "blank" shows nothing. Poll mode comes with Polls. */
+export const PROJECTOR_MODES = ["qr", "blank"] as const;
+export type ProjectorMode = (typeof PROJECTOR_MODES)[number];
+
+export interface SessionChanges extends Partial<SessionInput> {
+  projectorMode?: ProjectorMode;
+}
+
+/**
+ * What a Course's Projector window shows: the Session whose projector mode was set most recently,
+ * in that mode; Blank (with no Session) when none has been set.
+ */
+export type Projection = { mode: "qr"; session: Session } | { mode: "blank"; session: Session | null };
 
 export interface CourseModule {
   /** The one Lecturer (real accounts are v2). Creates the row on first start. */
@@ -66,6 +82,8 @@ export interface CourseModule {
   readCourse(lecturerId: number, courseId: number): Course;
   /** A Course's id and name, for a Student's QR page before they have claimed. */
   courseSummary(courseId: number): { id: number; name: string };
+  /** The Course's extra languages for Session summary translations, in the Lecturer's order. */
+  translationLanguages(courseId: number): string[];
   updateCourse(courseId: number, changes: { name?: string; translationLanguages?: string[] }): Course;
 
   importRoster(courseId: number, csv: string): RosterImportReport;
@@ -89,9 +107,18 @@ export interface CourseModule {
   createSession(courseId: number, input: SessionInput): Session;
   /** By id, or by the code in its QR link. */
   readSession(idOrQrCode: number | string): Session;
-  updateSession(sessionId: number, changes: Partial<SessionInput>): Session;
+  /** Changes the times and/or the projector mode; setting the mode makes this the projected Session. */
+  updateSession(sessionId: number, changes: SessionChanges): Session;
   deleteSession(sessionId: number): void;
   listSessions(courseId: number): Session[];
+  /** The secret in the Course's Projector window link, /p/<secret>. */
+  projectorSecret(courseId: number): string;
+  /** The Course whose current projector link has this secret, or null (an old link resolves nothing). */
+  projectorCourse(secret: string): Course | null;
+  /** Replaces the Course's projector link; the old one stops working at once. Returns the new secret. */
+  newProjectorLink(courseId: number): string;
+  projection(courseId: number): Projection;
+
   /** Today's date in the app's time zone, from the Clock. */
   today(): string;
 }
@@ -164,6 +191,7 @@ export function createCourseModule({ db, clock, events, timeZone }: CourseDeps):
     start: row.start,
     end: row.end,
     qrCode: row.qrCode,
+    projectorMode: row.projectorMode,
   });
 
   const courseChanged = (id: number) => events.publish(null, "lecturer", { type: "course.changed", id });
@@ -171,6 +199,11 @@ export function createCourseModule({ db, clock, events, timeZone }: CourseDeps):
     events.publish(courseId, "lecturer", { type: "roster.changed", id: courseId });
   const sessionChanged = (s: { id: number; courseId: number }) =>
     events.publish(s.courseId, "all", { type: "session.changed", id: s.id });
+  /** The Projector window hears only this (and the count); the Lecturer hears it for the console thumbnail. */
+  const projectorChanged = (courseId: number) => {
+    events.publish(courseId, "projector", { type: "projector.changed", id: courseId });
+    events.publish(courseId, "lecturer", { type: "projector.changed", id: courseId });
+  };
 
   function courseRow(courseId: number) {
     const row = db.select().from(course).where(eq(course.id, courseId)).get();
@@ -189,6 +222,7 @@ export function createCourseModule({ db, clock, events, timeZone }: CourseDeps):
       .where(and(eq(rosterEntry.courseId, courseId), eq(rosterEntry.studentId, studentId)))
       .get();
   }
+  const newSecret = () => randomBytes(16).toString("base64url");
   function newQrCode(): string {
     for (;;) {
       const code = randomBytes(8).toString("base64url");
@@ -211,7 +245,7 @@ export function createCourseModule({ db, clock, events, timeZone }: CourseDeps):
     createCourse(lecturerId, rawName) {
       const row = db
         .insert(course)
-        .values({ lecturerId, name: courseName(rawName), createdAt: clock.now() })
+        .values({ lecturerId, name: courseName(rawName), projectorSecret: newSecret(), createdAt: clock.now() })
         .returning()
         .get();
       courseChanged(row.id);
@@ -237,6 +271,10 @@ export function createCourseModule({ db, clock, events, timeZone }: CourseDeps):
     courseSummary(courseId) {
       const { id, name } = courseRow(courseId);
       return { id, name };
+    },
+
+    translationLanguages(courseId) {
+      return toCourse(courseRow(courseId)).translationLanguages;
     },
 
     updateCourse(courseId, changes) {
@@ -391,13 +429,20 @@ export function createCourseModule({ db, clock, events, timeZone }: CourseDeps):
 
     updateSession(sessionId, changes) {
       const current = sessionRow(sessionId);
-      const times = sessionTimes({
+      const { projectorMode } = changes;
+      if (projectorMode !== undefined && !(PROJECTOR_MODES as readonly string[]).includes(projectorMode)) {
+        throw new DomainError("session.bad-projector-mode", "Choose QR + count or Blank.");
+      }
+      const retimed = changes.date !== undefined || changes.start !== undefined || changes.end !== undefined;
+      const set: Partial<typeof session.$inferInsert> = sessionTimes({
         date: changes.date ?? current.date,
         start: changes.start ?? current.start,
         end: changes.end ?? current.end,
       });
-      const row = db.update(session).set(times).where(eq(session.id, sessionId)).returning().get()!;
-      sessionChanged(row);
+      if (projectorMode !== undefined) Object.assign(set, { projectorMode, projectorSetAt: clock.now() });
+      const row = db.update(session).set(set).where(eq(session.id, sessionId)).returning().get()!;
+      if (retimed || projectorMode === undefined) sessionChanged(row);
+      if (projectorMode !== undefined) projectorChanged(row.courseId);
       return toSession(row);
     },
 
@@ -405,6 +450,7 @@ export function createCourseModule({ db, clock, events, timeZone }: CourseDeps):
       const row = sessionRow(sessionId);
       db.delete(session).where(eq(session.id, sessionId)).run();
       sessionChanged(row);
+      if (row.projectorMode !== null) projectorChanged(row.courseId);
     },
 
     listSessions(courseId) {
@@ -415,6 +461,42 @@ export function createCourseModule({ db, clock, events, timeZone }: CourseDeps):
         .orderBy(asc(session.date), asc(session.start))
         .all()
         .map(toSession);
+    },
+
+    projectorSecret(courseId) {
+      const row = courseRow(courseId);
+      if (row.projectorSecret) return row.projectorSecret;
+      const secret = newSecret();
+      db.update(course).set({ projectorSecret: secret }).where(eq(course.id, courseId)).run();
+      return secret;
+    },
+
+    projectorCourse(secret) {
+      if (!secret) return null;
+      const row = db.select().from(course).where(eq(course.projectorSecret, secret)).get();
+      return row ? toCourse(row) : null;
+    },
+
+    newProjectorLink(courseId) {
+      courseRow(courseId);
+      const secret = newSecret();
+      db.update(course).set({ projectorSecret: secret }).where(eq(course.id, courseId)).run();
+      // A window still open on the old link refetches, finds it refused, and says so.
+      projectorChanged(courseId);
+      return secret;
+    },
+
+    projection(courseId) {
+      const row = db
+        .select()
+        .from(session)
+        .where(and(eq(session.courseId, courseId), isNotNull(session.projectorSetAt)))
+        .orderBy(desc(session.projectorSetAt), desc(session.id))
+        .limit(1)
+        .get();
+      if (!row) return { mode: "blank", session: null };
+      const projected = toSession(row);
+      return row.projectorMode === "qr" ? { mode: "qr", session: projected } : { mode: "blank", session: projected };
     },
 
     today() {

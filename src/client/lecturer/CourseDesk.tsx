@@ -8,6 +8,7 @@ import {
   ASSIGNMENT_STATE_LABEL,
   formatDate,
   formatInstant,
+  projectorUrl,
   SUMMARY_STATE_LABEL,
   useAssignments,
   useCourse,
@@ -15,6 +16,7 @@ import {
   useLlmUsage,
   formatTime,
   useComments,
+  useProjector,
   useRoster,
   useSessions,
   useSummaries,
@@ -62,6 +64,7 @@ export function CourseDesk() {
         <CommentsSection courseId={courseId} />
         <SummariesSection courseId={courseId} />
         <AssignmentsSection courseId={courseId} />
+        <ProjectorSection courseId={courseId} />
         <section className="sec" data-s="ros">
           <div className="sec-head">
             <h2><span className="hl">Roster</span></h2>
@@ -326,5 +329,72 @@ function SessionForm(props: {
       <button className="link" type="button" onClick={props.onDone}>Cancel</button>
       {save.error && <p className="error">{save.error.message}</p>}
     </form>
+  );
+}
+
+/**
+ * The Course's Projector window link: open it on the laptop's second display or set it up once on a
+ * classroom PC. "New link" replaces it, and the old one stops working (say, after it was shared).
+ */
+function ProjectorSection({ courseId }: { courseId: string }) {
+  const client = useQueryClient();
+  const projector = useProjector(courseId);
+  const [copied, setCopied] = useState(false);
+  const renew = useMutation({
+    mutationFn: async () =>
+      ok(await api.api.lecturer.courses[":courseId"].projector["new-link"].$post({ param: { courseId } })),
+    onSuccess: (data) => {
+      client.setQueryData(["projector", "course", Number(courseId)], data);
+      setCopied(false);
+    },
+  });
+  const url = projector.data ? projectorUrl(projector.data.secret) : "";
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+    } catch {
+      setCopied(false);
+    }
+  }
+
+  return (
+    <section className="sec" data-s="att">
+      <div className="sec-head">
+        <h2><span className="hl">Projector window</span></h2>
+      </div>
+      <p className="notice">
+        Shows the QR code and live count to the room, with no sign-in. Open it on the projector display or keep it on a
+        classroom PC.
+      </p>
+      {projector.error && <p className="error">{projector.error.message}</p>}
+      {projector.data && (
+        <>
+          <input className="linkbox" type="text" readOnly value={url} aria-label="Projector link" onFocus={(e) => e.target.select()} />
+          <div className="row">
+            <button type="button" className="btn-line btn-sm" onClick={() => void copy()}>
+              {copied ? "Copied" : "Copy link"}
+            </button>
+            <a className="btn-line btn-sm" href={url} target="cc-projector" rel="noopener">
+              Open
+            </a>
+            <button
+              type="button"
+              className="btn-line btn-sm"
+              disabled={renew.isPending}
+              onClick={() => {
+                if (confirm("Make a new projector link? The old one stops working at once, including on a classroom PC.")) {
+                  renew.mutate();
+                }
+              }}
+            >
+              {renew.isPending ? "Making…" : "New link"}
+            </button>
+          </div>
+        </>
+      )}
+      {renew.error && <p className="error" role="alert">{renew.error.message}</p>}
+    </section>
   );
 }
