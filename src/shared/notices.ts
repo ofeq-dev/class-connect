@@ -4,8 +4,10 @@
  *
  * The id is the changed thing's id: a Course for course.changed and roster.changed,
  * a Session for session.changed, summary.changed and attendance.changed,
- * an Assignment for assignment.changed, a Course for projector.changed (what its Projector
- * window shows, or its link, changed), a Topic for topic.changed, a Comment for comment.changed.
+ * an Assignment for assignment.changed and job.progress, a Course for projector.changed
+ * (what its Projector window shows, or its link, changed), a Topic for topic.changed, a
+ * Comment for comment.changed. job.progress, the Lecturer's review-run progress, also
+ * carries the counts `{done, total}` so a progress bar can move without a refetch.
  */
 export const NOTICE_TYPES = [
   "course.changed",
@@ -14,6 +16,7 @@ export const NOTICE_TYPES = [
   "summary.changed",
   "attendance.changed",
   "assignment.changed",
+  "job.progress",
   "projector.changed",
   "topic.changed",
   "comment.changed",
@@ -24,4 +27,5 @@ export type NoticeType = (typeof NOTICE_TYPES)[number];
 export interface Notice {
   type: NoticeType;
   id: number;
+  progress?: { done: number; total: number };
 }

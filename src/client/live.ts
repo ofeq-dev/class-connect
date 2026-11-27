@@ -31,6 +31,8 @@ export const noticeQueryKeys: { [T in NoticeType]: (id: number) => QueryKey[] } 
   // Lecturer scope only: the console's column, the Course desk section, the all-comments screen.
   "comment.changed": () => [["comments"]],
   "assignment.changed": (id) => [["assignment", id], ["assignments"], ["student", "assignment", id], ["student", "assignments"]],
+  // Lecturer only: a review run moved on (and may have spent LLM requests).
+  "job.progress": (assignmentId) => [["assignment", assignmentId], ["assignments"], ["llm-usage"]],
   // What the Projector window shows, or its link, changed: the window and the console thumbnail.
   "projector.changed": () => [["projector"]],
 };

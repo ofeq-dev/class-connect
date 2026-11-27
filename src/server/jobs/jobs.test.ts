@@ -124,6 +124,54 @@ describe("Jobs", () => {
     expect(jobs.read(job.id)).toMatchObject({ status: "failed", error: "Every model failed." });
   });
 
+  it("tells the handler which attempt it is on, so it can act on its last one", async () => {
+    const seen: number[] = [];
+    jobs.register("review.submission", async (job) => {
+      seen.push(job.attempts);
+      throw new Error("again");
+    });
+    jobs.enqueue("review.submission", {});
+    await jobs.runDue();
+    expect(seen).toEqual([1, 2, 3]);
+  });
+
+  it("fails a job and writes in one transaction, rolling both back if the write throws", async () => {
+    jobs.register("review.submission", async (job) => {
+      jobs.fail(job, "Out of attempts.", (tx) => {
+        tx.run("insert into test_result (value) values ('settled')");
+      });
+    });
+    const ok = jobs.enqueue("review.submission", {});
+    await jobs.runDue();
+    expect(jobs.read(ok.id)).toMatchObject({ status: "failed", error: "Out of attempts." });
+    expect(results()).toEqual(["settled"]);
+
+    jobs.register("review.compare", async (job) => {
+      jobs.fail(job, "Never saved.", (tx) => {
+        tx.run("insert into test_result (value) values ('half')");
+        throw new Error("write broke");
+      });
+    });
+    const broken = jobs.enqueue("review.compare", {});
+    await jobs.runDue();
+    expect(results()).toEqual(["settled"]);
+    expect(jobs.read(broken.id).error).toBe("write broke");
+  });
+
+  it("tallies a set of jobs by status, from the job rows", async () => {
+    jobs.register("review.submission", async (job) => {
+      const { n } = job.payload as { n: number };
+      if (n === 2) return jobs.fail(job, "nope");
+      jobs.complete(job, () => {});
+    });
+    const ids = [1, 2, 3].map((n) => jobs.enqueue("review.submission", { n }).id);
+    const later = jobs.enqueue("review.submission", { n: 4 }, new Date(clock.now().getTime() + 60_000));
+    expect(jobs.tally([...ids, later.id])).toEqual({ queued: 4, running: 0, done: 0, failed: 0, total: 4 });
+    await jobs.runDue();
+    expect(jobs.tally([...ids, later.id])).toEqual({ queued: 1, running: 0, done: 2, failed: 1, total: 4 });
+    expect(jobs.tally([])).toEqual({ queued: 0, running: 0, done: 0, failed: 0, total: 0 });
+  });
+
   it("retry re-queues a failed job with fresh attempts", async () => {
     let fail = true;
     jobs.register("summary.generate", async (job) => {

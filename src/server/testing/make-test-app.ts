@@ -39,7 +39,7 @@ export function makeTestApp(options: TestAppOptions = {}) {
   const llm = createScriptedGateway({ db: database.db, clock });
   const files = new MemoryFileStore();
   const summaries = createSummariesModule({ db: database.db, clock, course, llm, jobs, files, events });
-  const homework = createHomeworkModule({ db: database.db, clock, course, llm, files, events });
+  const homework = createHomeworkModule({ db: database.db, clock, course, llm, files, events, jobs });
 
   const app = createApp({
     course,

@@ -411,10 +411,25 @@ classDiagram
     file_hash
     submitted_at
   }
+  class review_run {
+    <<table>>
+    id
+    assignment_id
+    started_at
+    compare_job_id
+    class_summary_job_id
+  }
+  class review_job {
+    <<table>>
+    run_id
+    submission_id
+    job_id
+  }
   class review {
     <<table>>
     id
     submission_id
+    author : ai, lecturer
     edited_at
     released_at
   }
@@ -465,6 +480,8 @@ classDiagram
   assignment "1" --> "*" submission
   roster_entry "1" --> "*" submission : at most one per Assignment
   submission ..> file : PDF, text extracted in-app
+  assignment "1" --> "*" review_run
+  review_run "1" --> "*" review_job : one review.submission job per Submission
   submission "1" --> "0..1" review
   review "1" --> "*" review_level : one per Criterion
   assignment "1" --> "0..1" class_summary

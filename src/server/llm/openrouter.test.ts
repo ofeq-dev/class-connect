@@ -9,6 +9,7 @@ interface Sent {
   body: {
     model: string;
     messages: { role: string; content: string }[];
+    input?: string[];
     provider?: { data_collection?: string };
   };
   at: number;
@@ -42,6 +43,7 @@ function gateway(options: { models?: string[]; apiKey?: string; dailyLimit?: num
     clock,
     apiKey: options.apiKey ?? "test-key",
     models: options.models ?? MODELS,
+    embeddingModel: "embed/model:free",
     dailyLimit: options.dailyLimit,
     fetch: async (url, init) => {
       const body = JSON.parse(String(init?.body)) as Sent["body"];
@@ -180,5 +182,53 @@ describe("OpenRouter gateway", () => {
     const result = await gateway({ apiKey: "" }).generate(echoTask, "x");
     expect(result).toMatchObject({ ok: false, error: { kind: "all-models-failed" } });
     expect(sent).toHaveLength(0);
+  });
+});
+
+describe("OpenRouter embeddings", () => {
+  const vectors = (body: Sent["body"]) =>
+    Promise.resolve(
+      // Out of order on purpose: the gateway puts them back by index.
+      Response.json({ data: body.input!.map((t, index) => ({ index, embedding: [t.length, index] })).reverse() }),
+    );
+
+  it("embeds every text in one request to the embedding model, in input order", async () => {
+    reply = vectors;
+    const g = gateway();
+    expect(await g.embed(["ab", "abcd", "x"])).toEqual([
+      [2, 0],
+      [4, 1],
+      [1, 2],
+    ]);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]!.url).toBe("https://openrouter.ai/api/v1/embeddings");
+    expect(sent[0]!.body).toMatchObject({
+      model: "embed/model:free",
+      input: ["ab", "abcd", "x"],
+      provider: { data_collection: "deny" },
+    });
+    expect(g.usageToday()).toBe(1);
+  });
+
+  it("sends nothing for no texts", async () => {
+    expect(await gateway().embed([])).toEqual([]);
+    expect(sent).toHaveLength(0);
+  });
+
+  it("rejects on a failed request, at the daily limit, and without an API key", async () => {
+    reply = () => Promise.resolve(new Response("busy", { status: 429 }));
+    await expect(gateway().embed(["a"])).rejects.toThrow(/429/);
+
+    reply = vectors;
+    const g = gateway({ dailyLimit: 2 }); // the failed request above counted too
+    await g.embed(["a"]);
+    await expect(g.embed(["b"])).rejects.toThrow(/2 LLM requests/);
+    await expect(gateway({ apiKey: "" }).embed(["a"])).rejects.toThrow(/API key/);
+    expect(sent).toHaveLength(2);
+  });
+
+  it("rejects a reply without one vector per text", async () => {
+    reply = () => Promise.resolve(Response.json({ data: [{ index: 0, embedding: [1] }] }));
+    await expect(gateway().embed(["a", "b"])).rejects.toThrow(/vector/);
   });
 });

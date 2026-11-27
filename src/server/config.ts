@@ -19,6 +19,8 @@ export interface Config {
     openRouterApiKey: string;
     /** The fallback list for summaries and translations, in order. */
     models: string[];
+    /** The free embedding model for homework similarity. */
+    embeddingModel: string;
     fakeDelayMs: number;
   };
 }
@@ -29,6 +31,9 @@ export const DEFAULT_LLM_MODELS = [
   "nvidia/nemotron-3-ultra-550b-a55b:free",
   "openrouter/free",
 ];
+
+/** The free embedding model (#10). Overridable with LLM_EMBEDDING_MODEL. */
+export const DEFAULT_EMBEDDING_MODEL = "nvidia/nemotron-3.5-embed-1b:free";
 
 function required(env: NodeJS.ProcessEnv, name: string): string {
   const value = env[name];
@@ -52,6 +57,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       adapter: env.LLM_ADAPTER === "fake" ? "fake" : "openrouter",
       openRouterApiKey: env.OPENROUTER_API_KEY ?? "",
       models: env.LLM_MODELS ? env.LLM_MODELS.split(",").map((m) => m.trim()).filter(Boolean) : DEFAULT_LLM_MODELS,
+      embeddingModel: env.LLM_EMBEDDING_MODEL || DEFAULT_EMBEDDING_MODEL,
       fakeDelayMs: Number(env.FAKE_LLM_DELAY_MS ?? 1500),
     },
   };
