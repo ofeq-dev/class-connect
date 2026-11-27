@@ -4,7 +4,8 @@
  *
  * The id is the changed thing's id: a Course for course.changed and roster.changed,
  * a Session for session.changed, summary.changed and attendance.changed,
- * an Assignment for assignment.changed.
+ * an Assignment for assignment.changed, a Course for projector.changed (what its Projector
+ * window shows, or its link, changed).
  */
 export const NOTICE_TYPES = [
   "course.changed",
@@ -13,6 +14,7 @@ export const NOTICE_TYPES = [
   "summary.changed",
   "attendance.changed",
   "assignment.changed",
+  "projector.changed",
 ] as const;
 
 export type NoticeType = (typeof NOTICE_TYPES)[number];
