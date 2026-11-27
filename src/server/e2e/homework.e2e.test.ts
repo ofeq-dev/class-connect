@@ -128,3 +128,56 @@ describe("Assignments and Submissions over HTTP", () => {
     expect((await call("GET", `/lecturer/courses/${other}/assignments/${assignmentId}`)).status).toBe(404);
   });
 });
+
+describe("The review run over HTTP", () => {
+  it("starts a run, streams progress to the Lecturer only, edits a Review and keeps similar pairs from Students", async () => {
+    const assignmentId = anAssignmentWithCriteria(t, courseId).id;
+    const dana = `cc_device=${aClaimedStudent(t, courseId, "1001").deviceToken}`;
+    const omar = `cc_device=${aClaimedStudent(t, courseId, "1002").deviceToken}`;
+    const copied = "The librarian is the main actor and her goal is to lend a book to a member with a valid card at the desk.";
+    for (const phone of [dana, omar]) {
+      await call("POST", `/student/assignments/${assignmentId}/submission`, { text: copied }, phone);
+    }
+    t.fakes.clock.set("2026-12-08T08:00:00.000Z");
+    t.fakes.llm.reply("reviewSubmission", (input: { criteria: string[] }) => ({
+      criteria: input.criteria.map((_, i) => ({ criterion: i + 1, level: "Partly", evidence: "", feedback: "Say more." })),
+    }));
+    t.fakes.llm.reply("classSummary", { commonMistakes: [] });
+    const lecturerStream = await openSse(`${server.url}/api/lecturer/events?course=${courseId}`, cookie);
+    const studentStream = await openSse(`${server.url}/api/student/events`, dana);
+
+    const base = `/lecturer/courses/${courseId}/assignments/${assignmentId}`;
+    const started = await call("POST", `${base}/review-run`);
+    expect(await started.json()).toMatchObject({ state: "reviewing", reviewRun: { done: 0, total: 2 } });
+    expect(await lecturerStream.nextMessage()).toEqual({
+      type: "job.progress",
+      id: assignmentId,
+      progress: { done: 0, total: 2 },
+    });
+    expect((await call("POST", `${base}/review-run`)).status).toBe(400);
+
+    await t.jobs.runDue();
+    const v = (await (await call("GET", base)).json()) as {
+      state: string;
+      criteria: { id: number }[];
+      submissions: { id: number }[];
+      similarPairs: unknown[];
+    };
+    expect(v).toMatchObject({ state: "reviewed", similarPairs: [{}] });
+
+    const levels = v.criteria.map((c) => ({ criterionId: c.id, level: "secure", evidence: "lend a book", feedback: "Good." }));
+    const edited = await call("PUT", `${base}/submissions/${v.submissions[0]!.id}/review`, { levels });
+    expect(await edited.json()).toMatchObject({ submissions: [{ review: { levels: [{ level: "secure" }, {}, {}, {}] } }, {}] });
+    const retry = await call("POST", `${base}/submissions/${v.submissions[0]!.id}/review/retry`);
+    expect(retry.status).toBe(400);
+
+    for (const path of [`/student/assignments/${assignmentId}`, "/student/assignments"]) {
+      const body = await (await call("GET", path, undefined, dana)).text();
+      expect(body).not.toMatch(/similar|passage|fingerprint|embedding|score|reviewRun/i);
+    }
+    // Nothing about the run reaches a Student's phone.
+    await expect(studentStream.nextMessage(100)).rejects.toThrow(/timed out/);
+    lecturerStream.close();
+    studentStream.close();
+  });
+});
