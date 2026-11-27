@@ -47,6 +47,7 @@ const llm =
         clock: systemClock,
         apiKey: config.llm.openRouterApiKey,
         models: config.llm.models,
+        embeddingModel: config.llm.embeddingModel,
       });
 const files = createDiskFileStore(config.filesDir);
 const summaries = createSummariesModule({ db: database.db, clock: systemClock, course, llm, jobs, files, events });

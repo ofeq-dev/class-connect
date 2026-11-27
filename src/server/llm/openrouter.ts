@@ -4,6 +4,9 @@ import { DAILY_LIMIT, DEFAULT_TIMEOUT_MS, type LlmError, type LlmGateway, type L
 import { createUsage } from "./usage";
 
 const URL = "https://openrouter.ai/api/v1/chat/completions";
+const EMBEDDINGS_URL = "https://openrouter.ai/api/v1/embeddings";
+/** One batched embedding call covers a whole Assignment's Submissions. */
+const EMBED_TIMEOUT_MS = 60_000;
 const PER_MINUTE = 15;
 
 type Message = { role: "user" | "assistant"; content: string };
@@ -14,6 +17,8 @@ export interface OpenRouterDeps {
   apiKey: string;
   /** The fallback list, tried in order. Model ids live in config, not code. */
   models: string[];
+  /** The free embedding model for similarity. */
+  embeddingModel: string;
   fetch?: typeof fetch;
   /** Waits between requests to keep under the per-minute limit. */
   sleep?: (ms: number) => Promise<void>;
@@ -143,14 +148,61 @@ export function createOpenRouterGateway(deps: OpenRouterDeps): LlmGateway {
     return fail(kind, `Every model failed (${failures.map((f) => f.message).join("; ")}).`);
   }
 
+  /** One request for every text's vector, in input order. Rejects on any failure. */
+  async function embedAll(texts: string[]): Promise<number[][]> {
+    if (!apiKey) throw new Error("No OpenRouter API key is set.");
+    if (usage.today() >= dailyLimit) throw new Error(dailyLimitMessage(dailyLimit));
+    try {
+      await takeSlot();
+    } catch (error) {
+      if (error instanceof DailyLimitReached) throw new Error(dailyLimitMessage(dailyLimit));
+      throw error;
+    }
+    const model = deps.embeddingModel;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(new Error("timeout")), EMBED_TIMEOUT_MS);
+    try {
+      const res = await doFetch(EMBEDDINGS_URL, {
+        method: "POST",
+        headers: { authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
+        body: JSON.stringify({ model, input: texts, provider: { data_collection: "deny" } }),
+        signal: controller.signal,
+      });
+      if (!res.ok) throw new Error(`${model}: HTTP ${res.status}`);
+      const body = (await res.json()) as { data?: { index?: unknown; embedding?: unknown }[] };
+      const out: number[][] = [];
+      for (const [i, item] of (body.data ?? []).entries()) {
+        const index = typeof item.index === "number" ? item.index : i;
+        if (Array.isArray(item.embedding) && item.embedding.every((x) => typeof x === "number")) {
+          out[index] = item.embedding as number[];
+        }
+      }
+      if (out.length !== texts.length || texts.some((_, i) => !out[i])) {
+        throw new Error(`${model}: the reply doesn't have one vector per text`);
+      }
+      return out;
+    } catch (error) {
+      if (controller.signal.aborted) throw new Error(`${model}: timed out after ${EMBED_TIMEOUT_MS} ms`);
+      throw error;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  /** One call at a time, generate and embed alike. */
+  function serial<T>(work: () => Promise<T>): Promise<T> {
+    const result = queue.then(work);
+    queue = result.catch(() => {});
+    return result;
+  }
+
   return {
     generate(task, input) {
-      const result = queue.then(() => run(task, input));
-      queue = result.catch(() => {});
-      return result;
+      return serial(() => run(task, input));
     },
-    embed() {
-      return Promise.reject(new Error("Embeddings arrive with the homework review run."));
+    embed(texts) {
+      if (texts.length === 0) return Promise.resolve([]);
+      return serial(() => embedAll(texts));
     },
     usageToday: () => usage.today(),
   };
