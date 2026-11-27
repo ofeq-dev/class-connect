@@ -16,6 +16,8 @@ import {
   useCourse,
   useCourseLive,
   useLlmUsage,
+  formatTime,
+  useComments,
   useProjector,
   useRoster,
   useSessions,
@@ -53,6 +55,8 @@ export function CourseDesk() {
         )}
         <Menu label="Course menu">
           <Link to={`/lecturer/courses/${courseId}/roster`}>Roster</Link>
+          <Link to={`/lecturer/courses/${courseId}/topics`}>Topics</Link>
+          <Link to={`/lecturer/courses/${courseId}/comments`}>All comments</Link>
           <Link to={`/lecturer/courses/${courseId}/settings`}>Course settings</Link>
           <AttendanceSheetItem courseId={courseId} />
           <DiagnosticsItem />
@@ -61,6 +65,7 @@ export function CourseDesk() {
 
       <div className="desk">
         <SessionsSection courseId={courseId} />
+        <CommentsSection courseId={courseId} />
         <SummariesSection courseId={courseId} />
         <AssignmentsSection courseId={courseId} />
         <ProjectorSection courseId={courseId} />
@@ -134,6 +139,39 @@ function SessionsSection({ courseId }: { courseId: string }) {
           )}
         </>
       )}
+    </section>
+  );
+}
+
+/** Open Comments at a glance: how many, the latest few, and the all-comments screen. */
+function CommentsSection({ courseId }: { courseId: string }) {
+  const comments = useComments(courseId);
+  const open = comments.data?.filter((c) => c.status === "new" || c.status === "pinned") ?? [];
+  const pinned = open.filter((c) => c.status === "pinned").length;
+  return (
+    <section className="sec" data-s="cm">
+      <div className="sec-head">
+        <h2><span className="hl">Comments</span></h2>
+        <Link className="btn-line" to={`/lecturer/courses/${courseId}/comments`}>All comments</Link>
+      </div>
+      {comments.data?.length === 0 && (
+        <p className="empty">No Comments yet. Students send them from the Comment tab on their phones.</p>
+      )}
+      {comments.data && comments.data.length > 0 && (
+        <p>
+          <b className="num">{open.length}</b> open{pinned > 0 && <>, <b className="num">{pinned}</b> pinned</>}, of{" "}
+          <span className="num">{comments.data.length}</span> in all.
+        </p>
+      )}
+      <ul className="list" aria-label="Latest open Comments">
+        {open.slice(0, 3).map((c) => (
+          <li key={c.id}>
+            <span className="grow">{c.text}</span>
+            <span className="muted small">{c.author?.name ?? "Anonymous"} · {c.topicName} · {formatTime(c.createdAt)}</span>
+          </li>
+        ))}
+      </ul>
+      {comments.error && <p className="error">{comments.error.message}</p>}
     </section>
   );
 }

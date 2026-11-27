@@ -4,6 +4,7 @@ import { checkInLine } from "../attendance";
 import { useLiveEvents } from "../live";
 import { SummaryView } from "../markdown/SummaryView";
 import { AssignmentPage } from "./AssignmentPage";
+import { CommentTab, MineTab } from "./CommentTabs";
 import {
   dueLabel,
   longDate,
@@ -55,20 +56,8 @@ export function StudentShell() {
               </Empty>
             }
           />
-          <Route
-            path="comment"
-            element={
-              <Empty title="Message the Lecturer">
-                Soon you can send your Lecturer a note here, with your name or anonymously.
-              </Empty>
-            }
-          />
-          <Route
-            path="mine"
-            element={
-              <Empty title="Your comments">Nothing sent yet. Only you and the Lecturer see what you write.</Empty>
-            }
-          />
+          <Route path="comment" element={<CommentTab myName={me.data.me.name} />} />
+          <Route path="mine" element={<MineTab />} />
           <Route path="assignments/:assignmentId" element={<AssignmentPage />} />
           <Route path="summaries/:sessionId" element={<SummaryRead />} />
           <Route path="*" element={<Today me={me.data} />} />
