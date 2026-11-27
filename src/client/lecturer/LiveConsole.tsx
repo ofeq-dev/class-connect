@@ -4,6 +4,7 @@ import { Link, useParams } from "react-router";
 import { api, ok } from "../api";
 import { AttendanceColumn } from "./AttendanceColumn";
 import { CommentsColumn } from "./CommentsColumn";
+import { DiagnosticsItem } from "./DiagnosticsItem";
 import { Menu } from "./Menu";
 import { ProjectorControl } from "./ProjectorControl";
 import { formatDate, useCourse, useCourseLive } from "./queries";
@@ -44,6 +45,7 @@ export function LiveConsole() {
         <Menu label="Console menu">
           <Link to={`/lecturer/courses/${courseId}/roster`}>Roster</Link>
           <Link to={`/lecturer/courses/${courseId}/topics`}>Topics</Link>
+          <DiagnosticsItem />
         </Menu>
       </header>
       <div className="console">

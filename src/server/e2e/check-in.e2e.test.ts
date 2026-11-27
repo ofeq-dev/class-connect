@@ -138,3 +138,89 @@ describe("Live count", () => {
     phone.close();
   });
 });
+
+describe("Network approval and Manual marks, from the console", () => {
+  const CARRIER = "2.54.17.3";
+  beforeEach(async () => {
+    await openWindow();
+  });
+
+  const glance = async (query = "") => (await get(`${attendancePath()}${query}`, lecturer)).json();
+  const approve = (key: string, cookie = lecturer) => post(`${attendancePath()}/networks/${key}/approve`, {}, cookie);
+  const mark = (rosterEntryId: number, present: boolean | null, cookie = lecturer) =>
+    post(`${attendancePath()}/marks/${rosterEntryId}`, { present }, cookie);
+
+  it("approves a Pending network by its card's key, and the Student's phone hears it", async () => {
+    const omar = claimed("1002");
+    await scan(omar, CARRIER);
+    const phone = await openSse(`${server.url}/api/student/events`, omar);
+    await phone.next();
+    const { networks } = await glance();
+    expect(networks).toEqual([{ key: expect.any(String), students: [{ rosterEntryId: expect.any(Number), name: "Omar Haddad" }] }]);
+
+    const res = await approve(networks[0].key);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ present: 1, pending: 0, networks: [] });
+    expect(await phone.nextMessage()).toEqual({ type: "attendance.changed", id: session.id });
+    expect(await (await get("/api/student/me", omar)).json()).toMatchObject({ checkIn: { status: "present" } });
+    phone.close();
+  });
+
+  it("refuses an unknown network key, and a request without the Lecturer's cookie", async () => {
+    await scan(claimed("1002"), CARRIER);
+    const { networks } = await glance();
+    expect((await approve("nonsense")).status).toBe(404);
+    expect((await approve(networks[0].key, "")).status).toBe(401);
+  });
+
+  it("Manual marks present, absent and clear, with the window closed too", async () => {
+    await post(`${attendancePath()}/window/close`, {}, lecturer);
+    const dana = t.modules.course.findRosterEntry(courseId, "1001")!;
+    expect(await (await mark(dana.id, true)).json()).toMatchObject({ present: 1 });
+    expect(await (await mark(dana.id, false)).json()).toMatchObject({ present: 0 });
+    const cleared = await (await mark(dana.id, null)).json();
+    expect(cleared.students.find((s: { rosterEntryId: number }) => s.rosterEntryId === dana.id)).toMatchObject({
+      status: "absent",
+      mark: null,
+    });
+    const other = aRoster(t, aCourse(t, "Algorithms").id, 1)[0]!;
+    expect((await mark(other.id, true)).status).toBe(404);
+    expect((await mark(dana.id, true, "")).status).toBe(401);
+  });
+
+  it("never sends a Student's phone a notice naming another Student", async () => {
+    const omar = claimed("1002");
+    const dana = claimed("1001");
+    const phone = await openSse(`${server.url}/api/student/events`, omar);
+    await phone.next();
+    await scan(dana, CARRIER);
+    const danaEntry = t.modules.course.findRosterEntry(courseId, "1001")!;
+    await approve((await glance()).networks[0].key);
+    await mark(danaEntry.id, false);
+    const seen = [await phone.nextMessage(), await phone.nextMessage()];
+    expect(seen).toEqual(Array(2).fill({ type: "attendance.changed", id: session.id }));
+    await expect(phone.nextMessage(300)).rejects.toThrow(/timed out/);
+    phone.close();
+  });
+
+  it("shows no IP address in any response the console renders unless Diagnostics is on", async () => {
+    await scan(claimed("1001"), "147.235.10.99");
+    await scan(claimed("1002"), CARRIER);
+    const dana = t.modules.course.findRosterEntry(courseId, "1001")!;
+    const bodies = [
+      JSON.stringify(await glance()),
+      await (await mark(dana.id, true)).text(),
+      await (await post(`${attendancePath()}/window/open`, { ipv4: CLASSROOM }, lecturer)).text(),
+    ];
+    for (const body of bodies) {
+      expect(body).not.toMatch(/147\.235|2\.54\.17|\/24|deviceId/);
+    }
+    const diag = JSON.stringify(await glance("?diagnostics=1"));
+    expect(diag).toContain("2.54.17.0/24");
+    expect(diag).toContain("147.235.10.99");
+    const key = (await glance()).networks[0].key;
+    expect(await (await post(`${attendancePath()}/networks/${key}/approve?diagnostics=1`, {}, lecturer)).text()).toContain(
+      "2.54.17.3",
+    );
+  });
+});

@@ -33,6 +33,9 @@ const assignmentBody = (b: Body) => ({
   criteria: Array.isArray(b.criteria) ? b.criteria.map(str) : [],
 });
 
+/** The Diagnostics flag on attendance routes: ?diagnostics=1 adds IPs, blocks and device IDs. */
+const diagnosticsFlag = validator("query", (q) => ({ diagnostics: q.diagnostics === "1" ? ("1" as const) : undefined }));
+
 const reviewBody = (b: Body) => ({
   levels: (Array.isArray(b.levels) ? b.levels : []).map((l) => {
     const o = (l && typeof l === "object" ? l : {}) as Body;
@@ -71,6 +74,10 @@ function idParam(c: Context, name: string): number {
 }
 
 export function lecturerRoutes(deps: AppDeps) {
+  /** The console's Attendance glance; Diagnostics (?diagnostics=1) adds IPs, blocks and device IDs. */
+  const glance = (c: Context, sessionId: number) =>
+    deps.attendance.forLecturer(sessionId, { diagnostics: c.req.query("diagnostics") === "1" });
+
   const requireLecturer = createMiddleware<{ Variables: { lecturerId: number } }>(
     async (c, next) => {
       const value = await getSignedCookie(c, deps.cookieSecret, LECTURER_COOKIE);
@@ -199,25 +206,46 @@ export function lecturerRoutes(deps: AppDeps) {
       return c.json({ ok: true });
     })
 
-    // Attendance: the Check-in window and the live count
-    .get("/courses/:courseId/sessions/:sessionId/attendance", requireLecturer, (c) =>
-      c.json(deps.attendance.forLecturer(ownSession(c).id)),
+    // Attendance: the Check-in window, the live count, Network approval and Manual marks.
+    // Every route answers with the console's glance; IPs only with ?diagnostics=1 (FR-LC-6).
+    .get("/courses/:courseId/sessions/:sessionId/attendance", requireLecturer, diagnosticsFlag, (c) =>
+      c.json(glance(c, ownSession(c).id)),
     )
     .post(
       "/courses/:courseId/sessions/:sessionId/attendance/window/open",
-      requireLecturer,
+      requireLecturer, diagnosticsFlag,
       json((b) => ({ ipv4: optStr(b.ipv4) ?? null, ipv6: optStr(b.ipv6) ?? null })),
       (c) => {
         const sessionId = ownSession(c).id;
         deps.attendance.openWindow(sessionId, c.req.valid("json"));
-        return c.json(deps.attendance.forLecturer(sessionId));
+        return c.json(glance(c, sessionId));
       },
     )
-    .post("/courses/:courseId/sessions/:sessionId/attendance/window/close", requireLecturer, (c) => {
+    .post("/courses/:courseId/sessions/:sessionId/attendance/window/close", requireLecturer, diagnosticsFlag, (c) => {
       const sessionId = ownSession(c).id;
       deps.attendance.closeWindow(sessionId);
-      return c.json(deps.attendance.forLecturer(sessionId));
+      return c.json(glance(c, sessionId));
     })
+    .post("/courses/:courseId/sessions/:sessionId/attendance/networks/:key/approve", requireLecturer, diagnosticsFlag, (c) => {
+      const sessionId = ownSession(c).id;
+      // The console names a network by its card's opaque key; the block is looked up here.
+      const card = deps.attendance
+        .forLecturer(sessionId, { diagnostics: true })
+        .networks.find((n) => n.key === c.req.param("key"));
+      if (!card?.block) throw new NotFoundError("Network");
+      deps.attendance.approveNetwork(sessionId, card.block);
+      return c.json(glance(c, sessionId));
+    })
+    .post(
+      "/courses/:courseId/sessions/:sessionId/attendance/marks/:rosterEntryId",
+      requireLecturer, diagnosticsFlag,
+      json((b) => ({ present: typeof b.present === "boolean" ? b.present : null })),
+      (c) => {
+        const sessionId = ownSession(c).id;
+        deps.attendance.mark(sessionId, idParam(c, "rosterEntryId"), c.req.valid("json").present);
+        return c.json(glance(c, sessionId));
+      },
+    )
 
     // Topics and Comments
     .get(
