@@ -206,3 +206,30 @@ export function useProjector(courseId: string) {
 }
 
 export const projectorUrl = (secret: string) => `${window.location.origin}/p/${secret}`;
+
+/** The console's Polls for one Session; poll.changed refetches them. */
+export function useSessionPolls(courseId: string, sessionId: string) {
+  return useQuery({
+    queryKey: ["polls", Number(sessionId)],
+    queryFn: async () =>
+      ok(
+        await api.api.lecturer.courses[":courseId"].sessions[":sessionId"].polls.$get({
+          param: { courseId, sessionId },
+        }),
+      ),
+  });
+}
+
+export type LecturerPoll = NonNullable<ReturnType<typeof useSessionPolls>["data"]>[number];
+
+/** The Poll column's one Poll: the focused one, else an open one, else the next scheduled. */
+export function currentPoll(polls: LecturerPoll[] | undefined, focus: number | null): LecturerPoll | undefined {
+  if (!polls) return undefined;
+  return (
+    polls.find((p) => p.id === focus) ??
+    polls.find((p) => p.status === "open") ??
+    polls
+      .filter((p) => p.status === "scheduled")
+      .sort((a, b) => (a.opensAt ?? "").localeCompare(b.opensAt ?? ""))[0]
+  );
+}

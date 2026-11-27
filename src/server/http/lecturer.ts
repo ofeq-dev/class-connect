@@ -48,18 +48,23 @@ const reviewBody = (b: Body) => ({
   }),
 });
 
-/** A Poll form: opensAt is "now", an ISO time, or absent (a draft). */
-const pollBody = (b: Body): PollInput => {
-  const opens = str(b.opensAt);
-  const at = opens && opens !== "now" ? new Date(opens) : null;
+/** A Poll form as sent: opensAt is "now", an ISO time, or absent (a draft). */
+const pollBody = (b: Body) => ({
+  topicId: Number(b.topicId),
+  question: str(b.question),
+  options: Array.isArray(b.options) ? b.options.map(str) : [],
+  opensAt: optStr(b.opensAt),
+  closeAfterMinutes: typeof b.closeAfterMinutes === "number" ? b.closeAfterMinutes : undefined,
+});
+
+function pollInput(body: ReturnType<typeof pollBody>): PollInput {
+  const at = body.opensAt && body.opensAt !== "now" ? new Date(body.opensAt) : null;
   return {
-    topicId: Number(b.topicId),
-    question: str(b.question),
-    options: Array.isArray(b.options) ? b.options.map(str) : [],
-    opensAt: opens === "now" ? "now" : at && !Number.isNaN(at.getTime()) ? at : null,
-    closeAfterMinutes: typeof b.closeAfterMinutes === "number" ? b.closeAfterMinutes : null,
+    ...body,
+    opensAt: body.opensAt === "now" ? "now" : at && !Number.isNaN(at.getTime()) ? at : null,
+    closeAfterMinutes: body.closeAfterMinutes ?? null,
   };
-};
+}
 
 const sessionTimes = (b: Body) => ({ date: str(b.date), start: str(b.start), end: str(b.end) });
 
@@ -312,10 +317,10 @@ export function lecturerRoutes(deps: AppDeps) {
       c.json(deps.feedback.sessionPolls(ownSession(c).id)),
     )
     .post("/courses/:courseId/polls", requireLecturer, json(pollBody), (c) =>
-      c.json(deps.feedback.createPoll(ownCourse(c).id, c.req.valid("json")), 201),
+      c.json(deps.feedback.createPoll(ownCourse(c).id, pollInput(c.req.valid("json"))), 201),
     )
     .put("/courses/:courseId/polls/:pollId", requireLecturer, json(pollBody), (c) =>
-      c.json(deps.feedback.updatePoll(ownCourse(c).id, idParam(c, "pollId"), c.req.valid("json"))),
+      c.json(deps.feedback.updatePoll(ownCourse(c).id, idParam(c, "pollId"), pollInput(c.req.valid("json")))),
     )
     .post("/courses/:courseId/polls/:pollId/open", requireLecturer, (c) =>
       c.json(deps.feedback.openPoll(ownCourse(c).id, idParam(c, "pollId"))),

@@ -6,8 +6,9 @@ import { AttendanceColumn } from "./AttendanceColumn";
 import { CommentsColumn } from "./CommentsColumn";
 import { DiagnosticsItem } from "./DiagnosticsItem";
 import { Menu } from "./Menu";
+import { PollColumn } from "./PollColumn";
 import { ProjectorControl } from "./ProjectorControl";
-import { formatDate, useCourse, useCourseLive } from "./queries";
+import { currentPoll, formatDate, useCourse, useCourseLive, useSessionPolls } from "./queries";
 
 function useClock() {
   const [now, setNow] = useState(() => new Date());
@@ -18,7 +19,7 @@ function useClock() {
   return now.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
 }
 
-/** The live console: header, then Attendance | Comments | Poll (the Poll arrives with #31). */
+/** The live console: header, then Attendance | Comments | Poll. */
 export function LiveConsole() {
   const { courseId = "", sessionId = "" } = useParams();
   useCourseLive(courseId);
@@ -29,6 +30,10 @@ export function LiveConsole() {
       ok(await api.api.lecturer.courses[":courseId"].sessions[":sessionId"].$get({ param: { courseId, sessionId } })),
   });
   const clock = useClock();
+  // The Poll the column shows; the projector's Poll mode shows the same one.
+  const [pollFocus, setPollFocus] = useState<number | null>(null);
+  const polls = useSessionPolls(courseId, sessionId);
+  const poll = currentPoll(polls.data, pollFocus);
 
   if (session.error) return <p className="page error">{session.error.message}</p>;
   const s = session.data;
@@ -41,7 +46,11 @@ export function LiveConsole() {
           <span className="title">{s ? `${formatDate(s.date)} · ${s.start}–${s.end}` : " "}</span>
         </div>
         <span className="clock">{clock}</span>
-        <ProjectorControl courseId={courseId} sessionId={sessionId} />
+        <ProjectorControl
+          courseId={courseId}
+          sessionId={sessionId}
+          pollId={poll && (poll.status === "open" || poll.status === "closed") ? poll.id : null}
+        />
         <Menu label="Console menu">
           <Link to={`/lecturer/courses/${courseId}/roster`}>Roster</Link>
           <Link to={`/lecturer/courses/${courseId}/topics`}>Topics</Link>
@@ -51,10 +60,7 @@ export function LiveConsole() {
       <div className="console">
         <AttendanceColumn courseId={courseId} sessionId={sessionId} />
         <CommentsColumn courseId={courseId} sessionId={sessionId} />
-        <section className="sec" data-s="poll">
-          <div className="sec-head"><h2><span className="hl">Poll</span></h2></div>
-          <p className="empty">Polls arrive later.</p>
-        </section>
+        <PollColumn courseId={courseId} sessionId={sessionId} focus={pollFocus} setFocus={setPollFocus} />
       </div>
     </div>
   );

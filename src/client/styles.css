@@ -269,3 +269,21 @@ select { border: 1.5px solid var(--line); border-radius: 4px; background: var(--
 
 /* Course desk: the projector link */
 .linkbox { font: 13px ui-monospace, monospace; border: 1.5px solid var(--line); border-radius: 4px; background: var(--card); padding: 7px 10px; width: 100%; min-width: 0; }
+
+/* Poll column */
+.poll-q { font-family: var(--font-display); font-weight: 700; font-size: 18px; line-height: 1.25; }
+.bars { display: flex; flex-direction: column; gap: 5px; }
+.bar {
+  position: relative; display: flex; justify-content: space-between; padding: 6px 10px; border-radius: 4px;
+  background: var(--card); overflow: hidden; font-size: 14px; font-variant-numeric: tabular-nums; border: 1px solid var(--line);
+}
+.bar i { position: absolute; inset: 0 auto 0 0; background: var(--hl-poll); }
+.bar span, .bar b { position: relative; }
+.prow { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-top: 1px solid var(--line); }
+.prow:first-child { border-top: 0; }
+.prow .grow { flex: 1; min-width: 0; text-align: start; border: 0; background: none; padding: 0; color: inherit; }
+.poll-form { display: flex; flex-direction: column; gap: 10px; }
+.poll-form input[type="text"], .poll-form select {
+  border: 1.5px solid var(--line); border-radius: 4px; background: var(--card); padding: 7px 10px; font: inherit; font-weight: 400;
+}
+.poll-form .answers { display: flex; flex-direction: column; gap: 6px; }
