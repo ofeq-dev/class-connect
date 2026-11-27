@@ -41,6 +41,8 @@ export const attendance = sqliteTable(
     block: text("block"),
     /** Hash of the device token that checked in (ADR 0002); the raw token is never stored. */
     deviceTokenHash: text("device_token_hash"),
+    /** When the Student's own Check-in was recorded, kept under a Manual mark so clearing it restores the time too. */
+    checkInAt: integer("check_in_at", { mode: "timestamp_ms" }),
     at: integer("at", { mode: "timestamp_ms" }).notNull(),
   },
   (t) => [uniqueIndex("attendance_session_entry").on(t.sessionId, t.rosterEntryId)],
