@@ -213,7 +213,9 @@ export function lecturerRoutes(deps: AppDeps) {
     // Sessions
     .get("/courses/:courseId/sessions", requireLecturer, (c) => {
       const course = ownCourse(c);
-      return c.json({ today: deps.course.today(), sessions: deps.course.listSessions(course.id) });
+      const headcounts = deps.attendance.headcounts(course.id);
+      const sessions = deps.course.listSessions(course.id).map((s) => ({ ...s, headcount: headcounts[s.id] ?? null }));
+      return c.json({ today: deps.course.today(), sessions });
     })
     .post("/courses/:courseId/sessions", requireLecturer, json(sessionTimes), (c) =>
       c.json(deps.course.createSession(ownCourse(c).id, c.req.valid("json")), 201),

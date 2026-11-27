@@ -511,6 +511,14 @@ describe("The Attendance sheet", () => {
     expect(sheet().headcount).toEqual([2, 0, 1]);
   });
 
+  it("gives the Course desk each held Session's headcount, and none for a Session still to come", () => {
+    attendance().mark(monday.id, dana.id, true);
+    attendance().mark(monday.id, irina.id, true);
+    const next = aSession(t, courseId, { date: "2026-12-01" });
+    expect(attendance().headcounts(courseId)).toEqual({ [monday.id]: 2, [tuesday.id]: 0, [session.id]: 0 });
+    expect(attendance().headcounts(courseId)).not.toHaveProperty(String(next.id));
+  });
+
   it("reads 0% for everyone before the Course has any Sessions", () => {
     const empty = aCourse(t, "Algorithms").id;
     aRoster(t, empty, 1);

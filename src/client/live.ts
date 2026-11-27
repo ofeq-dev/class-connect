@@ -22,6 +22,7 @@ export const noticeQueryKeys: { [T in NoticeType]: (id: number) => QueryKey[] } 
   // checked-in count on the Projector window and the console's thumbnail of it.
   "attendance.changed": (sessionId) => [
     ["attendance", sessionId],
+    ["sessions"], // the Course desk's headcounts
     ["student", "me"],
     ["student", "entry"],
     ["projector"],

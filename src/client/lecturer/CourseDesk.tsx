@@ -29,7 +29,11 @@ interface Session {
   date: string;
   start: string;
   end: string;
+  /** Students attending, once the Session is held (dated today or earlier). */
+  headcount: number | null;
 }
+
+const headcountText = (n: number | null) => (n === null ? null : `${n} here`);
 
 export function CourseDesk() {
   const { courseId = "" } = useParams();
@@ -107,15 +111,7 @@ function SessionsSection({ courseId }: { courseId: string }) {
       </div>
       {adding && <SessionForm courseId={courseId} initial={{ date: today, start: "", end: "" }} onDone={() => setAdding(false)} />}
 
-      {todays.map((s) => (
-        <div className="today" key={s.id}>
-          <span className="muted small">Today</span>
-          <span className="when num">{s.start}–{s.end}</span>
-          <div className="row">
-            <Link className="btn" to={`/lecturer/courses/${courseId}/sessions/${s.id}/live`}>Open live console</Link>
-          </div>
-        </div>
-      ))}
+      {todays.map((s) => <TodaySession key={s.id} courseId={courseId} session={s} />)}
 
       {data && data.sessions.length === 0 && !adding && (
         <p className="empty">No Sessions yet. Add one for each meeting of the Course.</p>
@@ -255,7 +251,8 @@ function AssignmentsSection({ courseId }: { courseId: string }) {
   );
 }
 
-function SessionRow({ courseId, session }: { courseId: string; session: Session }) {
+/** Edit and delete (confirmed) for one Session, shared by Today's block and the Session rows. */
+function useSessionActions(courseId: string, session: Session) {
   const client = useQueryClient();
   const [editing, setEditing] = useState(false);
   const remove = useMutation({
@@ -267,19 +264,11 @@ function SessionRow({ courseId, session }: { courseId: string; session: Session 
       ),
     onSuccess: () => client.invalidateQueries({ queryKey: ["sessions"] }),
   });
-
-  if (editing) {
-    return (
-      <li>
-        <SessionForm courseId={courseId} sessionId={session.id} initial={session} onDone={() => setEditing(false)} />
-      </li>
-    );
-  }
-  return (
-    <li>
-      <span className="grow">
-        <b>{formatDate(session.date)}</b> <span className="muted num">{session.start}–{session.end}</span>
-      </span>
+  const form = (
+    <SessionForm courseId={courseId} sessionId={session.id} initial={session} onDone={() => setEditing(false)} />
+  );
+  const buttons = (
+    <>
       <button className="ib" aria-label="Edit Session" title="Edit" onClick={() => setEditing(true)}>
         <EditIcon />
       </button>
@@ -293,6 +282,39 @@ function SessionRow({ courseId, session }: { courseId: string; session: Session 
       >
         <TrashIcon />
       </button>
+    </>
+  );
+  return { editing, form, buttons, error: remove.error };
+}
+
+function TodaySession({ courseId, session }: { courseId: string; session: Session }) {
+  const { editing, form, buttons, error } = useSessionActions(courseId, session);
+  if (editing) return <div className="today">{form}</div>;
+  return (
+    <div className="today">
+      <span className="muted small">Today</span>
+      <span className="when num">{session.start}–{session.end}</span>
+      <div className="row">
+        <Link className="btn" to={`/lecturer/courses/${courseId}/sessions/${session.id}/live`}>Open live console</Link>
+        <span className="grow muted small num">{headcountText(session.headcount)}</span>
+        {buttons}
+      </div>
+      {error && <p className="error">{error.message}</p>}
+    </div>
+  );
+}
+
+function SessionRow({ courseId, session }: { courseId: string; session: Session }) {
+  const { editing, form, buttons, error } = useSessionActions(courseId, session);
+  if (editing) return <li>{form}</li>;
+  return (
+    <li>
+      <span className="grow">
+        <b>{formatDate(session.date)}</b> <span className="muted num">{session.start}–{session.end}</span>
+      </span>
+      {session.headcount !== null && <span className="muted small num">{headcountText(session.headcount)}</span>}
+      {buttons}
+      {error && <p className="error">{error.message}</p>}
     </li>
   );
 }

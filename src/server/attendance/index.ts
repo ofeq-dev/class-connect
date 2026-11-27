@@ -124,6 +124,8 @@ export interface AttendanceModule {
    * dated after today), each cell Present, Manual or Absent, with totals and headcounts.
    */
   sheet(courseId: number): AttendanceSheet;
+  /** Each held Session's headcount (as on the sheet), by Session id, for the Course desk. */
+  headcounts(courseId: number): Record<number, number>;
   /** The Attendance sheet as an xlsx file. */
   exportXlsx(courseId: number): Promise<Uint8Array<ArrayBuffer>>;
   /** Every recorded Check-in and mark for a Session, latest action per Roster entry. */
@@ -281,6 +283,10 @@ export function createAttendanceModule({
 
   return {
     sheet,
+    headcounts(courseId) {
+      const { sessions, headcount } = sheet(courseId);
+      return Object.fromEntries(sessions.map((s, i) => [s.id, headcount[i]!]));
+    },
     exportXlsx: (courseId) => sheetToXlsx(sheet(courseId)),
 
     openWindow(sessionId, lecturer) {
