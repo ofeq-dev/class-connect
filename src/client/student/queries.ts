@@ -73,3 +73,19 @@ export function useStudentSummary(sessionId: number) {
       ok(await api.api.student.summaries[":sessionId"].$get({ param: { sessionId: String(sessionId) } })),
   });
 }
+
+/** Topics to comment on: today's Session first. */
+export function useStudentTopics() {
+  return useQuery({
+    queryKey: ["student", "topics"],
+    queryFn: async () => ok(await api.api.student.topics.$get()),
+  });
+}
+
+/** This Student's own Comments with their status (the Mine tab). */
+export function useMyComments() {
+  return useQuery({
+    queryKey: ["student", "mine"],
+    queryFn: async () => ok(await api.api.student.comments.$get()),
+  });
+}
