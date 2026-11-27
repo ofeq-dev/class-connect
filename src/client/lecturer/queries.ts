@@ -122,3 +122,13 @@ export function formatInstant(iso: string): string {
 }
 
 export const ASSIGNMENT_STATE_LABEL = { open: "Open", due: "Due" } as const;
+
+/** The Course's projector link and what the class sees; projector.changed and attendance.changed refetch it. */
+export function useProjector(courseId: string) {
+  return useQuery({
+    queryKey: ["projector", "course", Number(courseId)],
+    queryFn: async () => ok(await api.api.lecturer.courses[":courseId"].projector.$get({ param: { courseId } })),
+  });
+}
+
+export const projectorUrl = (secret: string) => `${window.location.origin}/p/${secret}`;
