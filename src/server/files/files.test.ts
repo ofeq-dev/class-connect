@@ -42,4 +42,15 @@ describe("File store on disk", () => {
     expect(await store.get("0".repeat(64))).toBeNull();
     expect(await store.get("../../etc/passwd")).toBeNull();
   });
+
+  it("deletes a stored file, and deleting what isn't stored does nothing", async () => {
+    const store = createDiskFileStore(dir);
+    const hash = await store.put(bytes("gone"));
+    const kept = await store.put(bytes("kept"));
+    await store.delete(hash);
+    await store.delete(hash);
+    await store.delete("../../etc/passwd");
+    expect(await store.get(hash)).toBeNull();
+    expect(await store.get(kept)).toEqual(bytes("kept"));
+  });
 });

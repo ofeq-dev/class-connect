@@ -32,6 +32,7 @@ classDiagram
       +readSession(idOrQrCode) Session
       +updateSession(session, changes)
       +deleteSession(session)
+      +deleteCourse(course)
     }
     class Attendance {
       <<module>>
@@ -44,6 +45,7 @@ classDiagram
       +exportXlsx(course) Bytes
       +isPresent(session, rosterEntry) boolean
       +nextMoment(after) Instant
+      +deleteCourseData(course)
     }
     class Feedback {
       <<module>>
@@ -61,6 +63,7 @@ classDiagram
       +results(poll, viewer) PollResults
       +nextMoment(after) Instant
       +announce(since, until)
+      +deleteCourseData(course)
     }
     class Summaries {
       <<module>>
@@ -70,6 +73,7 @@ classDiagram
       +restore(version)
       +publish(summary, version)
       +forStudent(session, language) PublishedSummary
+      +deleteCourseData(course)
     }
     class Homework {
       <<module>>
@@ -86,6 +90,7 @@ classDiagram
       +matchNow(assignment)
       +lecturerView(assignment) LecturerAssignmentView
       +studentView(assignment, rosterEntry) StudentAssignmentView
+      +deleteCourseData(course)
     }
   }
 
@@ -102,6 +107,7 @@ classDiagram
       +register(kind, handler)
       +progress(job, done, total)
       +retry(job)
+      +discard(match)
     }
     class LiveEvents {
       <<interface>>
@@ -116,6 +122,7 @@ classDiagram
       <<interface>>
       +put(bytes) contentHash
       +get(contentHash) Bytes
+      +delete(contentHash)
     }
   }
 

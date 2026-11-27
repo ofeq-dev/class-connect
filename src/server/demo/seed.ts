@@ -11,6 +11,10 @@ import { FIXTURES_DIR } from "./rehearsal";
 
 export const DEMO_COURSE_NAME = "Software Engineering (demo)";
 
+/** The demo Course, or one an earlier seed set aside by renaming it "… (replaced <instant>)". */
+const isDemoCourse = (name: string) =>
+  name === DEMO_COURSE_NAME || /^Software Engineering \(demo\) \(replaced \d{4}-\d{2}-\d{2}T\d{2}:\d{2}\)$/.test(name);
+
 /** The seed moves the modules' Clock to each moment it re-enacts. */
 export interface SettableClock extends Clock {
   set(instant: Date): void;
@@ -37,7 +41,7 @@ export interface SeedOptions {
   date: string;
   start: string;
   end: string;
-  /** Sets an existing demo Course aside (renamed, its Claims reset) instead of refusing. */
+  /** Deletes an existing demo Course, with everything it owns, instead of refusing. */
   replace?: boolean;
 }
 
@@ -97,6 +101,24 @@ function addDays(date: string, days: number): string {
 }
 
 /**
+ * Deletes the Lecturer's demo Courses (by name; a real Course is never touched) and everything
+ * they own: each module deletes its own data first, Course last, so an interrupted run is
+ * finished by the next. Returns how many it deleted.
+ */
+export async function deleteDemoCourses(deps: { modules: SeedDeps["modules"]; lecturerId: number }): Promise<number> {
+  const { course, attendance, feedback, summaries, homework } = deps.modules;
+  const demos = course.listCourses(deps.lecturerId).filter((c) => isDemoCourse(c.name));
+  for (const { id } of demos) {
+    attendance.deleteCourseData(id);
+    feedback.deleteCourseData(id);
+    await summaries.deleteCourseData(id);
+    await homework.deleteCourseData(id);
+    course.deleteCourse(id);
+  }
+  return demos.length;
+}
+
+/**
  * `seed:demo`: builds the demo Course through module operations only, re-enacting its past on
  * the Clock: four weekly Sessions with attendance, Comments and a Poll, last Session's
  * published summary, and Assignment 2 with eight Submissions. Nothing moves past the Clock's
@@ -117,16 +139,10 @@ export async function seedDemo(deps: SeedDeps, options: SeedOptions): Promise<Se
   const local = (date: string, time: string, plusMinutes = 0) =>
     new Date(localInstant(date, time, timeZone).getTime() + plusMinutes * MIN);
 
-  // An existing demo Course is set aside, never deleted, so a re-seed on production loses nothing.
-  const existing = course.listCourses(lecturerId).filter((c) => c.name === DEMO_COURSE_NAME);
-  if (existing.length && !options.replace) {
+  if (!options.replace && course.listCourses(lecturerId).some((c) => c.name === DEMO_COURSE_NAME)) {
     throw new Error(`A Course named "${DEMO_COURSE_NAME}" already exists. Run again with --replace to seed a fresh one.`);
   }
-  for (const old of existing) {
-    for (const entry of course.listRoster(old.id).filter((e) => e.claimed)) course.resetClaim(old.id, entry.id);
-    course.newProjectorLink(old.id);
-    course.updateCourse(old.id, { name: `${DEMO_COURSE_NAME} (replaced ${limit.toISOString().slice(0, 16)})` });
-  }
+  await deleteDemoCourses({ modules: deps.modules, lecturerId });
 
   try {
     const pastDates = [28, 21, 14, 7].map((d) => addDays(options.date, -d));

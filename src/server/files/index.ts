@@ -8,6 +8,8 @@ export interface FileStore {
   put(bytes: Uint8Array): Promise<string>;
   /** The stored bytes, or null when nothing is stored under that hash. */
   get(contentHash: string): Promise<Uint8Array | null>;
+  /** Removes the file stored under that hash, if any. The caller checks nothing else uses it. */
+  delete(contentHash: string): Promise<void>;
 }
 
 const HASH = /^[0-9a-f]{64}$/;
@@ -43,6 +45,10 @@ export function createDiskFileStore(dir: string): FileStore {
       } catch {
         return null;
       }
+    },
+    async delete(hash) {
+      if (!HASH.test(hash)) return;
+      await fs.rm(fileFor(hash), { force: true });
     },
   };
 }

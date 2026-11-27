@@ -302,6 +302,11 @@ export interface HomeworkModule {
   offerHelp(assignmentId: number, criterionId: number, rosterEntryId: number): StudentAssignment;
   /** Queues `help.match` now; the deadline job then does nothing. Refused before Release and after matching. */
   matchNow(assignmentId: number): LecturerAssignment;
+  /**
+   * Deletes the Course's Assignments with everything under them and their jobs, and the
+   * Submission files no other Submission uses (the demo seed's --replace).
+   */
+  deleteCourseData(courseId: number): Promise<void>;
 }
 
 export interface HomeworkDeps {
@@ -783,6 +788,47 @@ export function createHomeworkModule({ db, clock, course, llm, files, events, jo
     },
 
     lecturerView,
+
+    async deleteCourseData(courseId) {
+      const assignmentIds = db
+        .select({ id: assignmentTable.id })
+        .from(assignmentTable)
+        .where(eq(assignmentTable.courseId, courseId))
+        .all()
+        .map((r) => r.id);
+      if (!assignmentIds.length) return;
+      const assignments = new Set(assignmentIds);
+      const runs = new Set(
+        db
+          .select({ id: reviewRun.id })
+          .from(reviewRun)
+          .where(inArray(reviewRun.assignmentId, assignmentIds))
+          .all()
+          .map((r) => r.id),
+      );
+      jobs.discard((job) => (job.kind === "help.match" ? assignments.has(job.payload.assignmentId) : "runId" in job.payload && runs.has(job.payload.runId)));
+      const hashes = db.transaction((tx) => {
+        const files = tx
+          .select({ fileHash: submissionTable.fileHash })
+          .from(submissionTable)
+          .where(inArray(submissionTable.assignmentId, assignmentIds))
+          .all();
+        // Everything under an Assignment goes with it (on delete cascade).
+        tx.delete(assignmentTable).where(inArray(assignmentTable.id, assignmentIds)).run();
+        return [...new Set(files.flatMap((r) => (r.fileHash ? [r.fileHash] : [])))];
+      });
+      const stillUsed = hashes.length
+        ? new Set(
+            db
+              .select({ fileHash: submissionTable.fileHash })
+              .from(submissionTable)
+              .where(inArray(submissionTable.fileHash, hashes))
+              .all()
+              .map((r) => r.fileHash),
+          )
+        : new Set();
+      for (const hash of hashes) if (!stillUsed.has(hash)) await files.delete(hash);
+    },
 
     async submit(assignmentId, rosterEntryId, input) {
       const row = assignmentRow(assignmentId);

@@ -127,6 +127,11 @@ export interface SummariesModule {
   listForStudent(deviceToken: string | undefined): PublishedSummaryRow[];
   /** One row per Session of the Course, for the Course desk. */
   forCourse(courseId: number): SummaryRow[];
+  /**
+   * Deletes the Transcripts and summaries of the Course's Sessions, with their jobs, and the
+   * Transcript files no other Session uses (the demo seed's --replace).
+   */
+  deleteCourseData(courseId: number): Promise<void>;
 }
 
 export interface SummariesDeps {
@@ -433,6 +438,34 @@ export function createSummariesModule({ db, clock, course, llm, jobs, files, eve
       jobs.retry(tr.jobId);
       changed(sessionId);
       return forLecturer(sessionId);
+    },
+
+    async deleteCourseData(courseId) {
+      const sessionIds = course.listSessions(courseId).map((s) => s.id);
+      if (!sessionIds.length) return;
+      const ids = new Set(sessionIds);
+      jobs.discard((job) => (job.kind === "summary.generate" || job.kind === "summary.translate") && ids.has(job.payload.sessionId));
+      const hashes = db.transaction((tx) => {
+        const deleted = tx
+          .delete(transcriptTable)
+          .where(inArray(transcriptTable.sessionId, sessionIds))
+          .returning({ fileHash: transcriptTable.fileHash })
+          .all();
+        // Versions and translations go with their summary (on delete cascade).
+        tx.delete(summary).where(inArray(summary.sessionId, sessionIds)).run();
+        return [...new Set(deleted.flatMap((r) => (r.fileHash ? [r.fileHash] : [])))];
+      });
+      const stillUsed = hashes.length
+        ? new Set(
+            db
+              .select({ fileHash: transcriptTable.fileHash })
+              .from(transcriptTable)
+              .where(inArray(transcriptTable.fileHash, hashes))
+              .all()
+              .map((r) => r.fileHash),
+          )
+        : new Set();
+      for (const hash of hashes) if (!stillUsed.has(hash)) await files.delete(hash);
     },
 
     deleteSummary(sessionId) {
