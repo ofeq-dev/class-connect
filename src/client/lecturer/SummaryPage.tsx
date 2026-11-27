@@ -8,7 +8,8 @@ import { formatDate, SUMMARY_STATE_LABEL, useCourse, useCourseLive, useSummary }
 /**
  * The Session summary screen (lavender), minimal: Transcript upload, Generate, the
  * "Summarising…" and failed states, the Markdown editor with a live preview, Save, and the
- * version list with Restore and Publish. Translations come with #34.
+ * version list with Restore and Publish, and the published version's translations with a
+ * language switcher, per-language status and an editor without history.
  */
 export function SummaryPage() {
   const { courseId = "", sessionId = "" } = useParams();
@@ -215,7 +216,10 @@ export function SummaryPage() {
                         className="btn"
                         disabled={publish.isPending}
                         onClick={() => {
-                          if (confirm(`Publish version ${v.number}? Students will see it on their phones.`)) {
+                          const message = data.translations.length
+                            ? `Publish version ${v.number}? Students will see it on their phones, and every translation is made again from it. Edits to the translations will be overwritten.`
+                            : `Publish version ${v.number}? Students will see it on their phones.`;
+                          if (confirm(message)) {
                             publish.mutate(v.id);
                           }
                         }}
@@ -231,6 +235,10 @@ export function SummaryPage() {
             {publish.error && <p className="error">{publish.error.message}</p>}
           </section>
         )}
+
+        {data && data.translations.length > 0 && (
+          <Translations courseId={courseId} sessionId={sessionId} translations={data.translations} onChange={refresh} />
+        )}
       </div>
     </div>
   );
@@ -244,6 +252,7 @@ function Editor(props: {
   dirty: boolean;
   onSave: () => void;
   onDiscard: () => void;
+  note?: string;
 }) {
   return (
     <>
@@ -271,8 +280,95 @@ function Editor(props: {
             Discard edit
           </button>
         )}
-        <span className="muted small">Saving adds a new version; nothing is lost.</span>
+        <span className="muted small">{props.note ?? "Saving adds a new version; nothing is lost."}</span>
       </div>
     </>
+  );
+}
+
+const TRANSLATION_STATE_LABEL = { translating: "Translating…", failed: "Failed", done: "Ready" } as const;
+
+type Translation = {
+  language: string;
+  state: keyof typeof TRANSLATION_STATE_LABEL;
+  markdown: string | null;
+  error: string | null;
+  edited: boolean;
+};
+
+/** The published version's translations: a language switcher with each one's status, and its editor. */
+function Translations(props: {
+  courseId: string;
+  sessionId: string;
+  translations: Translation[];
+  onChange: () => Promise<unknown>;
+}) {
+  const [chosen, setChosen] = useState<string | null>(null);
+  const current = props.translations.find((x) => x.language === chosen) ?? props.translations[0]!;
+  const [edited, setEdited] = useState<string | null>(null);
+  const routes = api.api.lecturer.courses[":courseId"].sessions[":sessionId"].summary.translations[":language"];
+  const param = { courseId: props.courseId, sessionId: props.sessionId, language: current.language };
+  const save = useMutation({
+    mutationFn: async (markdown: string) => ok(await routes.$put({ param, json: { markdown } })),
+    onSuccess: () => {
+      setEdited(null);
+      return props.onChange();
+    },
+  });
+  const retry = useMutation({
+    mutationFn: async () => ok(await routes.retry.$post({ param })),
+    onSuccess: props.onChange,
+  });
+
+  function choose(language: string) {
+    if (edited === null || confirm("Discard your unsaved edit to this translation?")) {
+      setEdited(null);
+      setChosen(language);
+    }
+  }
+
+  return (
+    <section className="sec" data-s="sum">
+      <div className="sec-head"><h2><span className="hl">Translations</span></h2></div>
+      <p className="notice">Made from the published version. Publishing again makes them afresh.</p>
+      <div className="row" role="tablist" aria-label="Translation language">
+        {props.translations.map((x) => (
+          <button
+            key={x.language}
+            role="tab"
+            aria-selected={x.language === current.language}
+            className={x.language === current.language ? "btn" : "btn-line"}
+            onClick={() => choose(x.language)}
+          >
+            {x.language} · {TRANSLATION_STATE_LABEL[x.state]}
+            {x.edited && " · edited"}
+          </button>
+        ))}
+      </div>
+      {current.state === "translating" && <p role="status"><b>Translating…</b></p>}
+      {current.state === "failed" && (
+        <div className="report has-problems" role="alert">
+          <b>This translation couldn't be made.</b>
+          <span>{current.error}</span>
+          <div className="row">
+            <button className="btn-line" disabled={retry.isPending} onClick={() => retry.mutate()}>Retry</button>
+          </div>
+        </div>
+      )}
+      {current.markdown !== null && (
+        <Editor
+          key={current.language}
+          markdown={edited ?? current.markdown}
+          onChange={setEdited}
+          saving={save.isPending}
+          dirty={edited !== null && edited !== current.markdown}
+          onSave={() => edited !== null && save.mutate(edited)}
+          onDiscard={() => setEdited(null)}
+          note="Saving replaces this translation; there is no history."
+        />
+      )}
+      {save.error && <p className="error">{save.error.message}</p>}
+      {retry.error && <p className="error">{retry.error.message}</p>}
+    </section>
   );
 }

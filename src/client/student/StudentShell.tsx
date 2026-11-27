@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link, NavLink, Route, Routes, useLocation, useParams } from "react-router";
 import { checkInLine } from "../attendance";
 import { useLiveEvents } from "../live";
@@ -183,7 +184,9 @@ function Summaries() {
 /** A plain read page for one published Session summary. */
 function SummaryRead() {
   const sessionId = Number(useParams().sessionId);
-  const summary = useStudentSummary(sessionId);
+  // The browser's language by default; the server falls back to the source when there's no translation.
+  const [lang, setLang] = useState(() => navigator.language);
+  const summary = useStudentSummary(sessionId, lang);
   return (
     <>
       <Link className="st-back" to="/">← Today</Link>
@@ -193,6 +196,17 @@ function SummaryRead() {
         <>
           <p className="bd-course">Session summary</p>
           <h1 className="bd-title">{longDate(summary.data.date)}</h1>
+          {summary.data.languages.length > 0 && (
+            <label className="field">
+              <span>Language</span>
+              <select value={summary.data.language ?? ""} onChange={(e) => setLang(e.target.value)}>
+                <option value="">Original</option>
+                {summary.data.languages.map((l) => (
+                  <option key={l} value={l}>{languageName(l)}</option>
+                ))}
+              </select>
+            </label>
+          )}
           <SummaryView markdown={summary.data.markdown} />
         </>
       )}
@@ -222,4 +236,13 @@ function Welcome() {
       </p>
     </main>
   );
+}
+
+/** "ar" → "العربية", in the language's own name where the browser knows it. */
+function languageName(code: string): string {
+  try {
+    return new Intl.DisplayNames([code], { type: "language" }).of(code) ?? code;
+  } catch {
+    return code;
+  }
 }

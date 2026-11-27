@@ -40,8 +40,15 @@
     {
       "idx": 5,
       "version": "6",
-      "when": 1795738471409,
-      "tag": "0005_projector",
+      "when": 1795738388796,
+      "tag": "0005_summary_translations",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1795738961570,
+      "tag": "0006_projector",
       "breakpoints": true
     }
   ]
