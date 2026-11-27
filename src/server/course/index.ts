@@ -66,6 +66,8 @@ export interface CourseModule {
   readCourse(lecturerId: number, courseId: number): Course;
   /** A Course's id and name, for a Student's QR page before they have claimed. */
   courseSummary(courseId: number): { id: number; name: string };
+  /** The Course's extra languages for Session summary translations, in the Lecturer's order. */
+  translationLanguages(courseId: number): string[];
   updateCourse(courseId: number, changes: { name?: string; translationLanguages?: string[] }): Course;
 
   importRoster(courseId: number, csv: string): RosterImportReport;
@@ -237,6 +239,10 @@ export function createCourseModule({ db, clock, events, timeZone }: CourseDeps):
     courseSummary(courseId) {
       const { id, name } = courseRow(courseId);
       return { id, name };
+    },
+
+    translationLanguages(courseId) {
+      return toCourse(courseRow(courseId)).translationLanguages;
     },
 
     updateCourse(courseId, changes) {

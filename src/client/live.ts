@@ -18,6 +18,8 @@ export const noticeQueryKeys: { [T in NoticeType]: (id: number) => QueryKey[] } 
     ["student", "summaries"],
     ["student", "summary", sessionId],
   ],
+  // The console's count, and the Student's own Check-in line (window opened or closed).
+  "attendance.changed": (sessionId) => [["attendance", sessionId], ["student", "me"], ["student", "entry"]],
   "assignment.changed": (id) => [["assignment", id], ["assignments"], ["student", "assignment", id], ["student", "assignments"]],
   // Lecturer only: a review run moved on (and may have spent LLM requests).
   "job.progress": (assignmentId) => [["assignment", assignmentId], ["assignments"], ["llm-usage"]],

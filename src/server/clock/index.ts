@@ -17,3 +17,36 @@ export function localDate(instant: Date, timeZone: string): string {
     day: "2-digit",
   }).format(instant);
 }
+
+const partsFormatters = new Map<string, Intl.DateTimeFormat>();
+
+/** How far a time zone's wall clock is ahead of UTC at an instant, in ms. */
+function zoneOffset(instant: Date, timeZone: string): number {
+  let format = partsFormatters.get(timeZone);
+  if (!format) {
+    format = new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      hourCycle: "h23",
+      year: "numeric",
+      month: "numeric",
+      day: "numeric",
+      hour: "numeric",
+      minute: "numeric",
+      second: "numeric",
+    });
+    partsFormatters.set(timeZone, format);
+  }
+  const p = Object.fromEntries(format.formatToParts(instant).map((x) => [x.type, Number(x.value)]));
+  const wall = Date.UTC(p.year!, p.month! - 1, p.day!, p.hour!, p.minute!, p.second!);
+  return wall - Math.floor(instant.getTime() / 1000) * 1000;
+}
+
+/** The first instant of the next local day after an instant: the midnight that ends its day. */
+export function nextLocalMidnight(instant: Date, timeZone: string): Date {
+  const [y, m, d] = localDate(instant, timeZone).split("-").map(Number) as [number, number, number];
+  const wallMidnight = Date.UTC(y, m - 1, d + 1);
+  // Correct twice so a DST change on that day still lands on local midnight.
+  let guess = wallMidnight - zoneOffset(instant, timeZone);
+  guess = wallMidnight - zoneOffset(new Date(guess), timeZone);
+  return new Date(guess);
+}

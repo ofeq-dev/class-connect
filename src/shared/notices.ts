@@ -3,15 +3,17 @@
  * notice type to the TanStack Query keys it refetches (src/client/live.ts).
  *
  * The id is the changed thing's id: a Course for course.changed and roster.changed,
- * a Session for session.changed and summary.changed, an Assignment for assignment.changed and
- * job.progress. job.progress, the Lecturer's review-run progress, also carries the counts
- * `{done, total}` so a progress bar can move without a refetch.
+ * a Session for session.changed, summary.changed and attendance.changed,
+ * an Assignment for assignment.changed and job.progress. job.progress, the Lecturer's
+ * review-run progress, also carries the counts `{done, total}` so a progress bar can move
+ * without a refetch.
  */
 export const NOTICE_TYPES = [
   "course.changed",
   "roster.changed",
   "session.changed",
   "summary.changed",
+  "attendance.changed",
   "assignment.changed",
   "job.progress",
 ] as const;

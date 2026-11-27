@@ -1,4 +1,6 @@
+import { useState } from "react";
 import { Link, NavLink, Route, Routes, useLocation, useParams } from "react-router";
+import { checkInLine } from "../attendance";
 import { useLiveEvents } from "../live";
 import { SummaryView } from "../markdown/SummaryView";
 import { AssignmentPage } from "./AssignmentPage";
@@ -94,13 +96,7 @@ function Today({ me }: { me: Me }) {
           <p className="bd-when">
             {longDate(session.date)}, {session.start} to {session.end}
           </p>
-          <div className="bd-check" role="status">
-            <span className="bd-box" aria-hidden="true" />
-            <div>
-              <b>Not checked in yet</b>
-              <span>Scan the code on the board with your phone camera.</span>
-            </div>
-          </div>
+          {me.checkIn && <CheckInLine checkIn={me.checkIn} />}
         </>
       ) : (
         <>
@@ -120,6 +116,24 @@ function Today({ me }: { me: Me }) {
         This phone is set up for <b>{me.me.name}</b>.
       </p>
     </>
+  );
+}
+
+const MARK = { ok: "✓", wait: "?", todo: "", bad: "!" } as const;
+
+/** Today's one Check-in spot: checked in, waiting for the Lecturer, not yet, or closed. */
+function CheckInLine({ checkIn }: { checkIn: NonNullable<Me["checkIn"]> }) {
+  const line = checkInLine(checkIn);
+  return (
+    <div className="bd-check" data-tone={line.tone} role="status">
+      <span className="bd-box" aria-hidden="true">
+        {MARK[line.tone]}
+      </span>
+      <div>
+        <b className={line.tone === "ok" ? "hl" : undefined}>{line.title}</b>
+        <span>{line.detail}</span>
+      </div>
+    </div>
   );
 }
 
@@ -170,7 +184,9 @@ function Summaries() {
 /** A plain read page for one published Session summary. */
 function SummaryRead() {
   const sessionId = Number(useParams().sessionId);
-  const summary = useStudentSummary(sessionId);
+  // The browser's language by default; the server falls back to the source when there's no translation.
+  const [lang, setLang] = useState(() => navigator.language);
+  const summary = useStudentSummary(sessionId, lang);
   return (
     <>
       <Link className="st-back" to="/">← Today</Link>
@@ -180,6 +196,17 @@ function SummaryRead() {
         <>
           <p className="bd-course">Session summary</p>
           <h1 className="bd-title">{longDate(summary.data.date)}</h1>
+          {summary.data.languages.length > 0 && (
+            <label className="field">
+              <span>Language</span>
+              <select value={summary.data.language ?? ""} onChange={(e) => setLang(e.target.value)}>
+                <option value="">Original</option>
+                {summary.data.languages.map((l) => (
+                  <option key={l} value={l}>{languageName(l)}</option>
+                ))}
+              </select>
+            </label>
+          )}
           <SummaryView markdown={summary.data.markdown} />
         </>
       )}
@@ -209,4 +236,13 @@ function Welcome() {
       </p>
     </main>
   );
+}
+
+/** "ar" → "العربية", in the language's own name where the browser knows it. */
+function languageName(code: string): string {
+  try {
+    return new Intl.DisplayNames([code], { type: "language" }).of(code) ?? code;
+  } catch {
+    return code;
+  }
 }

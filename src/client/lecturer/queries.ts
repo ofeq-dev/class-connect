@@ -40,6 +40,19 @@ export function formatDate(date: string): string {
   });
 }
 
+/** The console's Attendance glance; attendance.changed refetches it. */
+export function useAttendance(courseId: string, sessionId: string) {
+  return useQuery({
+    queryKey: ["attendance", Number(sessionId)],
+    queryFn: async () =>
+      ok(
+        await api.api.lecturer.courses[":courseId"].sessions[":sessionId"].attendance.$get({
+          param: { courseId, sessionId },
+        }),
+      ),
+  });
+}
+
 export function useSummaries(courseId: string) {
   return useQuery({
     queryKey: ["summaries", Number(courseId)],
