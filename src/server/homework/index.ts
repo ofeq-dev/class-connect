@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, lt } from "drizzle-orm";
 import type { Clock } from "../clock";
 import type { CourseModule } from "../course";
 import type { Db } from "../db";
@@ -15,6 +15,9 @@ import {
   assignment as assignmentTable,
   classSummary as classSummaryTable,
   criterion,
+  helpMatch,
+  helpOffer,
+  helpRequest,
   review as reviewTable,
   reviewJob,
   reviewLevel,
@@ -56,8 +59,21 @@ export interface Assignment {
 /** What a Student sees: open until the due date, due after it. */
 export type AssignmentState = "open" | "due";
 
-/** The Lecturer's states add the review run: reviewing while it works, reviewed once it settles. */
-export type LecturerAssignmentState = AssignmentState | "reviewing" | "reviewed";
+/** A Student's states add Release, after which their Review and the class summary show. */
+export type StudentAssignmentState = AssignmentState | "released";
+
+/**
+ * The Lecturer's states add the review run (reviewing while it works, reviewed once it settles),
+ * then Release and the Help matching pass.
+ */
+export type LecturerAssignmentState = AssignmentState | "reviewing" | "reviewed" | "released" | "matched";
+
+/** A Helper takes at most this many Help requests per Criterion. */
+export const MAX_MATCHES_PER_HELPER = 2;
+/** Two days after Release, unless the Lecturer picks another match deadline. */
+export const DEFAULT_MATCH_DELAY_MS = 2 * 24 * 60 * 60 * 1000;
+/** Students see the class summary only when at least this many Reviews went into it. */
+export const MIN_CLASS_SUMMARY_REVIEWS = 5;
 
 export interface ReviewLevel {
   criterionId: number;
@@ -76,6 +92,8 @@ export interface LecturerReview {
   /** Who wrote the Review first; null without one. */
   author: "ai" | "lecturer" | null;
   editedAt: string | null;
+  /** When the Student could first see it: at Release, or on its own for a Late one after it. */
+  releasedAt: string | null;
   /** One per Criterion, in the Criteria's order; empty without a Review. */
   levels: ReviewLevel[];
 }
@@ -105,7 +123,10 @@ export interface SimilarPair {
   passages: { a: string; b: string }[];
 }
 
-/** Anonymised: counts per Criterion and common mistakes, from the Reviews written when it ran. */
+/**
+ * Anonymised: counts per Criterion and common mistakes. The counts are from the Reviews when the
+ * run wrote it, then from the Reviews released at Release, after which it stays as it is.
+ */
 export interface ClassSummary {
   reviewCount: number;
   counts: { criterionId: number; label: string; notYet: number; partly: number; secure: number }[];
@@ -125,6 +146,44 @@ export interface LecturerSubmission {
   review: LecturerReview;
 }
 
+export interface StudentRef {
+  rosterEntryId: number;
+  name: string;
+}
+
+/** For the Lecturer only: every Help request, offer and match of the Assignment. */
+export interface LecturerHelp {
+  /** Oldest first. */
+  requests: {
+    id: number;
+    criterionId: number;
+    criterion: string;
+    student: StudentRef;
+    level: Level;
+    createdAt: string;
+    helper: StudentRef | null;
+  }[];
+  /** Oldest first. */
+  offers: { id: number; criterionId: number; criterion: string; student: StudentRef; createdAt: string; matched: StudentRef[] }[];
+  /** In Criteria order. */
+  matches: { criterionId: number; criterion: string; student: StudentRef; helper: StudentRef }[];
+}
+
+/**
+ * A Student's Help on one Criterion. Before matching they can ask (Not yet / Partly) or offer
+ * (Secure); after it they see who they're paired with, "No Helper this time", or a thank-you.
+ * Nobody else's level is ever in it.
+ */
+export type HelpState =
+  | { kind: "can-ask" }
+  | { kind: "can-offer" }
+  | { kind: "asked" }
+  | { kind: "offered" }
+  | { kind: "paired"; with: string[] }
+  | { kind: "no-helper" }
+  | { kind: "thanks" }
+  | { kind: "closed" };
+
 export interface LecturerAssignment extends Assignment {
   state: LecturerAssignmentState;
   /** Oldest first. */
@@ -134,6 +193,12 @@ export interface LecturerAssignment extends Assignment {
   /** Above the similarity threshold, highest score first. Never shown to Students. */
   similarPairs: SimilarPair[];
   classSummary: ClassSummary | null;
+  releasedAt: string | null;
+  matchDeadline: string | null;
+  matchedAt: string | null;
+  /** Why Release is refused right now; null when it can go ahead, or once Released. */
+  releaseBlocker: string | null;
+  help: LecturerHelp;
 }
 
 export interface AssignmentRow {
@@ -158,18 +223,33 @@ export interface StudentSubmission {
   late: boolean;
 }
 
+/** The Student's own released Review. */
+export interface StudentReview {
+  levels: (ReviewLevel & { label: string })[];
+}
+
 export interface StudentAssignment extends Assignment {
-  state: AssignmentState;
+  state: StudentAssignmentState;
   submission: StudentSubmission | null;
   /** Until the due date a Student can hand in or replace; after it only a first, Late, Submission. */
   canReplace: boolean;
+  /** Their own Review once released; never anyone else's. */
+  review: StudentReview | null;
+  /** After Release, when at least MIN_CLASS_SUMMARY_REVIEWS Reviews went into it. */
+  classSummary: Omit<ClassSummary, "reviewCount"> | null;
+  /** True after Release when the class summary is held back for having too few Reviews. */
+  classSummaryHidden: boolean;
+  /** One per Criterion once the Student's own Review is released; empty before. */
+  help: { criterionId: number; label: string; state: HelpState }[];
+  /** When matching runs unless the Lecturer matches first; null before Release. */
+  matchDeadline: string | null;
 }
 
 export interface StudentAssignmentRow {
   id: number;
   title: string;
   dueAt: string;
-  state: AssignmentState;
+  state: StudentAssignmentState;
   submitted: boolean;
   late: boolean;
 }
@@ -202,6 +282,20 @@ export interface HomeworkModule {
    * Edits a draft, or writes one by hand (e.g. for a failed draft).
    */
   editReview(assignmentId: number, submissionId: number, levels: ReviewLevel[]): LecturerAssignment;
+  /**
+   * Publishes every Review and the class summary at once and opens Help until the match
+   * deadline (an instant; default two days on), when `help.match` runs. Refused before the due
+   * date, while a run is going, while an on-time Submission has no Review, and a second time.
+   */
+  release(assignmentId: number, matchDeadline?: string): LecturerAssignment;
+  /** After Release, a Late Submission's Review goes to its Student on its own. */
+  releaseReview(assignmentId: number, submissionId: number): LecturerAssignment;
+  /** A Help request on a Criterion where the Student's released level is Not yet or Partly, until matching. */
+  requestHelp(assignmentId: number, criterionId: number, rosterEntryId: number): StudentAssignment;
+  /** A Helper's offer on a Criterion where the Student's released level is Secure, until matching. */
+  offerHelp(assignmentId: number, criterionId: number, rosterEntryId: number): StudentAssignment;
+  /** Queues `help.match` now; the deadline job then does nothing. Refused before Release and after matching. */
+  matchNow(assignmentId: number): LecturerAssignment;
 }
 
 export interface HomeworkDeps {
@@ -346,8 +440,53 @@ export function createHomeworkModule({ db, clock, course, llm, files, events, jo
     return "reviewed";
   }
 
-  function lecturerStateOf(row: typeof assignmentTable.$inferSelect): LecturerAssignmentState {
-    return runState(latestRun(row.id)) ?? stateOf(row.dueAt);
+  function lecturerStateOf(
+    row: typeof assignmentTable.$inferSelect,
+    run = latestRun(row.id),
+  ): LecturerAssignmentState {
+    if (row.matchedAt) return "matched";
+    if (row.releasedAt) return "released";
+    return runState(run) ?? stateOf(row.dueAt);
+  }
+
+  const studentStateOf = (row: typeof assignmentTable.$inferSelect): StudentAssignmentState =>
+    row.releasedAt ? "released" : stateOf(row.dueAt);
+
+  /** Why Release can't go ahead now, or null when it can (and once it has). */
+  function releaseBlocker(row: typeof assignmentTable.$inferSelect): string | null {
+    if (row.releasedAt) return null;
+    if (stateOf(row.dueAt) === "open") return "Release opens after the due date.";
+    if (runState(latestRun(row.id)) === "reviewing") return "Wait for the review run to finish.";
+    const missing = db
+      .select({ id: submissionTable.id })
+      .from(submissionTable)
+      .leftJoin(reviewTable, eq(reviewTable.submissionId, submissionTable.id))
+      .where(
+        and(
+          eq(submissionTable.assignmentId, row.id),
+          lt(submissionTable.submittedAt, row.dueAt),
+          isNull(reviewTable.id),
+        ),
+      )
+      .all().length;
+    if (missing === 0) return null;
+    return missing === 1
+      ? "1 Submission handed in on time has no Review yet. Retry it or write it by hand."
+      : `${missing} Submissions handed in on time have no Review yet. Retry them or write them by hand.`;
+  }
+
+  /** Not yet / Partly / Secure counts per Criterion over the given Reviews' levels. */
+  function countLevels(criteria: Criterion[], reviews: ReviewLevel[][]) {
+    return criteria.map((c) => {
+      const count = { criterionId: c.id, notYet: 0, partly: 0, secure: 0 };
+      for (const review of reviews) {
+        const level = review.find((l) => l.criterionId === c.id)?.level;
+        if (level === "not-yet") count.notYet++;
+        else if (level === "partly") count.partly++;
+        else if (level === "secure") count.secure++;
+      }
+      return count;
+    });
   }
 
   /** Each Submission's Review with its levels in Criteria order. */
@@ -412,6 +551,7 @@ export function createHomeworkModule({ db, clock, course, llm, files, events, jo
             error: null,
             author: written.review.author as "ai" | "lecturer",
             editedAt: written.review.editedAt?.toISOString() ?? null,
+            releasedAt: written.review.releasedAt?.toISOString() ?? null,
             levels: written.levels,
           }
         : {
@@ -419,6 +559,7 @@ export function createHomeworkModule({ db, clock, course, llm, files, events, jo
             error: job?.status === "failed" ? job.error : null,
             author: null,
             editedAt: null,
+            releasedAt: null,
             levels: [],
           };
       return {
@@ -466,11 +607,16 @@ export function createHomeworkModule({ db, clock, course, llm, files, events, jo
       }));
     return {
       ...assignment,
-      state: runState(run) ?? stateOf(row.dueAt),
+      state: lecturerStateOf(row, run),
       submissions,
       reviewRun: reviewRunView,
       similarPairs,
       classSummary: readClassSummary(assignment),
+      releasedAt: row.releasedAt?.toISOString() ?? null,
+      matchDeadline: row.matchDeadline?.toISOString() ?? null,
+      matchedAt: row.matchedAt?.toISOString() ?? null,
+      releaseBlocker: releaseBlocker(row),
+      help: lecturerHelp(assignment, roster),
     };
   }
 
@@ -487,6 +633,172 @@ export function createHomeworkModule({ db, clock, course, llm, files, events, jo
       commonMistakes: JSON.parse(row.commonMistakes) as string[],
     };
   }
+
+  // ---- Help ----------------------------------------------------------------------------------
+
+  function helpRows(assignmentId: number) {
+    const ids = criteriaOf(assignmentId).map((c) => c.id);
+    if (ids.length === 0) return { requests: [], offers: [], matches: [] };
+    const requests = db
+      .select()
+      .from(helpRequest)
+      .where(inArray(helpRequest.criterionId, ids))
+      .orderBy(asc(helpRequest.createdAt), asc(helpRequest.id))
+      .all();
+    const offers = db
+      .select()
+      .from(helpOffer)
+      .where(inArray(helpOffer.criterionId, ids))
+      .orderBy(asc(helpOffer.createdAt), asc(helpOffer.id))
+      .all();
+    const matches = requests.length
+      ? db.select().from(helpMatch).where(inArray(helpMatch.helpRequestId, requests.map((r) => r.id))).all()
+      : [];
+    return { requests, offers, matches };
+  }
+
+  function lecturerHelp(assignment: Assignment, roster: Map<number, { name: string }>): LecturerHelp {
+    const { requests, offers, matches } = helpRows(assignment.id);
+    const ref = (rosterEntryId: number): StudentRef => ({
+      rosterEntryId,
+      name: roster.get(rosterEntryId)?.name ?? "Unknown Student",
+    });
+    const label = new Map(assignment.criteria.map((c) => [c.id, c.label]));
+    const position = new Map(assignment.criteria.map((c, i) => [c.id, i]));
+    const offerById = new Map(offers.map((o) => [o.id, o]));
+    const helperOf = new Map(matches.map((m) => [m.helpRequestId, offerById.get(m.helpOfferId)!]));
+    return {
+      requests: requests.map((r) => ({
+        id: r.id,
+        criterionId: r.criterionId,
+        criterion: label.get(r.criterionId) ?? "",
+        student: ref(r.rosterEntryId),
+        level: r.level as Level,
+        createdAt: r.createdAt.toISOString(),
+        helper: helperOf.has(r.id) ? ref(helperOf.get(r.id)!.rosterEntryId) : null,
+      })),
+      offers: offers.map((o) => ({
+        id: o.id,
+        criterionId: o.criterionId,
+        criterion: label.get(o.criterionId) ?? "",
+        student: ref(o.rosterEntryId),
+        createdAt: o.createdAt.toISOString(),
+        matched: requests.filter((r) => helperOf.get(r.id)?.id === o.id).map((r) => ref(r.rosterEntryId)),
+      })),
+      matches: requests
+        .filter((r) => helperOf.has(r.id))
+        .sort((a, b) => position.get(a.criterionId)! - position.get(b.criterionId)!)
+        .map((r) => ({
+          criterionId: r.criterionId,
+          criterion: label.get(r.criterionId) ?? "",
+          student: ref(r.rosterEntryId),
+          helper: ref(helperOf.get(r.id)!.rosterEntryId),
+        })),
+    };
+  }
+
+  /** The Student's Help per Criterion; needs their own released Review. */
+  function studentHelp(
+    row: typeof assignmentTable.$inferSelect,
+    assignment: Assignment,
+    rosterEntryId: number,
+    levels: ReviewLevel[],
+  ): StudentAssignment["help"] {
+    const roster = new Map(course.listRoster(row.courseId).map((e) => [e.id, e.name]));
+    const { requests, offers, matches } = helpRows(assignment.id);
+    const nameOf = (id: number) => roster.get(id) ?? "Unknown Student";
+    const offerById = new Map(offers.map((o) => [o.id, o]));
+    const requestById = new Map(requests.map((r) => [r.id, r]));
+    const matched = row.matchedAt !== null;
+    return assignment.criteria.map((c) => {
+      const level = levels.find((l) => l.criterionId === c.id)?.level;
+      const mineAsk = requests.find((r) => r.criterionId === c.id && r.rosterEntryId === rosterEntryId);
+      const mineOffer = offers.find((o) => o.criterionId === c.id && o.rosterEntryId === rosterEntryId);
+      let state: HelpState;
+      if (mineAsk) {
+        const m = matches.find((x) => x.helpRequestId === mineAsk.id);
+        state = m
+          ? { kind: "paired", with: [nameOf(offerById.get(m.helpOfferId)!.rosterEntryId)] }
+          : matched
+            ? { kind: "no-helper" }
+            : { kind: "asked" };
+      } else if (mineOffer) {
+        const helped = matches
+          .filter((x) => x.helpOfferId === mineOffer.id)
+          .map((x) => nameOf(requestById.get(x.helpRequestId)!.rosterEntryId));
+        state = helped.length ? { kind: "paired", with: helped } : matched ? { kind: "thanks" } : { kind: "offered" };
+      } else if (matched || !level) {
+        state = { kind: "closed" };
+      } else {
+        state = level === "secure" ? { kind: "can-offer" } : { kind: "can-ask" };
+      }
+      return { criterionId: c.id, label: c.label, state };
+    });
+  }
+
+  /**
+   * Checks the Student may ask or offer on the Criterion now, and returns their released level on it:
+   * after Release, before matching, with their own Review released.
+   */
+  function helpLevel(assignmentId: number, criterionId: number, rosterEntryId: number) {
+    const row = assignmentRow(assignmentId);
+    studentOn(row.courseId, rosterEntryId);
+    if (!row.releasedAt) throw new DomainError("help.not-released", "Help opens once the Assignment is Released.");
+    if (row.matchedAt) throw new DomainError("help.matched", "Help matching has run, so Help is closed.");
+    const criteria = criteriaOf(assignmentId);
+    if (!criteria.some((c) => c.id === criterionId)) throw new NotFoundError("Criterion");
+    const mine = submissionRow(assignmentId, rosterEntryId);
+    const written = mine ? reviewsOf([mine.id], criteria).get(mine.id) : undefined;
+    if (!written?.review.releasedAt) {
+      throw new DomainError("help.no-review", "Help opens once your Review is released.");
+    }
+    return { row, level: written.levels.find((l) => l.criterionId === criterionId)!.level };
+  }
+
+  /**
+   * The one matching pass: Not yet before Partly, earliest first; each request to the Helper on
+   * its Criterion with the fewest matches so far in this pass (across the Assignment), the
+   * earliest offer on a tie, with at most MAX_MATCHES_PER_HELPER per Helper per Criterion.
+   */
+  function matchHelp(assignmentId: number): { helpRequestId: number; helpOfferId: number }[] {
+    const { requests, offers } = helpRows(assignmentId);
+    const rank = (level: string) => (level === "not-yet" ? 0 : 1);
+    const queue = [...requests].sort((a, b) => rank(a.level) - rank(b.level)); // stable: earliest first within a level
+    const perOffer = new Map<number, number>();
+    const perHelper = new Map<number, number>();
+    const out: { helpRequestId: number; helpOfferId: number }[] = [];
+    for (const r of queue) {
+      let best: (typeof offers)[number] | undefined;
+      for (const o of offers) {
+        if (o.criterionId !== r.criterionId || o.rosterEntryId === r.rosterEntryId) continue;
+        if ((perOffer.get(o.id) ?? 0) >= MAX_MATCHES_PER_HELPER) continue;
+        if (!best || (perHelper.get(o.rosterEntryId) ?? 0) < (perHelper.get(best.rosterEntryId) ?? 0)) best = o;
+      }
+      if (!best) continue;
+      out.push({ helpRequestId: r.id, helpOfferId: best.id });
+      perOffer.set(best.id, (perOffer.get(best.id) ?? 0) + 1);
+      perHelper.set(best.rosterEntryId, (perHelper.get(best.rosterEntryId) ?? 0) + 1);
+    }
+    return out;
+  }
+
+  async function handleHelpMatch(job: Job) {
+    const { assignmentId } = job.payload as { assignmentId: number };
+    const row = db.select().from(assignmentTable).where(eq(assignmentTable.id, assignmentId)).get();
+    if (!row) return;
+    let ran = false;
+    jobs.complete(job, () => {
+      // The deadline job after Match now, or a second Match now, finds matched_at set and stops.
+      const current = assignmentRow(assignmentId);
+      if (!current.releasedAt || current.matchedAt) return;
+      for (const m of matchHelp(assignmentId)) db.insert(helpMatch).values(m).run();
+      db.update(assignmentTable).set({ matchedAt: clock.now() }).where(eq(assignmentTable.id, assignmentId)).run();
+      ran = true;
+    });
+    if (ran) changed(row.courseId, assignmentId);
+  }
+
+  jobs.register("help.match", handleHelpMatch);
 
   const lecturerChanged = (courseId: number, assignmentId: number) => changed(courseId, assignmentId, "lecturer");
 
@@ -653,6 +965,8 @@ export function createHomeworkModule({ db, clock, course, llm, files, events, jo
     jobs.complete(job, () => {
       db.delete(similarityPair).where(eq(similarityPair.assignmentId, row.id)).run();
       for (const p of pairs) db.insert(similarityPair).values(p).run();
+      // After Release the class summary stays as it was released; a Late Submission only joins similarity.
+      if (assignmentRow(row.id).releasedAt) return;
       const next = jobs.enqueue("review.classSummary", { runId });
       db.update(reviewRun).set({ classSummaryJobId: next.id }).where(eq(reviewRun.id, runId)).run();
     });
@@ -670,16 +984,7 @@ export function createHomeworkModule({ db, clock, course, llm, files, events, jo
       criteria,
     );
     const levels = [...reviews.values()].map((r) => r.levels);
-    const perCriterion = criteria.map((c) => {
-      const count = { criterionId: c.id, notYet: 0, partly: 0, secure: 0 };
-      for (const review of levels) {
-        const level = review.find((l) => l.criterionId === c.id)?.level;
-        if (level === "not-yet") count.notYet++;
-        else if (level === "partly") count.partly++;
-        else if (level === "secure") count.secure++;
-      }
-      return count;
-    });
+    const perCriterion = countLevels(criteria, levels);
 
     let commonMistakes: string[] = [];
     if (levels.length > 0) {
@@ -699,6 +1004,7 @@ export function createHomeworkModule({ db, clock, course, llm, files, events, jo
       createdAt: clock.now(),
     };
     jobs.complete(job, () => {
+      if (assignmentRow(row.id).releasedAt) return;
       db.insert(classSummaryTable)
         .values(values)
         .onConflictDoUpdate({ target: classSummaryTable.assignmentId, set: values })
@@ -736,7 +1042,7 @@ export function createHomeworkModule({ db, clock, course, llm, files, events, jo
     });
   }
 
-  return {
+  const api: HomeworkModule = {
     setAssignment(courseId, input, assignmentId) {
       course.courseSummary(courseId);
       const { title, instructions, dueAt, labels } = read(input);
@@ -751,6 +1057,9 @@ export function createHomeworkModule({ db, clock, course, llm, files, events, jo
         } else {
           const existing = tx.select().from(assignmentTable).where(eq(assignmentTable.id, assignmentId)).get();
           if (!existing || existing.courseId !== courseId) throw new NotFoundError("Assignment");
+          if (existing.releasedAt) {
+            throw new DomainError("assignment.released", "This Assignment is Released, so it can't be edited.");
+          }
           id = existing.id;
           tx.update(assignmentTable).set({ title, instructions, dueAt }).where(eq(assignmentTable.id, id)).run();
         }
@@ -812,12 +1121,28 @@ export function createHomeworkModule({ db, clock, course, llm, files, events, jo
       const row = assignmentRow(assignmentId);
       studentOn(row.courseId, rosterEntryId);
       const mine = submissionRow(assignmentId, rosterEntryId);
+      const assignment = toAssignment(row);
       const state = stateOf(row.dueAt);
+      const written = mine ? reviewsOf([mine.id], assignment.criteria).get(mine.id) : undefined;
+      const labels = new Map(assignment.criteria.map((c) => [c.id, c.label]));
+      const summary = row.releasedAt ? readClassSummary(assignment) : null;
+      const shown = summary !== null && summary.reviewCount >= MIN_CLASS_SUMMARY_REVIEWS;
       return {
-        ...toAssignment(row),
-        state,
+        ...assignment,
+        state: studentStateOf(row),
         submission: mine ? toStudentSubmission(mine, row.dueAt) : null,
         canReplace: state === "open" || !mine,
+        review:
+          written?.review.releasedAt
+            ? { levels: written.levels.map((l) => ({ ...l, label: labels.get(l.criterionId)! })) }
+            : null,
+        classSummary: shown ? { counts: summary.counts, commonMistakes: summary.commonMistakes } : null,
+        classSummaryHidden: summary !== null && !shown,
+        help:
+          row.releasedAt && written?.review.releasedAt
+            ? studentHelp(row, assignment, rosterEntryId, written.levels)
+            : [],
+        matchDeadline: row.matchDeadline?.toISOString() ?? null,
       };
     },
 
@@ -849,7 +1174,7 @@ export function createHomeworkModule({ db, clock, course, llm, files, events, jo
           id: r.id,
           title: r.title,
           dueAt: r.dueAt.toISOString(),
-          state: stateOf(r.dueAt),
+          state: studentStateOf(r),
           submitted: !!s,
           late: !!s && s.submittedAt >= r.dueAt,
         };
@@ -924,6 +1249,93 @@ export function createHomeworkModule({ db, clock, course, llm, files, events, jo
       return lecturerView(assignmentId);
     },
 
+    release(assignmentId, matchDeadline) {
+      const row = assignmentRow(assignmentId);
+      if (row.releasedAt) throw new DomainError("release.done", "This Assignment is already Released.");
+      const blocker = releaseBlocker(row);
+      if (blocker) throw new DomainError("release.blocked", blocker);
+      const now = clock.now();
+      const deadline = matchDeadline ? new Date(matchDeadline) : new Date(now.getTime() + DEFAULT_MATCH_DELAY_MS);
+      if (Number.isNaN(deadline.getTime()) || deadline <= now) {
+        throw new DomainError("release.bad-deadline", "Pick a match deadline in the future.");
+      }
+      const assignment = toAssignment(row);
+      db.transaction(() => {
+        const reviews = reviewsOf(
+          reviewedSubmissions(assignmentId).map((s) => s.id),
+          assignment.criteria,
+        );
+        // The class summary goes out with the Reviews as they are now, Lecturer edits included.
+        const previous = db.select().from(classSummaryTable).where(eq(classSummaryTable.assignmentId, assignmentId)).get();
+        const levels = [...reviews.values()].map((r) => r.levels);
+        const values = {
+          assignmentId,
+          counts: JSON.stringify({ reviewCount: levels.length, perCriterion: countLevels(assignment.criteria, levels) }),
+          commonMistakes: previous?.commonMistakes ?? "[]",
+          createdAt: now,
+        };
+        db.insert(classSummaryTable)
+          .values(values)
+          .onConflictDoUpdate({ target: classSummaryTable.assignmentId, set: values })
+          .run();
+        const reviewIds = [...reviews.values()].map((r) => r.review.id);
+        if (reviewIds.length) db.update(reviewTable).set({ releasedAt: now }).where(inArray(reviewTable.id, reviewIds)).run();
+        db.update(assignmentTable)
+          .set({ releasedAt: now, matchDeadline: deadline })
+          .where(eq(assignmentTable.id, assignmentId))
+          .run();
+        jobs.enqueue("help.match", { assignmentId }, deadline);
+      });
+      changed(row.courseId, assignmentId);
+      return lecturerView(assignmentId);
+    },
+
+    releaseReview(assignmentId, submissionId) {
+      const row = assignmentRow(assignmentId);
+      submissionOf(assignmentId, submissionId);
+      if (!row.releasedAt) {
+        throw new DomainError("release.not-released", "Release the Assignment first; this Review then goes with it.");
+      }
+      const existing = db.select().from(reviewTable).where(eq(reviewTable.submissionId, submissionId)).get();
+      if (!existing) throw new DomainError("release.no-review", "This Submission has no Review to release yet.");
+      if (existing.releasedAt) throw new DomainError("release.review-done", "This Review is already released.");
+      db.update(reviewTable).set({ releasedAt: clock.now() }).where(eq(reviewTable.id, existing.id)).run();
+      changed(row.courseId, assignmentId);
+      return lecturerView(assignmentId);
+    },
+
+    requestHelp(assignmentId, criterionId, rosterEntryId) {
+      const { row, level } = helpLevel(assignmentId, criterionId, rosterEntryId);
+      if (level === "secure") {
+        throw new DomainError("help.secure", "You're Secure on this Criterion, so you can offer help instead.");
+      }
+      db.insert(helpRequest)
+        .values({ criterionId, rosterEntryId, level, createdAt: clock.now() })
+        .onConflictDoNothing()
+        .run();
+      lecturerChanged(row.courseId, assignmentId);
+      return api.studentView(assignmentId, rosterEntryId);
+    },
+
+    offerHelp(assignmentId, criterionId, rosterEntryId) {
+      const { row, level } = helpLevel(assignmentId, criterionId, rosterEntryId);
+      if (level !== "secure") {
+        throw new DomainError("help.not-secure", "You can offer help on a Criterion where you reached Secure.");
+      }
+      db.insert(helpOffer).values({ criterionId, rosterEntryId, createdAt: clock.now() }).onConflictDoNothing().run();
+      lecturerChanged(row.courseId, assignmentId);
+      return api.studentView(assignmentId, rosterEntryId);
+    },
+
+    matchNow(assignmentId) {
+      const row = assignmentRow(assignmentId);
+      if (!row.releasedAt) throw new DomainError("help.not-released", "Release the Assignment before matching.");
+      if (row.matchedAt) throw new DomainError("help.matched", "Help matching has already run.");
+      jobs.enqueue("help.match", { assignmentId });
+      lecturerChanged(row.courseId, assignmentId);
+      return lecturerView(assignmentId);
+    },
+
     forCourse(courseId) {
       const rows = db
         .select()
@@ -954,4 +1366,5 @@ export function createHomeworkModule({ db, clock, course, llm, files, events, jo
       });
     },
   };
+  return api;
 }

@@ -392,6 +392,19 @@ export function lecturerRoutes(deps: AppDeps) {
         ),
     )
 
+    .post(
+      "/courses/:courseId/assignments/:assignmentId/release",
+      requireLecturer,
+      json((b) => ({ matchDeadline: optStr(b.matchDeadline) })),
+      (c) => c.json(deps.homework.release(ownAssignment(c).id, c.req.valid("json").matchDeadline || undefined)),
+    )
+    .post("/courses/:courseId/assignments/:assignmentId/submissions/:submissionId/review/release", requireLecturer, (c) =>
+      c.json(deps.homework.releaseReview(ownAssignment(c).id, idParam(c, "submissionId"))),
+    )
+    .post("/courses/:courseId/assignments/:assignmentId/match-now", requireLecturer, (c) =>
+      c.json(deps.homework.matchNow(ownAssignment(c).id)),
+    )
+
     .get("/llm-usage", requireLecturer, (c) => c.json({ today: deps.llm.usageToday(), limit: DAILY_LIMIT }))
 
     .get("/events", requireLecturer, (c) => {

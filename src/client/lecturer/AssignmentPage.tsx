@@ -4,6 +4,7 @@ import { Link, useNavigate, useParams } from "react-router";
 import { api, ok } from "../api";
 import { TrashIcon } from "./icons";
 import { ASSIGNMENT_STATE_LABEL, useAssignment, useCourse, useCourseLive } from "./queries";
+import { ReleasePanel } from "./ReleasePanel";
 import { ReviewRun } from "./ReviewRun";
 
 const MIN = 3;
@@ -26,7 +27,8 @@ function localInput(iso: string): string {
 
 /**
  * The Assignment screen (apricot), minimal: title, instructions, due date and the Criteria
- * editor with "Draft with AI"; then the Submissions and, after the due date, the review run.
+ * editor with "Draft with AI"; then the Submissions and, after the due date, the review run,
+ * Release, and Help.
  */
 export function AssignmentPage() {
   const { courseId = "", assignmentId } = useParams();
@@ -66,6 +68,7 @@ export function AssignmentPage() {
         )}
 
         {data && <ReviewRun courseId={courseId} data={data} />}
+        {data && data.state !== "open" && <ReleasePanel courseId={courseId} data={data} />}
       </div>
     </div>
   );

@@ -1,7 +1,7 @@
 import { index, integer, primaryKey, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 // course_id and roster_entry_id refer to Course's tables; Course owns them, so there is no
-// cross-module foreign key. Job ids refer to Jobs' table the same way. Help tables come with Release.
+// cross-module foreign key. Job ids refer to Jobs' table the same way.
 
 export const assignment = sqliteTable(
   "assignment",
@@ -12,6 +12,12 @@ export const assignment = sqliteTable(
     instructions: text("instructions").notNull(),
     dueAt: integer("due_at", { mode: "timestamp_ms" }).notNull(),
     createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+    /** Set once by Release: every Review and the class summary go out, and Help opens. */
+    releasedAt: integer("released_at", { mode: "timestamp_ms" }),
+    /** When help.match runs unless the Lecturer matches first. */
+    matchDeadline: integer("match_deadline", { mode: "timestamp_ms" }),
+    /** Set by the one Help matching pass; after it no Help request or offer is taken. */
+    matchedAt: integer("matched_at", { mode: "timestamp_ms" }),
   },
   (t) => [index("assignment_course").on(t.courseId)],
 );
@@ -149,4 +155,48 @@ export const similarityPair = sqliteTable(
     passages: text("passages").notNull(),
   },
   (t) => [index("similarity_pair_assignment").on(t.assignmentId)],
+);
+
+/** A Student at Not yet or Partly on a Criterion asking for help, after Release. */
+export const helpRequest = sqliteTable(
+  "help_request",
+  {
+    id: integer("id").primaryKey(),
+    criterionId: integer("criterion_id")
+      .notNull()
+      .references(() => criterion.id, { onDelete: "cascade" }),
+    rosterEntryId: integer("roster_entry_id").notNull(),
+    /** The level the Student reached when asking: not-yet | partly. Not yet is matched first. */
+    level: text("level").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (t) => [uniqueIndex("help_request_criterion_student").on(t.criterionId, t.rosterEntryId)],
+);
+
+/** A Student at Secure on a Criterion offering to be a Helper, after Release. */
+export const helpOffer = sqliteTable(
+  "help_offer",
+  {
+    id: integer("id").primaryKey(),
+    criterionId: integer("criterion_id")
+      .notNull()
+      .references(() => criterion.id, { onDelete: "cascade" }),
+    rosterEntryId: integer("roster_entry_id").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (t) => [uniqueIndex("help_offer_criterion_student").on(t.criterionId, t.rosterEntryId)],
+);
+
+/** A Help request paired with a Helper's offer: at most one per request, at most two per offer. */
+export const helpMatch = sqliteTable(
+  "help_match",
+  {
+    helpRequestId: integer("help_request_id")
+      .primaryKey()
+      .references(() => helpRequest.id, { onDelete: "cascade" }),
+    helpOfferId: integer("help_offer_id")
+      .notNull()
+      .references(() => helpOffer.id, { onDelete: "cascade" }),
+  },
+  (t) => [index("help_match_offer").on(t.helpOfferId)],
 );

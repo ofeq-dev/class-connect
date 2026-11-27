@@ -53,9 +53,21 @@ export function ReviewRun({ courseId, data }: { courseId: string; data: Assignme
       ),
     onSuccess: settle,
   });
+  const releaseOne = useMutation({
+    mutationFn: async (submissionId: number) =>
+      ok(
+        await routes.submissions[":submissionId"].review.release.$post({
+          param: { ...param, submissionId: String(submissionId) },
+        }),
+      ),
+    onSuccess: settle,
+  });
 
   const run = data.reviewRun;
-  const reviewing = data.state === "reviewing";
+  // After Release the state stays Released while a Late Submission's run works, so read the run too.
+  const reviewing =
+    data.state === "reviewing" ||
+    (!!run && (run.done < run.total || run.compare === "queued" || run.compare === "running"));
   const unreviewed = data.submissions.filter((s) => s.review.status === "not-started").length;
 
   return (
@@ -91,6 +103,7 @@ export function ReviewRun({ courseId, data }: { courseId: string; data: Assignme
         {run?.error && <p className="error">{run.error}</p>}
         {start.error && <p className="error">{start.error.message}</p>}
         {retry.error && <p className="error">{retry.error.message}</p>}
+        {releaseOne.error && <p className="error">{releaseOne.error.message}</p>}
 
         {data.submissions.length === 0 ? (
           <p className="empty">Nothing handed in yet. Students hand in from the Assignment on their phone’s Today tab.</p>
@@ -118,6 +131,7 @@ export function ReviewRun({ courseId, data }: { courseId: string; data: Assignme
                         </span>
                         {r.status === "drafted" && r.author === "lecturer" && <span className="muted small"> by hand</span>}
                         {r.status === "drafted" && r.editedAt && r.author === "ai" && <span className="muted small"> edited</span>}
+                        {r.releasedAt && <span className="muted small"> · released</span>}
                         {r.error && <div className="error small">{r.error}</div>}
                       </td>
                       <td>
@@ -125,6 +139,11 @@ export function ReviewRun({ courseId, data }: { courseId: string; data: Assignme
                           {r.status === "failed" && (
                             <button className="btn-line" disabled={retry.isPending} onClick={() => retry.mutate(s.id)}>
                               Retry
+                            </button>
+                          )}
+                          {data.releasedAt && r.status === "drafted" && !r.releasedAt && (
+                            <button className="btn-line" disabled={releaseOne.isPending} onClick={() => releaseOne.mutate(s.id)}>
+                              Release this Review
                             </button>
                           )}
                           {!busy && data.state !== "open" && (
@@ -151,7 +170,7 @@ export function ReviewRun({ courseId, data }: { courseId: string; data: Assignme
       </section>
 
       {run && <SimilarPairs data={data} />}
-      {data.classSummary && <ClassSummaryPreview summary={data.classSummary} />}
+      {data.classSummary && <ClassSummaryPreview summary={data.classSummary} released={!!data.releasedAt} />}
     </>
   );
 }
@@ -271,12 +290,19 @@ function SimilarPairs({ data }: { data: AssignmentData }) {
   );
 }
 
-function ClassSummaryPreview({ summary }: { summary: NonNullable<AssignmentData["classSummary"]> }) {
+function ClassSummaryPreview({
+  summary,
+  released,
+}: {
+  summary: NonNullable<AssignmentData["classSummary"]>;
+  released: boolean;
+}) {
   return (
     <section className="sec" data-s="hw">
       <div className="sec-head">
         <h2><span className="hl">Class summary</span></h2>
-        <span className="muted small num">from {summary.reviewCount} Reviews · preview</span>
+        <span className="muted small num">from {summary.reviewCount} Reviews · {released ? (summary.reviewCount < 5 ? "released, hidden from Students below 5" : "released") : "preview"}
+        </span>
       </div>
       <table className="table">
         <thead>
