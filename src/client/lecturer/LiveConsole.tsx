@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router";
 import { api, ok } from "../api";
+import { AttendanceColumn } from "./AttendanceColumn";
 import { Menu } from "./Menu";
 import { formatDate, useCourse, useCourseLive } from "./queries";
 
@@ -14,7 +15,7 @@ function useClock() {
   return now.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
 }
 
-/** The live console's frame; its three columns fill in with #26, #30 and #31. */
+/** The live console: header, then Attendance | Comments | Poll (Comments and Poll arrive with #30 and #31). */
 export function LiveConsole() {
   const { courseId = "", sessionId = "" } = useParams();
   useCourseLive(courseId);
@@ -42,10 +43,7 @@ export function LiveConsole() {
         </Menu>
       </header>
       <div className="console">
-        <section className="sec" data-s="att">
-          <div className="sec-head"><h2><span className="hl">Attendance</span></h2></div>
-          <p className="empty">Check-in arrives next.</p>
-        </section>
+        <AttendanceColumn courseId={courseId} sessionId={sessionId} />
         <section className="sec" data-s="cm">
           <div className="sec-head"><h2><span className="hl">Comments</span></h2></div>
           <p className="empty">Comments arrive later.</p>

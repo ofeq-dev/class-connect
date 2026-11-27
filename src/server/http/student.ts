@@ -1,9 +1,10 @@
 import { randomBytes } from "node:crypto";
 import { Hono, type Context } from "hono";
+import { getConnInfo } from "@hono/node-server/conninfo";
 import { getCookie, setCookie } from "hono/cookie";
 import { createMiddleware } from "hono/factory";
 import { validator } from "hono/validator";
-import type { RosterEntry, Viewer } from "../course";
+import type { RosterEntry, Session, Viewer } from "../course";
 import { DomainError, NotFoundError } from "../errors";
 import { streamLiveEvents } from "../live-events";
 import type { AppDeps } from "./app";
@@ -32,7 +33,34 @@ function setDeviceCookie(c: Context, token: string) {
 /** What the Student app may know about its own Roster entry: never the device token. */
 const me = (entry: RosterEntry) => ({ name: entry.name, studentId: entry.studentId });
 
+/**
+ * The phone's public IP. Behind the Cloudflare Tunnel (the only way in, ADR 0003) that is
+ * CF-Connecting-IP; without it (local development) the socket's own address.
+ */
+function clientIp(c: Context): string {
+  const header = c.req.header("cf-connecting-ip")?.trim();
+  if (header) return header;
+  try {
+    return getConnInfo(c).remote.address ?? "";
+  } catch {
+    return "";
+  }
+}
+
 export function studentRoutes(deps: AppDeps) {
+  /**
+   * Loading the QR page is the Check-in (ADR 0001): no tap. A closed window isn't an error for
+   * the page; the Student's own line says so.
+   */
+  function checkInOnScan(c: Context, session: Session, entry: RosterEntry, token: string) {
+    try {
+      deps.attendance.checkIn(session.id, entry.id, clientIp(c), token);
+    } catch (err) {
+      if (!(err instanceof DomainError && err.code === "check-in.closed")) throw err;
+    }
+    return deps.attendance.forStudent(session.id, entry.id);
+  }
+
   /**
    * Reads the device token and, when it still resolves to a Student, refreshes the cookie so a
    * phone in use is never forgotten. An unknown or reset token is left alone: it's unclaimed.
@@ -60,12 +88,15 @@ export function studentRoutes(deps: AppDeps) {
   return new Hono<Vars>()
     .use(deviceToken)
 
-    // The QR entry page, /s/<code>: claim if needed, then the app.
+    // The QR entry page, /s/<code>: a claimed phone is checked in by loading it; a new one claims first.
     .get("/s/:code", (c) => {
       const session = qrSession(c);
-      const viewer = deps.course.whoIs(c.var.deviceToken, session.courseId);
+      const token = c.var.deviceToken;
+      const viewer = deps.course.whoIs(token, session.courseId);
       const course = deps.course.courseSummary(session.courseId);
-      return c.json({ course, session, me: viewer ? me(viewer.rosterEntry) : null });
+      if (!viewer || !token) return c.json({ course, session, me: null, checkIn: null });
+      const checkIn = checkInOnScan(c, session, viewer.rosterEntry, token);
+      return c.json({ course, session, me: me(viewer.rosterEntry), checkIn });
     })
     .post("/s/:code/lookup", studentIdBody, (c) => {
       const session = qrSession(c);
@@ -85,7 +116,8 @@ export function studentRoutes(deps: AppDeps) {
       const token = c.var.deviceToken ?? randomBytes(32).toString("base64url");
       const entry = deps.course.claim(session.courseId, c.req.valid("json").studentId, token);
       setDeviceCookie(c, token);
-      return c.json(me(entry));
+      // The first scan does everything: claim, then Check-in.
+      return c.json({ ...me(entry), checkIn: checkInOnScan(c, session, entry, token) });
     })
 
     // The Student app at /.
@@ -100,6 +132,7 @@ export function studentRoutes(deps: AppDeps) {
         me: me(viewer.rosterEntry),
         today,
         session,
+        checkIn: session ? deps.attendance.forStudent(session.id, viewer.rosterEntry.id) : null,
       });
     })
 

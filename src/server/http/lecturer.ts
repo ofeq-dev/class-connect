@@ -150,6 +150,26 @@ export function lecturerRoutes(deps: AppDeps) {
       return c.json({ ok: true });
     })
 
+    // Attendance: the Check-in window and the live count
+    .get("/courses/:courseId/sessions/:sessionId/attendance", requireLecturer, (c) =>
+      c.json(deps.attendance.forLecturer(ownSession(c).id)),
+    )
+    .post(
+      "/courses/:courseId/sessions/:sessionId/attendance/window/open",
+      requireLecturer,
+      json((b) => ({ ipv4: optStr(b.ipv4) ?? null, ipv6: optStr(b.ipv6) ?? null })),
+      (c) => {
+        const sessionId = ownSession(c).id;
+        deps.attendance.openWindow(sessionId, c.req.valid("json"));
+        return c.json(deps.attendance.forLecturer(sessionId));
+      },
+    )
+    .post("/courses/:courseId/sessions/:sessionId/attendance/window/close", requireLecturer, (c) => {
+      const sessionId = ownSession(c).id;
+      deps.attendance.closeWindow(sessionId);
+      return c.json(deps.attendance.forLecturer(sessionId));
+    })
+
     // Session summaries
     .get("/courses/:courseId/summaries", requireLecturer, (c) =>
       c.json(deps.summaries.forCourse(ownCourse(c).id)),

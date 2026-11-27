@@ -47,6 +47,16 @@ describe("notice → query keys", () => {
     expect(stale(client, ["student", "entry", "abc"])).toBe(true);
   });
 
+  it("attendance.changed refetches that Session's count and the Student's own Check-in line", () => {
+    const client = clientWith(["student", "me"]);
+    client.setQueryData(["attendance", 5], "cached");
+    client.setQueryData(["attendance", 6], "cached");
+    applyNotice(client, { type: "attendance.changed", id: 5 });
+    expect(client.getQueryState(["attendance", 5])?.isInvalidated).toBe(true);
+    expect(client.getQueryState(["attendance", 6])?.isInvalidated).toBe(false);
+    expect(stale(client, ["student", "me"])).toBe(true);
+  });
+
   it("summary.changed refreshes the phone's summary list and that summary, not others", () => {
     const client = clientWith(["student", "summaries"]);
     client.setQueryData(["student", "summary", 5], "cached");

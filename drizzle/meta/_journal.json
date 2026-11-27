@@ -29,6 +29,13 @@
       "when": 1795727675021,
       "tag": "0003_homework_assignments",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1795738088962,
+      "tag": "0004_checkin_window_and_attendance",
+      "breakpoints": true
     }
   ]
 }
