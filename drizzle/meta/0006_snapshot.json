@@ -1,56 +1,9 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "1a2fc38e-024a-4771-8544-f752cc044086",
+  "id": "548a40b7-4ce4-4b42-9f4c-451103816e59",
   "prevId": "e9dad2b2-9212-4e85-8acb-535b31534d3b",
   "tables": {
-    "approved_network": {
-      "name": "approved_network",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "integer",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "session_id": {
-          "name": "session_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "block": {
-          "name": "block",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "approved_at": {
-          "name": "approved_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        }
-      },
-      "indexes": {
-        "approved_network_session_block": {
-          "name": "approved_network_session_block",
-          "columns": [
-            "session_id",
-            "block"
-          ],
-          "isUnique": true
-        }
-      },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
     "attendance": {
       "name": "attendance",
       "columns": {
@@ -80,13 +33,6 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false
-        },
-        "check_in_state": {
-          "name": "check_in_state",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
           "autoincrement": false
         },
         "ip": {
@@ -226,6 +172,13 @@
           "autoincrement": false,
           "default": "'[]'"
         },
+        "projector_secret": {
+          "name": "projector_secret",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "integer",
@@ -235,7 +188,15 @@
           "default": "(unixepoch() * 1000)"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "course_projector_secret": {
+          "name": "course_projector_secret",
+          "columns": [
+            "projector_secret"
+          ],
+          "isUnique": true
+        }
+      },
       "foreignKeys": {
         "course_lecturer_id_lecturer_id_fk": {
           "name": "course_lecturer_id_lecturer_id_fk",
@@ -397,6 +358,27 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true,
+          "autoincrement": false
+        },
+        "projector_mode": {
+          "name": "projector_mode",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "projected_poll_id": {
+          "name": "projected_poll_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "projector_set_at": {
+          "name": "projector_set_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
           "autoincrement": false
         }
       },

@@ -184,23 +184,21 @@ describe("Check-ins", () => {
     expect(attendance().isPresent(session.id, omar.id)).toBe(false);
   });
 
-  it("publishes an attendance notice to the Lecturer scope only for every Check-in", () => {
+  const to = (audience: string) => ({ courseId, audience, notice: { type: "attendance.changed", id: session.id } });
+
+  it("publishes an attendance notice to the Lecturer for every Check-in, and to the Projector when the count rises", () => {
     t.fakes.events.clear();
-    checkIn(dana, "147.235.10.21");
-    checkIn(omar, "2.54.1.1");
-    checkIn(dana, "147.235.10.21");
-    expect(t.fakes.events.published).toEqual(
-      Array(3).fill({ courseId, audience: "lecturer", notice: { type: "attendance.changed", id: session.id } }),
-    );
+    checkIn(dana, "147.235.10.21"); // Present: the count rises
+    checkIn(omar, "2.54.1.1"); // Pending: the count doesn't
+    checkIn(dana, "147.235.10.21"); // Already present
+    expect(t.fakes.events.published).toEqual([to("lecturer"), to("projector"), to("lecturer"), to("lecturer")]);
   });
 
-  it("tells the whole Course when the window opens or closes, naming no Student", () => {
+  it("tells the whole Course and the Projector when the window opens or closes, naming no Student", () => {
     t.fakes.events.clear();
     attendance().closeWindow(session.id);
     attendance().openWindow(session.id, LECTURER);
-    expect(t.fakes.events.published).toEqual(
-      Array(2).fill({ courseId, audience: "all", notice: { type: "attendance.changed", id: session.id } }),
-    );
+    expect(t.fakes.events.published).toEqual([to("all"), to("projector"), to("all"), to("projector")]);
   });
 });
 
@@ -278,12 +276,13 @@ describe("Network approval", () => {
     expect(attendance().forStudent(session.id, dana.id).status).toBe("closed");
   });
 
-  it("tells the Lecturer and the Students, naming only the Session", () => {
+  it("tells the Lecturer, the Students and the Projector window, naming only the Session", () => {
     checkIn(dana, "2.54.1.10");
     t.fakes.events.clear();
     attendance().approveNetwork(session.id, CARRIER);
     expect(t.fakes.events.published).toEqual([
       { courseId, audience: "all", notice: { type: "attendance.changed", id: session.id } },
+      { courseId, audience: "projector", notice: { type: "attendance.changed", id: session.id } },
     ]);
   });
 });
@@ -359,10 +358,11 @@ describe("Manual marks", () => {
     expect(() => attendance().mark(session.id, other.id, true)).toThrow(/not found/i);
   });
 
-  it("tell the Lecturer and the Students, naming only the Session", () => {
+  it("tell the Lecturer, the Students and the Projector window, naming only the Session", () => {
     mark(dana, true);
     expect(t.fakes.events.published).toEqual([
       { courseId, audience: "all", notice: { type: "attendance.changed", id: session.id } },
+      { courseId, audience: "projector", notice: { type: "attendance.changed", id: session.id } },
     ]);
   });
 });

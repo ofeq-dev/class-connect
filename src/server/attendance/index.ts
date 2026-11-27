@@ -180,9 +180,17 @@ export function createAttendanceModule({ db, clock, events, course, timeZone }: 
     };
   }
 
-  /** Check-ins name a Student, so only the Lecturer hears of them; window changes go to everyone. */
-  const changed = (sessionId: number, audience: "lecturer" | "all") =>
-    events.publish(course.readSession(sessionId).courseId, audience, { type: "attendance.changed", id: sessionId });
+  /**
+   * Check-ins name a Student, so only the Lecturer hears of them; window changes go to everyone.
+   * The Projector window shows only the checked-in count, so it hears only when that count or the
+   * window changes; a Pending Check-in never reaches it.
+   */
+  const changed = (sessionId: number, audience: "lecturer" | "all", countChanged: boolean) => {
+    const { courseId } = course.readSession(sessionId);
+    const notice = { type: "attendance.changed", id: sessionId } as const;
+    events.publish(courseId, audience, notice);
+    if (countChanged) events.publish(courseId, "projector", notice);
+  };
 
   function record(sessionId: number, rosterEntryId: number) {
     return db
@@ -217,14 +225,14 @@ export function createAttendanceModule({ db, clock, events, course, timeZone }: 
           .values({ sessionId, openedAt: clock.now(), lecturerIpv4: values.ipv4, lecturerIpv6: values.ipv6 })
           .run();
       });
-      changed(sessionId, "all");
+      changed(sessionId, "all", true);
     },
 
     closeWindow(sessionId) {
       const current = openWindowRow(sessionId);
       if (!current) return;
       closeRow(current);
-      changed(sessionId, "all");
+      changed(sessionId, "all", true);
     },
 
     checkIn(sessionId, rosterEntryId, ip, deviceToken) {
@@ -236,13 +244,13 @@ export function createAttendanceModule({ db, clock, events, course, timeZone }: 
       const existing = record(sessionId, rosterEntryId);
       // A Student already present stays present from their first Check-in; scanning again changes nothing.
       if (existing && (PRESENT as readonly string[]).includes(existing.state)) {
-        changed(sessionId, "lecturer");
+        changed(sessionId, "lecturer", false);
         return "present";
       }
       const row = { state, checkInState: state, ip, block: mine?.block ?? null, deviceTokenHash: tokenHash(deviceToken), at: clock.now() };
       if (existing) db.update(attendance).set(row).where(eq(attendance.id, existing.id)).run();
       else db.insert(attendance).values({ sessionId, rosterEntryId, ...row }).run();
-      changed(sessionId, "lecturer");
+      changed(sessionId, "lecturer", state === "present");
       return state;
     },
 
@@ -259,7 +267,7 @@ export function createAttendanceModule({ db, clock, events, course, timeZone }: 
         db.update(attendance).set({ checkInState: "present" }).where(and(fromBlock, eq(attendance.checkInState, "pending"))).run();
         db.update(attendance).set({ state: "present" }).where(and(fromBlock, eq(attendance.state, "pending"))).run();
       });
-      changed(sessionId, "all");
+      changed(sessionId, "all", true);
     },
     mark(sessionId, rosterEntryId, present) {
       const { courseId } = course.readSession(sessionId);
@@ -276,7 +284,7 @@ export function createAttendanceModule({ db, clock, events, course, timeZone }: 
         if (existing) db.update(attendance).set({ state, at: clock.now() }).where(eq(attendance.id, existing.id)).run();
         else db.insert(attendance).values({ sessionId, rosterEntryId, state, at: clock.now() }).run();
       }
-      changed(sessionId, "all");
+      changed(sessionId, "all", true);
     },
     isPresent(sessionId, rosterEntryId) {
       const row = record(sessionId, rosterEntryId);
