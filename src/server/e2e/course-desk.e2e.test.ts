@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { aCourse, listen, makeTestApp, openSse, signInLecturer, type TestApp } from "../testing";
+import { aCourse, aRoster, aSession, listen, makeTestApp, openSse, signInLecturer, type TestApp } from "../testing";
 
 let t: TestApp;
 let server: Awaited<ReturnType<typeof listen>>;
@@ -76,5 +76,44 @@ describe("Course desk over HTTP", () => {
 
   it("refuses a stream for a Course that doesn't exist", async () => {
     expect((await fetch(`${server.url}/api/lecturer/events?course=999`, { headers: { cookie } })).status).toBe(404);
+  });
+
+  it("downloads the Attendance sheet as xlsx, named for the Course and today", async () => {
+    const { id } = aCourse(t);
+    aRoster(t, id, 2);
+    aSession(t, id);
+    const res = await call("GET", `/courses/${id}/attendance.xlsx`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    expect(res.headers.get("content-disposition")).toBe(
+      `attachment; filename="Software Engineering attendance 2026-11-30.xlsx"; ` +
+        `filename*=UTF-8''Software%20Engineering%20attendance%202026-11-30.xlsx`,
+    );
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    expect([...bytes.slice(0, 2)]).toEqual([0x50, 0x4b]); // a zip, as every xlsx is
+  });
+
+  it("keeps a non-Latin Course name in the xlsx file name, with a plain fallback", async () => {
+    const { id } = aCourse(t, "הנדסת תוכנה / 2");
+    const res = await call("GET", `/courses/${id}/attendance.xlsx`);
+    expect(res.headers.get("content-disposition")).toBe(
+      `attachment; filename="2 attendance 2026-11-30.xlsx"; ` +
+        `filename*=UTF-8''${encodeURIComponent("הנדסת תוכנה 2 attendance 2026-11-30.xlsx")}`,
+    );
+  });
+
+  it("escapes an apostrophe in the xlsx file name", async () => {
+    const { id } = aCourse(t, "Dana's seminar");
+    const res = await call("GET", `/courses/${id}/attendance.xlsx`);
+    expect(res.headers.get("content-disposition")).toBe(
+      `attachment; filename="Dana's seminar attendance 2026-11-30.xlsx"; ` +
+        `filename*=UTF-8''Dana%27s%20seminar%20attendance%202026-11-30.xlsx`,
+    );
+  });
+
+  it("refuses the Attendance sheet without sign-in, or for another Lecturer's Course", async () => {
+    const res = await fetch(`${server.url}/api/lecturer/courses/${aCourse(t).id}/attendance.xlsx`);
+    expect(res.status).toBe(401);
+    expect((await call("GET", "/courses/999/attendance.xlsx")).status).toBe(404);
   });
 });
