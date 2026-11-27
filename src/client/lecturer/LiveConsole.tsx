@@ -6,6 +6,7 @@ import { AttendanceColumn } from "./AttendanceColumn";
 import { AttendanceSheetItem } from "./AttendanceSheetItem";
 import { CommentsColumn } from "./CommentsColumn";
 import { DiagnosticsItem } from "./DiagnosticsItem";
+import { LlmUsage } from "./LlmUsage";
 import { Menu } from "./Menu";
 import { PollColumn } from "./PollColumn";
 import { ProjectorControl } from "./ProjectorControl";
@@ -57,6 +58,7 @@ export function LiveConsole() {
           <Link to={`/lecturer/courses/${courseId}/topics`}>Topics</Link>
           <AttendanceSheetItem courseId={courseId} />
           <DiagnosticsItem />
+          <LlmUsage />
         </Menu>
       </header>
       <div className="console">

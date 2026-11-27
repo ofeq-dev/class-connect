@@ -6,6 +6,7 @@ import { api, ok } from "../api";
 import { EditIcon, TrashIcon } from "./icons";
 import { AttendanceSheetItem } from "./AttendanceSheetItem";
 import { DiagnosticsItem } from "./DiagnosticsItem";
+import { LlmUsage } from "./LlmUsage";
 import { Menu } from "./Menu";
 import {
   ASSIGNMENT_STATE_LABEL,
@@ -16,7 +17,6 @@ import {
   useAssignments,
   useCourse,
   useCourseLive,
-  useLlmUsage,
   formatTime,
   useComments,
   useProjector,
@@ -41,7 +41,6 @@ export function CourseDesk() {
   useCourseLive(courseId);
   const course = useCourse(courseId);
   const roster = useRoster(courseId);
-  const usage = useLlmUsage();
 
   if (course.error) return <p className="page error">{course.error.message}</p>;
   const claimed = roster.data?.filter((e) => e.claimed).length ?? 0;
@@ -53,11 +52,7 @@ export function CourseDesk() {
           <Link className="crumb" to="/lecturer">← Your Courses</Link>
           <span className="title">{course.data?.name ?? " "}</span>
         </div>
-        {usage.data && (
-          <span className="muted small num">
-            LLM requests today: {usage.data.today} / {usage.data.limit}
-          </span>
-        )}
+        <LlmUsage />
         <Menu label="Course menu">
           <Link to={`/lecturer/courses/${courseId}/roster`}>Roster</Link>
           <Link to={`/lecturer/courses/${courseId}/topics`}>Topics</Link>
