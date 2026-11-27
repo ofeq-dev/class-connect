@@ -318,6 +318,8 @@ describe("Publishing and forStudent", () => {
       date: session.date,
       start: session.start,
       markdown: v1.markdown,
+      language: null,
+      languages: [],
     });
     expect(summaries().listForStudent(device)).toEqual([{ sessionId, date: session.date, start: session.start }]);
     expect(summaries().forCourse(courseId)).toEqual([{ sessionId, state: "published", error: null }]);
@@ -394,5 +396,45 @@ describe("The scripted adapter's contract", () => {
     await t.jobs.runDue();
     expect(summaries().forLecturer(sessionId)).toMatchObject({ state: "failed" });
     expect(summaries().forLecturer(sessionId).error).toMatch(/3.5 review questions/);
+  });
+});
+
+describe("Translations", () => {
+  let device: string;
+  const PUBLISHED = "## Outline\n\n- `00:00:01` Welcome\n- `00:01:10` Use cases\n";
+
+  beforeEach(() => {
+    device = aClaimedStudent(t, courseId).deviceToken;
+    t.modules.course.updateCourse(courseId, { translationLanguages: ["ar", "ru"] });
+    t.fakes.llm.reply("translate", ({ markdown, language }: { markdown: string; language: string }) => ({
+      markdown: `[${language}] ${markdown}`,
+    }));
+    t.fakes.events.clear();
+  });
+
+  const publishText = (markdown: string) => {
+    const version = summaries().saveEdit(sessionId, markdown).versions[0]!;
+    return summaries().publish(sessionId, version.id);
+  };
+
+  it("publishing makes one translate call per Course language, from the published version", async () => {
+    publishText(PUBLISHED);
+    summaries().saveEdit(sessionId, "A later, unpublished edit.");
+    expect(t.fakes.llm.calls).toHaveLength(0);
+    expect(summaries().forLecturer(sessionId).translations).toEqual([
+      expect.objectContaining({ language: "ar", state: "translating" }),
+      expect.objectContaining({ language: "ru", state: "translating" }),
+    ]);
+
+    await t.jobs.runDue();
+
+    expect(t.fakes.llm.calls).toEqual([
+      { task: "translate", input: { markdown: PUBLISHED, language: "ar" } },
+      { task: "translate", input: { markdown: PUBLISHED, language: "ru" } },
+    ]);
+    expect(summaries().forLecturer(sessionId).translations).toEqual([
+      { language: "ar", state: "done", markdown: `[ar] ${PUBLISHED}`, error: null, edited: false },
+      { language: "ru", state: "done", markdown: `[ru] ${PUBLISHED}`, error: null, edited: false },
+    ]);
   });
 });

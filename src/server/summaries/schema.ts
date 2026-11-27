@@ -45,3 +45,27 @@ export const summaryVersion = sqliteTable(
   },
   (t) => [index("summary_version_summary").on(t.summaryId, t.number)],
 );
+
+/**
+ * One row per Course language of a published summary. Publishing (again) resets every row:
+ * markdown null, a new translate job, Lecturer edits gone. Edits overwrite in place, no history.
+ */
+export const summaryTranslation = sqliteTable(
+  "summary_translation",
+  {
+    id: integer("id").primaryKey(),
+    summaryId: integer("summary_id")
+      .notNull()
+      .references(() => summary.id, { onDelete: "cascade" }),
+    language: text("language").notNull(),
+    /** Null until the translate job has written it. */
+    markdown: text("markdown"),
+    /** The published version this was translated from. */
+    sourceVersionId: integer("source_version_id").notNull(),
+    /** The latest summary.translate job; a job that isn't this one is stale and writes nothing. */
+    jobId: integer("job_id").notNull(),
+    /** Set when the Lecturer edits the translation; null for the AI's text. */
+    editedAt: integer("edited_at", { mode: "timestamp_ms" }),
+  },
+  (t) => [uniqueIndex("summary_translation_language").on(t.summaryId, t.language)],
+);
