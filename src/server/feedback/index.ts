@@ -370,12 +370,12 @@ export function createFeedbackModule({ db, clock, events, course, attendance, ti
     },
 
     comment(deviceToken, topicId, input) {
+      const unclaimed = () => new DomainError("comment.unclaimed", "Scan your Session's QR code first.");
+      if (!deviceToken || !course.whoIs(deviceToken)) throw unclaimed();
       const row = db.select().from(topicTable).where(eq(topicTable.id, topicId)).get();
       if (!row) throw new NotFoundError("Topic");
-      const viewer = deviceToken ? course.whoIs(deviceToken, row.courseId) : null;
-      if (!viewer || viewer.course.id !== row.courseId) {
-        throw new DomainError("comment.unclaimed", "Scan your Session's QR code first.");
-      }
+      const viewer = course.whoIs(deviceToken, row.courseId);
+      if (!viewer || viewer.course.id !== row.courseId) throw unclaimed();
       const t = readTopic(row.courseId, topicId);
       if (t.archived) throw new DomainError("comment.topic-archived", "That Topic is closed.");
       const { text, reaction } = commentText(input);

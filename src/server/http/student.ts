@@ -169,6 +169,36 @@ export function studentRoutes(deps: AppDeps) {
       },
     )
 
+    // Topics to comment on, Comments, and the Student's own (Mine)
+    .get("/topics", (c) => {
+      const viewer = student(c);
+      if (!viewer) return unclaimed(c);
+      return c.json(deps.feedback.listTopics(viewer.course.id));
+    })
+    .post(
+      "/comments",
+      validator("json", (value) => {
+        const b = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+        return {
+          topicId: typeof b.topicId === "number" ? b.topicId : 0,
+          text: typeof b.text === "string" ? b.text : undefined,
+          reaction: typeof b.reaction === "string" ? b.reaction : undefined,
+          anonymous: b.anonymous === true,
+        };
+      }),
+      (c) => {
+        const { topicId, ...input } = c.req.valid("json");
+        return c.json(deps.feedback.comment(c.var.deviceToken, topicId, input), 201);
+      },
+    )
+    .get("/comments", (c) => c.json(deps.feedback.mine(c.var.deviceToken)))
+    .delete("/comments/:commentId", (c) => {
+      const id = Number(c.req.param("commentId"));
+      if (!Number.isInteger(id) || id <= 0) throw new NotFoundError("Comment");
+      deps.feedback.deleteComment(c.var.deviceToken, id);
+      return c.json({ ok: true });
+    })
+
     // Published Session summaries of this phone's Course, and one to read.
     .get("/summaries", (c) => c.json(deps.summaries.listForStudent(c.var.deviceToken)))
     .get("/summaries/:sessionId", (c) => {
