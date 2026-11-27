@@ -42,7 +42,7 @@ describe("Course desk over HTTP", () => {
     expect(await moved.json()).toMatchObject({ start: "10:15", qrCode: created.qrCode });
 
     const listed = await (await call("GET", `/courses/${id}/sessions`)).json();
-    expect(listed).toMatchObject({ today: "2026-11-30", sessions: [{ id: created.id }] });
+    expect(listed).toMatchObject({ today: "2026-11-30", sessions: [{ id: created.id, headcount: 0 }] });
 
     expect((await call("DELETE", `/courses/${id}/sessions/${created.id}`)).status).toBe(200);
     expect((await call("GET", `/courses/${id}/sessions/${created.id}`)).status).toBe(404);

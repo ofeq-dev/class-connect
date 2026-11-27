@@ -4,10 +4,10 @@ import { createMiddleware } from "hono/factory";
 import { validator } from "hono/validator";
 import type { ProjectorMode, SessionChanges } from "../course";
 import { NotFoundError } from "../errors";
-import type { CommentFilter, CommentStatus, PollInput, Timing } from "../feedback";
+import { COMMENT_STATUSES, TIMINGS, type CommentStatus, type Timing } from "../../shared/feedback";
+import type { CommentFilter, PollInput } from "../feedback";
 import { verifyPassword } from "../lecturer-auth";
 import { streamLiveEvents } from "../live-events";
-import type { Level } from "../homework";
 import { DAILY_LIMIT } from "../llm";
 import type { AppDeps } from "./app";
 import { projectorView } from "./projector";
@@ -41,7 +41,7 @@ const reviewBody = (b: Body) => ({
     const o = (l && typeof l === "object" ? l : {}) as Body;
     return {
       criterionId: Number(o.criterionId),
-      level: str(o.level) as Level,
+      level: str(o.level),
       evidence: str(o.evidence),
       feedback: str(o.feedback),
     };
@@ -82,9 +82,8 @@ function attachment(fileName: string) {
   return `attachment; filename="${ascii}"; filename*=UTF-8''${encoded}`;
 }
 
-const STATUSES: readonly string[] = ["new", "pinned", "addressed", "ignored"];
-const TIMINGS: readonly string[] = ["before", "during", "after"];
-const status = (v: unknown) => (STATUSES.includes(str(v)) ? (str(v) as CommentStatus) : undefined);
+const status = (v: unknown) =>
+  (COMMENT_STATUSES as readonly string[]).includes(str(v)) ? (str(v) as CommentStatus) : undefined;
 
 /** The all-comments screen's query string; anything unrecognised is no filter. */
 type CommentQuery = { topicId?: string; author?: string; status?: string; timing?: string };
@@ -95,7 +94,7 @@ function commentFilter(q: CommentQuery): CommentFilter {
     topicId: n(q.topicId),
     author: q.author === "anonymous" ? "anonymous" : n(q.author),
     status: status(q.status),
-    timing: TIMINGS.includes(q.timing ?? "") ? (q.timing as Timing) : undefined,
+    timing: (TIMINGS as readonly string[]).includes(q.timing ?? "") ? (q.timing as Timing) : undefined,
   };
 }
 
@@ -107,8 +106,8 @@ function idParam(c: Context, name: string): number {
 
 export function lecturerRoutes(deps: AppDeps) {
   /** The console's Attendance glance; Diagnostics (?diagnostics=1) adds IPs, blocks and device IDs. */
-  const glance = (c: Context, sessionId: number) =>
-    deps.attendance.forLecturer(sessionId, { diagnostics: c.req.query("diagnostics") === "1" });
+  const glance = (query: { diagnostics?: "1" }, sessionId: number) =>
+    deps.attendance.forLecturer(sessionId, { diagnostics: query.diagnostics === "1" });
 
   const requireLecturer = createMiddleware<{ Variables: { lecturerId: number } }>(
     async (c, next) => {
@@ -213,7 +212,9 @@ export function lecturerRoutes(deps: AppDeps) {
     // Sessions
     .get("/courses/:courseId/sessions", requireLecturer, (c) => {
       const course = ownCourse(c);
-      return c.json({ today: deps.course.today(), sessions: deps.course.listSessions(course.id) });
+      const headcounts = deps.attendance.headcounts(course.id);
+      const sessions = deps.course.listSessions(course.id).map((s) => ({ ...s, headcount: headcounts[s.id] ?? null }));
+      return c.json({ today: deps.course.today(), sessions });
     })
     .post("/courses/:courseId/sessions", requireLecturer, json(sessionTimes), (c) =>
       c.json(deps.course.createSession(ownCourse(c).id, c.req.valid("json")), 201),
@@ -258,7 +259,7 @@ export function lecturerRoutes(deps: AppDeps) {
     // Attendance: the Check-in window, the live count, Network approval and Manual marks.
     // Every route answers with the console's glance; IPs only with ?diagnostics=1 (FR-LC-6).
     .get("/courses/:courseId/sessions/:sessionId/attendance", requireLecturer, diagnosticsFlag, (c) =>
-      c.json(glance(c, ownSession(c).id)),
+      c.json(glance(c.req.valid("query"), ownSession(c).id)),
     )
     .post(
       "/courses/:courseId/sessions/:sessionId/attendance/window/open",
@@ -267,13 +268,13 @@ export function lecturerRoutes(deps: AppDeps) {
       (c) => {
         const sessionId = ownSession(c).id;
         deps.attendance.openWindow(sessionId, c.req.valid("json"));
-        return c.json(glance(c, sessionId));
+        return c.json(glance(c.req.valid("query"), sessionId));
       },
     )
     .post("/courses/:courseId/sessions/:sessionId/attendance/window/close", requireLecturer, diagnosticsFlag, (c) => {
       const sessionId = ownSession(c).id;
       deps.attendance.closeWindow(sessionId);
-      return c.json(glance(c, sessionId));
+      return c.json(glance(c.req.valid("query"), sessionId));
     })
     .post("/courses/:courseId/sessions/:sessionId/attendance/networks/:key/approve", requireLecturer, diagnosticsFlag, (c) => {
       const sessionId = ownSession(c).id;
@@ -283,7 +284,7 @@ export function lecturerRoutes(deps: AppDeps) {
         .networks.find((n) => n.key === c.req.param("key"));
       if (!card?.block) throw new NotFoundError("Network");
       deps.attendance.approveNetwork(sessionId, card.block);
-      return c.json(glance(c, sessionId));
+      return c.json(glance(c.req.valid("query"), sessionId));
     })
     .post(
       "/courses/:courseId/sessions/:sessionId/attendance/marks/:rosterEntryId",
@@ -292,7 +293,7 @@ export function lecturerRoutes(deps: AppDeps) {
       (c) => {
         const sessionId = ownSession(c).id;
         deps.attendance.mark(sessionId, idParam(c, "rosterEntryId"), c.req.valid("json").present);
-        return c.json(glance(c, sessionId));
+        return c.json(glance(c.req.valid("query"), sessionId));
       },
     )
 
@@ -423,6 +424,9 @@ export function lecturerRoutes(deps: AppDeps) {
     })
     .post("/courses/:courseId/assignments/:assignmentId/review-run", requireLecturer, (c) =>
       c.json(deps.homework.startReviewRun(ownAssignment(c).id)),
+    )
+    .post("/courses/:courseId/assignments/:assignmentId/review-run/retry", requireLecturer, (c) =>
+      c.json(deps.homework.retryReviewRun(ownAssignment(c).id)),
     )
     .post("/courses/:courseId/assignments/:assignmentId/submissions/:submissionId/review/retry", requireLecturer, (c) =>
       c.json(deps.homework.retryReview(ownAssignment(c).id, idParam(c, "submissionId"))),

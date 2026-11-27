@@ -61,24 +61,24 @@ describe("Jobs", () => {
       running++;
       expect(running).toBe(1);
       await new Promise((r) => setTimeout(r, 1));
-      ran.push((job.payload as { name: string }).name);
+      ran.push(String(job.payload.sessionId));
       running--;
       jobs.complete(job, () => {});
     });
     const now = clock.now().getTime();
-    jobs.enqueue("summary.generate", { name: "second" }, new Date(now - 1000));
-    jobs.enqueue("summary.generate", { name: "first" }, new Date(now - 2000));
-    jobs.enqueue("summary.generate", { name: "third" });
+    jobs.enqueue("summary.generate", { sessionId: 2 }, new Date(now - 1000));
+    jobs.enqueue("summary.generate", { sessionId: 1 }, new Date(now - 2000));
+    jobs.enqueue("summary.generate", { sessionId: 3 });
     await jobs.runDue();
-    expect(ran).toEqual(["first", "second", "third"]);
+    expect(ran).toEqual(["1", "2", "3"]);
   });
 
   it("tells the timer when the next queued job is due", () => {
     expect(jobs.nextRunAt()).toBeNull();
     const later = new Date(clock.now().getTime() + 5 * 60_000);
     const sooner = new Date(clock.now().getTime() + 60_000);
-    jobs.enqueue("help.match", {}, later);
-    jobs.enqueue("help.match", {}, sooner);
+    jobs.enqueue("help.match", { assignmentId: 1 }, later);
+    jobs.enqueue("help.match", { assignmentId: 1 }, sooner);
     expect(jobs.nextRunAt()).toEqual(sooner);
   });
 
@@ -88,7 +88,7 @@ describe("Jobs", () => {
       calls++;
       throw new Error(`boom ${calls}`);
     });
-    const job = jobs.enqueue("summary.generate", {});
+    const job = jobs.enqueue("summary.generate", { sessionId: 1 });
 
     await jobs.runDue();
     expect(calls).toBe(3);
@@ -106,7 +106,7 @@ describe("Jobs", () => {
       expect(jobs.read(job.id)).toMatchObject({ status: "running", attempts: 2, error: "flaky" });
       writeResult(job, "ok");
     });
-    const job = jobs.enqueue("summary.generate", {});
+    const job = jobs.enqueue("summary.generate", { sessionId: 1 });
     await jobs.runDue();
     expect(jobs.read(job.id)).toMatchObject({ status: "done", attempts: 2, error: null });
     expect(results()).toEqual(["ok"]);
@@ -118,7 +118,7 @@ describe("Jobs", () => {
       calls++;
       jobs.fail(job, "Every model failed.");
     });
-    const job = jobs.enqueue("summary.generate", {});
+    const job = jobs.enqueue("summary.generate", { sessionId: 1 });
     await jobs.runDue();
     expect(calls).toBe(1);
     expect(jobs.read(job.id)).toMatchObject({ status: "failed", error: "Every model failed." });
@@ -130,42 +130,70 @@ describe("Jobs", () => {
       seen.push(job.attempts);
       throw new Error("again");
     });
-    jobs.enqueue("review.submission", {});
+    jobs.enqueue("review.submission", { runId: 1, submissionId: 1 });
     await jobs.runDue();
     expect(seen).toEqual([1, 2, 3]);
   });
 
-  it("fails a job and writes in one transaction, rolling both back if the write throws", async () => {
-    jobs.register("review.submission", async (job) => {
-      jobs.fail(job, "Out of attempts.", (tx) => {
-        tx.run("insert into test_result (value) values ('settled')");
-      });
-    });
-    const ok = jobs.enqueue("review.submission", {});
-    await jobs.runDue();
-    expect(jobs.read(ok.id)).toMatchObject({ status: "failed", error: "Out of attempts." });
-    expect(results()).toEqual(["settled"]);
-
+  it("tells the handler when it is on its last attempt", async () => {
+    const seen: boolean[] = [];
     jobs.register("review.compare", async (job) => {
-      jobs.fail(job, "Never saved.", (tx) => {
-        tx.run("insert into test_result (value) values ('half')");
-        throw new Error("write broke");
-      });
+      seen.push(job.lastAttempt);
+      throw new Error("again");
     });
-    const broken = jobs.enqueue("review.compare", {});
+    jobs.enqueue("review.compare", { runId: 1 });
     await jobs.runDue();
-    expect(results()).toEqual(["settled"]);
-    expect(jobs.read(broken.id).error).toBe("write broke");
+    expect(seen).toEqual([false, false, true]);
+  });
+
+  it("runs the kind's onFailed in the transaction that fails the job for good, after the last attempt or on fail", async () => {
+    const failed: string[] = [];
+    const onFailed = (job: Job, error: string) => {
+      failed.push(`${job.kind}: ${error} (${jobs.read(job.id).status})`);
+      database.sqlite.prepare("insert into test_result (value) values (?)").run(error);
+    };
+    jobs.register(
+      "review.submission",
+      async () => {
+        throw new Error("flaky");
+      },
+      { onFailed },
+    );
+    jobs.register("review.compare", async (job) => jobs.fail(job, "Out of attempts."), { onFailed });
+    jobs.enqueue("review.submission", { runId: 1, submissionId: 1 });
+    jobs.enqueue("review.compare", { runId: 1 });
+    await jobs.runDue();
+    expect(failed).toEqual(["review.submission: flaky (failed)", "review.compare: Out of attempts. (failed)"]);
+    expect(results()).toEqual(["flaky", "Out of attempts."]);
+  });
+
+  it("still fails the job, with nothing written, when onFailed throws", async () => {
+    jobs.register(
+      "review.compare",
+      async () => {
+        throw new Error("boom");
+      },
+      {
+        onFailed: () => {
+          database.sqlite.prepare("insert into test_result (value) values ('half')").run();
+          throw new Error("write broke");
+        },
+      },
+    );
+    const broken = jobs.enqueue("review.compare", { runId: 1 });
+    await jobs.runDue();
+    expect(results()).toEqual([]);
+    expect(jobs.read(broken.id)).toMatchObject({ status: "failed", error: "write broke" });
   });
 
   it("tallies a set of jobs by status, from the job rows", async () => {
     jobs.register("review.submission", async (job) => {
-      const { n } = job.payload as { n: number };
+      const n = job.payload.submissionId;
       if (n === 2) return jobs.fail(job, "nope");
       jobs.complete(job, () => {});
     });
-    const ids = [1, 2, 3].map((n) => jobs.enqueue("review.submission", { n }).id);
-    const later = jobs.enqueue("review.submission", { n: 4 }, new Date(clock.now().getTime() + 60_000));
+    const ids = [1, 2, 3].map((n) => jobs.enqueue("review.submission", { runId: 1, submissionId: n }).id);
+    const later = jobs.enqueue("review.submission", { runId: 1, submissionId: 4 }, new Date(clock.now().getTime() + 60_000));
     expect(jobs.tally([...ids, later.id])).toEqual({ queued: 4, running: 0, done: 0, failed: 0, total: 4 });
     await jobs.runDue();
     expect(jobs.tally([...ids, later.id])).toEqual({ queued: 1, running: 0, done: 2, failed: 1, total: 4 });
@@ -178,7 +206,7 @@ describe("Jobs", () => {
       if (fail) return jobs.fail(job, "nope");
       writeResult(job, "second time");
     });
-    const job = jobs.enqueue("summary.generate", {});
+    const job = jobs.enqueue("summary.generate", { sessionId: 1 });
     await jobs.runDue();
     expect(jobs.read(job.id).status).toBe("failed");
 
@@ -196,20 +224,20 @@ describe("Jobs", () => {
       expect(jobs.read(job.id).progress).toEqual({ done: 2, total: 8 });
       jobs.complete(job, () => {});
     });
-    const job = jobs.enqueue("review.submission", {});
+    const job = jobs.enqueue("review.submission", { runId: 1, submissionId: 1 });
     await jobs.runDue();
     expect(jobs.read(job.id).progress).toEqual({ done: 2, total: 8 });
   });
 
   it("marks a job done when its handler returns without calling complete", async () => {
     jobs.register("help.match", async () => {});
-    const job = jobs.enqueue("help.match", {});
+    const job = jobs.enqueue("help.match", { assignmentId: 1 });
     await jobs.runDue();
     expect(jobs.read(job.id).status).toBe("done");
   });
 
   it("fails a job whose kind has no handler", async () => {
-    const job = jobs.enqueue("help.match", {});
+    const job = jobs.enqueue("help.match", { assignmentId: 1 });
     await jobs.runDue();
     expect(jobs.read(job.id)).toMatchObject({ status: "failed" });
   });
@@ -223,7 +251,7 @@ describe("Jobs", () => {
     }
 
     it("puts running jobs back to queued and runs them again", async () => {
-      const job = jobs.enqueue("summary.generate", {});
+      const job = jobs.enqueue("summary.generate", { sessionId: 1 });
       await interrupt();
       expect(jobs.read(job.id).status).toBe("running");
 
@@ -236,7 +264,7 @@ describe("Jobs", () => {
     });
 
     it("writes nothing for a job interrupted before complete", async () => {
-      const job = jobs.enqueue("summary.generate", {});
+      const job = jobs.enqueue("summary.generate", { sessionId: 1 });
       jobs.register("summary.generate", async () => {
         await new Promise(() => {}); // the slow work never finishes
       });
@@ -253,7 +281,7 @@ describe("Jobs", () => {
         calls++;
         writeResult(j, "once");
       });
-      jobs.enqueue("summary.generate", {});
+      jobs.enqueue("summary.generate", { sessionId: 1 });
       await jobs.runDue();
 
       restart();
@@ -267,7 +295,7 @@ describe("Jobs", () => {
     });
 
     it("counts attempts at claim, so a job interrupted 3 times ends failed", async () => {
-      const job = jobs.enqueue("summary.generate", {});
+      const job = jobs.enqueue("summary.generate", { sessionId: 1 });
       for (let i = 1; i <= 3; i++) {
         await interrupt();
         expect(jobs.read(job.id).attempts).toBe(i);
@@ -295,7 +323,7 @@ describe("Jobs", () => {
       });
       jobs.start();
       await jobs.idle();
-      const job = jobs.enqueue("help.match", {}, new Date(clock.now().getTime() + 90_000));
+      const job = jobs.enqueue("help.match", { assignmentId: 1 }, new Date(clock.now().getTime() + 90_000));
       const timer = timers.at(-1)!;
       expect(timer.at).toBe(clock.now().getTime() + 90_000);
 

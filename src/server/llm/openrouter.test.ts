@@ -37,12 +37,16 @@ const echoTask: LlmTask<string, { answer: string }> = {
   },
 };
 
+const REVIEW_MODEL = "model/review:free";
+const reviewTask: LlmTask<string, { answer: string }> = { ...echoTask, name: "review", model: "review" };
+
 function gateway(options: { models?: string[]; apiKey?: string; dailyLimit?: number } = {}) {
   return createOpenRouterGateway({
     db: database.db,
     clock,
     apiKey: options.apiKey ?? "test-key",
     models: options.models ?? MODELS,
+    reviewModel: REVIEW_MODEL,
     embeddingModel: "embed/model:free",
     dailyLimit: options.dailyLimit,
     fetch: async (url, init) => {
@@ -85,6 +89,20 @@ describe("OpenRouter gateway", () => {
     const result = await gateway().generate(echoTask, "x");
     expect(result).toEqual({ ok: true, value: { answer: "from c" } });
     expect(sent.map((s) => s.body.model)).toEqual(MODELS);
+  });
+
+  it("sends a Review task to the pinned Review model, not the fallback list", async () => {
+    expect(await gateway().generate(reviewTask, "x")).toEqual({ ok: true, value: { answer: "hi" } });
+    expect(sent.map((s) => s.body.model)).toEqual([REVIEW_MODEL]);
+    await gateway().generate(echoTask, "x");
+    expect(sent.at(-1)!.body.model).toBe("model/a:free");
+  });
+
+  it("falls back to the fallback list only when the pinned Review model fails", async () => {
+    reply = (body) =>
+      body.model === REVIEW_MODEL ? Promise.resolve(new Response("down", { status: 503 })) : ok('{"answer":"from a"}');
+    expect(await gateway().generate(reviewTask, "x")).toEqual({ ok: true, value: { answer: "from a" } });
+    expect(sent.map((s) => s.body.model)).toEqual([REVIEW_MODEL, "model/a:free"]);
   });
 
   it("returns an LlmError when every model fails", async () => {

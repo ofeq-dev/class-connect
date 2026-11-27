@@ -1,7 +1,8 @@
 import type { LlmTask } from "../llm";
 
-export type Level = "not-yet" | "partly" | "secure";
-export const LEVELS: readonly Level[] = ["not-yet", "partly", "secure"];
+import type { Level } from "../../shared/homework";
+
+export { LEVELS, type Level } from "../../shared/homework";
 
 export interface ReviewSubmissionInput {
   instructions: string;
@@ -31,6 +32,7 @@ const LEVEL_WORDS: Record<string, Level> = { "not yet": "not-yet", partly: "part
 export function reviewSubmission(criteriaCount: number): LlmTask<ReviewSubmissionInput, ReviewDraft> {
   return {
     name: "reviewSubmission",
+    model: "review",
     timeoutMs: 2 * 60_000,
     prompt: ({ instructions, criteria, text }) =>
       [

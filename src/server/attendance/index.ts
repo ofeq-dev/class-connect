@@ -124,6 +124,8 @@ export interface AttendanceModule {
    * dated after today), each cell Present, Manual or Absent, with totals and headcounts.
    */
   sheet(courseId: number): AttendanceSheet;
+  /** Each held Session's headcount (as on the sheet), by Session id, for the Course desk. */
+  headcounts(courseId: number): Record<number, number>;
   /** The Attendance sheet as an xlsx file. */
   exportXlsx(courseId: number): Promise<Uint8Array<ArrayBuffer>>;
   /** Every recorded Check-in and mark for a Session, latest action per Roster entry. */
@@ -281,6 +283,10 @@ export function createAttendanceModule({
 
   return {
     sheet,
+    headcounts(courseId) {
+      const { sessions, headcount } = sheet(courseId);
+      return Object.fromEntries(sessions.map((s, i) => [s.id, headcount[i]!]));
+    },
     exportXlsx: (courseId) => sheetToXlsx(sheet(courseId)),
 
     openWindow(sessionId, lecturer) {
@@ -317,7 +323,7 @@ export function createAttendanceModule({
         changed(sessionId, "lecturer", false);
         return "present";
       }
-      const row = { state, checkInState: state, ip, block: mine?.block ?? null, deviceTokenHash: tokenHash(deviceToken), at: clock.now() };
+      const row = { state, checkInState: state, ip, block: mine?.block ?? null, deviceTokenHash: tokenHash(deviceToken), checkInAt: clock.now(), at: clock.now() };
       if (existing) db.update(attendance).set(row).where(eq(attendance.id, existing.id)).run();
       else db.insert(attendance).values({ sessionId, rosterEntryId, ...row }).run();
       changed(sessionId, "lecturer", state === "present");
@@ -345,7 +351,9 @@ export function createAttendanceModule({
       const existing = record(sessionId, rosterEntryId);
       if (present === null) {
         if (existing?.checkInState) {
-          db.update(attendance).set({ state: existing.checkInState }).where(eq(attendance.id, existing.id)).run();
+          db.update(attendance)
+            .set({ state: existing.checkInState, at: existing.checkInAt ?? existing.at })
+            .where(eq(attendance.id, existing.id)).run();
         } else if (existing) {
           db.delete(attendance).where(eq(attendance.id, existing.id)).run();
         }

@@ -285,8 +285,8 @@ export function createSummariesModule({ db, clock, course, llm, jobs, files, eve
     return course.whoIs(deviceToken, session.courseId) ? session : null;
   }
 
-  async function handleGenerate(job: Job) {
-    const { sessionId } = job.payload as { sessionId: number };
+  async function handleGenerate(job: Job<"summary.generate">) {
+    const { sessionId } = job.payload;
     const t = transcriptRow(sessionId);
     const row = summaryRow(sessionId);
     if (!t || !row) return jobs.fail(job, "The Transcript is gone.");
@@ -302,8 +302,8 @@ export function createSummariesModule({ db, clock, course, llm, jobs, files, eve
     changed(sessionId);
   }
 
-  async function handleTranslate(job: Job) {
-    const { sessionId, language } = job.payload as { sessionId: number; language: string };
+  async function handleTranslate(job: Job<"summary.translate">) {
+    const { sessionId, language } = job.payload;
     const row = summaryRow(sessionId);
     const tr = row
       ? db

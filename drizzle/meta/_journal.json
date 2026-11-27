@@ -85,6 +85,13 @@
       "when": 1795759621815,
       "tag": "0011_polls_and_votes",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1795761501151,
+      "tag": "0012_attendance_check_in_at",
+      "breakpoints": true
     }
   ]
 }

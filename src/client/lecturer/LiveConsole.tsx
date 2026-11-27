@@ -1,3 +1,4 @@
+import { clockTime } from "../time";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router";
@@ -6,6 +7,7 @@ import { AttendanceColumn } from "./AttendanceColumn";
 import { AttendanceSheetItem } from "./AttendanceSheetItem";
 import { CommentsColumn } from "./CommentsColumn";
 import { DiagnosticsItem } from "./DiagnosticsItem";
+import { LlmUsage } from "./LlmUsage";
 import { Menu } from "./Menu";
 import { PollColumn } from "./PollColumn";
 import { ProjectorControl } from "./ProjectorControl";
@@ -17,7 +19,7 @@ function useClock() {
     const timer = setInterval(() => setNow(new Date()), 15_000);
     return () => clearInterval(timer);
   }, []);
-  return now.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+  return clockTime(now);
 }
 
 /** The live console: header, then Attendance | Comments | Poll. */
@@ -57,6 +59,7 @@ export function LiveConsole() {
           <Link to={`/lecturer/courses/${courseId}/topics`}>Topics</Link>
           <AttendanceSheetItem courseId={courseId} />
           <DiagnosticsItem />
+          <LlmUsage />
         </Menu>
       </header>
       <div className="console">

@@ -60,8 +60,10 @@ describe("notice → query keys", () => {
     const client = clientWith(["student", "me"]);
     client.setQueryData(["attendance", 5], "cached");
     client.setQueryData(["attendance", 6], "cached");
+    client.setQueryData(["sessions", 1], "cached");
     applyNotice(client, { type: "attendance.changed", id: 5 });
     expect(client.getQueryState(["attendance", 5])?.isInvalidated).toBe(true);
+    expect(client.getQueryState(["sessions", 1])?.isInvalidated).toBe(true);
     expect(client.getQueryState(["attendance", 6])?.isInvalidated).toBe(false);
     expect(stale(client, ["student", "me"])).toBe(true);
   });

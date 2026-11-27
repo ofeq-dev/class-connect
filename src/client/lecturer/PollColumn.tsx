@@ -1,7 +1,8 @@
+import { clockTime } from "../time";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { api, ok } from "../api";
-import { currentPoll, formatTime, useProjector, useSessionPolls, useTopics, type LecturerPoll } from "./queries";
+import { currentPoll, useProjector, useSessionPolls, useTopics, type LecturerPoll } from "./queries";
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
@@ -133,7 +134,7 @@ export function PollColumn(props: {
 
 function StatusChip({ poll }: { poll: LecturerPoll }) {
   if (poll.status === "open") return <span className="chip c-ok">Open</span>;
-  if (poll.status === "scheduled") return <span className="chip c-warn">{poll.opensAt ? formatTime(poll.opensAt) : "Scheduled"}</span>;
+  if (poll.status === "scheduled") return <span className="chip c-warn">{poll.opensAt ? clockTime(poll.opensAt) : "Scheduled"}</span>;
   if (poll.status === "closed") return <span className="chip c-mute">Closed</span>;
   return <span className="chip c-mute">{poll.complete ? "Saved" : "Draft"}</span>;
 }
@@ -175,7 +176,7 @@ function Glance(props: {
           <span className="dot on" />
           <span className="grow" aria-live="polite">
             Open · {plural(p.votes, "vote")}
-            {p.closesAt && ` · closes ${formatTime(p.closesAt)}`}
+            {p.closesAt && ` · closes ${clockTime(p.closesAt)}`}
           </span>
         </div>
         {question}
@@ -199,7 +200,7 @@ function Glance(props: {
         <div className="state">
           <span className="dot" />
           <span className="grow">
-            Closed{p.closesAt && ` ${formatTime(p.closesAt)}`} · {plural(p.votes, "vote")} · Students see the results
+            Closed{p.closesAt && ` ${clockTime(p.closesAt)}`} · {plural(p.votes, "vote")} · Students see the results
           </span>
         </div>
         {question}
@@ -220,7 +221,7 @@ function Glance(props: {
       <>
         <div className="state">
           <span className="dot" />
-          <span className="grow">Next poll opens {p.opensAt && formatTime(p.opensAt)}</span>
+          <span className="grow">Next poll opens {p.opensAt && clockTime(p.opensAt)}</span>
         </div>
         {question}
         <div className="row">

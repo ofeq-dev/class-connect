@@ -1,3 +1,4 @@
+import type { CommentStatus } from "../../shared/feedback";
 import { useQuery } from "@tanstack/react-query";
 import { api, ok } from "../api";
 import { diagnosticsQuery, useDiagnostics } from "./diagnostics";
@@ -185,7 +186,7 @@ export function useComments(courseId: string, filter: CommentQuery = {}) {
   });
 }
 
-export type CommentStatus = "new" | "pinned" | "addressed" | "ignored";
+export type { CommentStatus } from "../../shared/feedback";
 
 export const STATUS_LABEL: Record<CommentStatus, string> = {
   new: "New",
@@ -194,10 +195,6 @@ export const STATUS_LABEL: Record<CommentStatus, string> = {
   ignored: "Ignored",
 };
 
-/** "10:19" for an instant, in the browser's time zone. */
-export function formatTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
-}
 
 /** The Course's projector link and what the class sees; projector.changed and attendance.changed refetch it. */
 export function useProjector(courseId: string) {

@@ -1,3 +1,5 @@
+import { localInput } from "../time";
+import { LEVEL_LABEL } from "../../shared/homework";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { api, ok } from "../api";
@@ -5,14 +7,8 @@ import { formatInstant, type useAssignment } from "./queries";
 
 type AssignmentData = NonNullable<ReturnType<typeof useAssignment>["data"]>;
 
-const LEVEL_LABEL = { "not-yet": "Not yet", partly: "Partly", secure: "Secure" } as const;
 const TWO_DAYS = 2 * 24 * 60 * 60 * 1000;
 
-/** An instant as a datetime-local value in the browser's time zone. */
-function localInput(d: Date): string {
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
-}
 
 /**
  * Release with the match deadline (the reason shown while refused); after it, Match now and the

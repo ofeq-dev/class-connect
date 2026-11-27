@@ -9,6 +9,11 @@ export interface LlmTask<I, O> {
   prompt(input: I): string;
   /** How long one request may take before the next model is tried. */
   timeoutMs?: number;
+  /**
+   * "review": the pinned structured-output Review model is tried first, then the fallback list.
+   * Otherwise the fallback list alone.
+   */
+  model?: "review";
 }
 
 export interface LlmError {

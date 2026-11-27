@@ -1,9 +1,10 @@
+import { clockTime } from "../time";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { api, ok } from "../api";
 import { useToast } from "../toast";
 import { BackIcon, CheckIcon, IgnoreIcon, PinIcon } from "./icons";
-import { formatTime, STATUS_LABEL, useInbox, type CommentStatus } from "./queries";
+import { STATUS_LABEL, useInbox, type CommentStatus } from "./queries";
 
 type Inbox = NonNullable<ReturnType<typeof useInbox>["data"]>;
 type Item = Inbox["open"][number];
@@ -170,7 +171,7 @@ function ItemCard(props: { item: Item; pinned?: boolean; sessionTopic?: number; 
         <div className="cm-text"><b>{item.text}</b></div>
         <div className="cm-meta">
           {props.showTopic && item.topicId !== props.sessionTopic && <span>{item.topicName}</span>}
-          <span className="num">{formatTime(item.from)}–{formatTime(item.to)}</span>
+          <span className="num">{clockTime(item.from)}–{clockTime(item.to)}</span>
           {who && <span>{people}</span>}
           <button className="link small" onClick={() => setWho(!who)} aria-expanded={who}>
             {who ? "hide names" : "who?"}
@@ -190,7 +191,7 @@ export function CommentMeta({ c, sessionTopic, showTopic = true }: { c: Lecturer
       {showTopic && c.topicId !== sessionTopic && <span>{c.topicName}</span>}
       {c.timing && c.timing !== "during" && <span>{c.timing} the Session</span>}
       {c.present !== null && <span>{c.present ? "checked in" : "not checked in"}</span>}
-      <span className="num">{formatTime(c.createdAt)}</span>
+      <span className="num">{clockTime(c.createdAt)}</span>
     </>
   );
 }

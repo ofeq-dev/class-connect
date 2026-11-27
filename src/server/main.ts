@@ -77,6 +77,7 @@ const llm =
         clock: systemClock,
         apiKey: config.llm.openRouterApiKey,
         models: config.llm.models,
+        reviewModel: config.llm.reviewModel,
         embeddingModel: config.llm.embeddingModel,
       });
 const files = createDiskFileStore(config.filesDir);

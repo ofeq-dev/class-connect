@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DomainError } from "../errors";
 import { aCourse, anAssignmentWithCriteria, aRoster, makeTestApp, type TestApp } from "../testing";
-import type { ReviewSubmissionInput } from "./review-task";
+import { reviewSubmission, type ReviewSubmissionInput } from "./review-task";
 
 let t: TestApp;
 let courseId: number;
@@ -30,11 +30,7 @@ const replyAll = (level: string) => (input: ReviewSubmissionInput) => ({
 
 const homework = () => t.modules.homework;
 const view = () => homework().lecturerView(assignmentId);
-const jobsOf = (kind: string) =>
-  t.database.sqlite.prepare("select id, status from job where kind = ? order by id").all(kind) as {
-    id: number;
-    status: string;
-  }[];
+const callsOf = (task: string) => t.fakes.llm.calls.filter((c) => c.task === task);
 
 async function handIn(texts: string[]) {
   for (const [i, text] of texts.entries()) await homework().submit(assignmentId, students[i]!, { text });
@@ -71,7 +67,6 @@ afterEach(() => t.close());
 describe("Starting a review run", () => {
   it("queues one review.submission job per Submission and shows 0 of 3", () => {
     const started = homework().startReviewRun(assignmentId);
-    expect(jobsOf("review.submission")).toHaveLength(3);
     expect(started.state).toBe("reviewing");
     expect(started.reviewRun).toMatchObject({ done: 0, total: 3, failed: 0 });
     expect(started.submissions.map((s) => s.review.status)).toEqual(["queued", "queued", "queued"]);
@@ -122,6 +117,10 @@ describe("Draft Reviews", () => {
       criteria: ["Actors", "Goals", "Main flow", "Alternative flows"],
       text: TEXTS[0],
     });
+  });
+
+  it("asks the pinned Review model first (the gateway falls back to the shared list after it)", () => {
+    expect(reviewSubmission(4).model).toBe("review");
   });
 
   it("lets the Lecturer edit any draft Review", async () => {
@@ -184,8 +183,8 @@ describe("A failing draft", () => {
     homework().startReviewRun(assignmentId);
     await t.jobs.runDue();
 
-    expect(jobsOf("review.compare").map((j) => j.status)).toEqual(["done"]);
-    expect(jobsOf("review.classSummary").map((j) => j.status)).toEqual(["done"]);
+    expect(view().reviewRun).toMatchObject({ compare: "done", classSummary: "done" });
+    expect(callsOf("classSummary")).toHaveLength(1);
     expect(embed).toHaveBeenCalledTimes(1); // one batched call
     expect(embed.mock.calls[0]![0]).toEqual([TEXTS[0], TEXTS[2]]);
     const summary = view().classSummary!;
@@ -196,6 +195,7 @@ describe("A failing draft", () => {
 
   it("runs compare and the class summary again after a successful Retry", async () => {
     failDraftOf(TEXTS[1]!);
+    const embed = vi.spyOn(t.fakes.llm, "embed");
     homework().startReviewRun(assignmentId);
     await t.jobs.runDue();
     const failed = view().submissions[1]!;
@@ -206,9 +206,10 @@ describe("A failing draft", () => {
     expect(retried.state).toBe("reviewing");
     await t.jobs.runDue();
 
-    expect(jobsOf("review.compare").map((j) => j.status)).toEqual(["done", "done"]);
-    expect(jobsOf("review.classSummary").map((j) => j.status)).toEqual(["done", "done"]);
+    expect(embed).toHaveBeenCalledTimes(2);
+    expect(callsOf("classSummary")).toHaveLength(2);
     const v = view();
+    expect(v.reviewRun).toMatchObject({ compare: "done", classSummary: "done" });
     expect(v.submissions[1]!.review.status).toBe("drafted");
     expect(v.classSummary).toMatchObject({ reviewCount: 3 });
     expect(v.classSummary!.counts[0]).toMatchObject({ partly: 2, secure: 1 });
@@ -326,6 +327,29 @@ describe("Similar pairs", () => {
   });
 });
 
+describe("Retrying a failed comparison", () => {
+  it("queues compare again, which then queues the class summary", async () => {
+    // A reply without one vector per Submission breaks the comparison on every attempt.
+    const embed = vi.spyOn(t.fakes.llm, "embed").mockResolvedValue([]);
+    homework().startReviewRun(assignmentId);
+    await t.jobs.runDue();
+    expect(view().reviewRun).toMatchObject({ compare: "failed", classSummary: null });
+    expect(view().reviewRun!.error).toBeTruthy();
+
+    embed.mockRestore();
+    expect(homework().retryReviewRun(assignmentId).reviewRun).toMatchObject({ compare: "queued" });
+    await t.jobs.runDue();
+    expect(view().reviewRun).toMatchObject({ compare: "done", classSummary: "done", error: null });
+    expect(view().classSummary).toMatchObject({ reviewCount: 3 });
+  });
+
+  it("is refused when neither compare nor the class summary failed", async () => {
+    homework().startReviewRun(assignmentId);
+    await t.jobs.runDue();
+    expect(() => homework().retryReviewRun(assignmentId)).toThrow(DomainError);
+  });
+});
+
 describe("The class summary", () => {
   it("counts levels per Criterion and asks the LLM for common mistakes from anonymised Reviews", async () => {
     t.fakes.llm.reply("reviewSubmission", (input: ReviewSubmissionInput) =>
@@ -359,6 +383,22 @@ describe("The class summary", () => {
     expect(v.state).toBe("reviewed");
     expect(v.submissions.every((s) => s.review.status === "drafted")).toBe(true);
     expect(t.fakes.events.published.at(-1)!.notice).toEqual({ type: "assignment.changed", id: assignmentId });
+  });
+
+  it("can be retried once failed, and then writes the class summary", async () => {
+    t.fakes.llm.fail("classSummary", "all-models-failed", "Every model failed.");
+    homework().startReviewRun(assignmentId);
+    await t.jobs.runDue();
+    expect(view().reviewRun).toMatchObject({ classSummary: "failed" });
+
+    t.fakes.llm.reply("classSummary", { commonMistakes: ["Goals missing."] });
+    const retried = homework().retryReviewRun(assignmentId);
+    expect(retried.state).toBe("reviewing");
+    expect(retried.reviewRun).toMatchObject({ classSummary: "queued", error: null });
+    await t.jobs.runDue();
+    const v = view();
+    expect(v.reviewRun).toMatchObject({ compare: "done", classSummary: "done", error: null });
+    expect(v.classSummary!.commonMistakes).toEqual(["Goals missing."]);
   });
 
   it("tells the Lecturer when compare and the class summary are done", async () => {

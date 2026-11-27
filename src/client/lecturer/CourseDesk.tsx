@@ -1,10 +1,13 @@
+import { clockTime } from "../time";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router";
+import { isOpen, openByTopic } from "../../shared/feedback";
 import { api, ok } from "../api";
 import { EditIcon, TrashIcon } from "./icons";
 import { AttendanceSheetItem } from "./AttendanceSheetItem";
 import { DiagnosticsItem } from "./DiagnosticsItem";
+import { LlmUsage } from "./LlmUsage";
 import { Menu } from "./Menu";
 import {
   ASSIGNMENT_STATE_LABEL,
@@ -15,8 +18,6 @@ import {
   useAssignments,
   useCourse,
   useCourseLive,
-  useLlmUsage,
-  formatTime,
   useComments,
   useProjector,
   useRoster,
@@ -29,14 +30,17 @@ interface Session {
   date: string;
   start: string;
   end: string;
+  /** Students attending, once the Session is held (dated today or earlier). */
+  headcount: number | null;
 }
+
+const headcountText = (n: number | null) => (n === null ? null : `${n} here`);
 
 export function CourseDesk() {
   const { courseId = "" } = useParams();
   useCourseLive(courseId);
   const course = useCourse(courseId);
   const roster = useRoster(courseId);
-  const usage = useLlmUsage();
 
   if (course.error) return <p className="page error">{course.error.message}</p>;
   const claimed = roster.data?.filter((e) => e.claimed).length ?? 0;
@@ -48,11 +52,7 @@ export function CourseDesk() {
           <Link className="crumb" to="/lecturer">← Your Courses</Link>
           <span className="title">{course.data?.name ?? " "}</span>
         </div>
-        {usage.data && (
-          <span className="muted small num">
-            LLM requests today: {usage.data.today} / {usage.data.limit}
-          </span>
-        )}
+        <LlmUsage />
         <Menu label="Course menu">
           <Link to={`/lecturer/courses/${courseId}/roster`}>Roster</Link>
           <Link to={`/lecturer/courses/${courseId}/topics`}>Topics</Link>
@@ -107,15 +107,7 @@ function SessionsSection({ courseId }: { courseId: string }) {
       </div>
       {adding && <SessionForm courseId={courseId} initial={{ date: today, start: "", end: "" }} onDone={() => setAdding(false)} />}
 
-      {todays.map((s) => (
-        <div className="today" key={s.id}>
-          <span className="muted small">Today</span>
-          <span className="when num">{s.start}–{s.end}</span>
-          <div className="row">
-            <Link className="btn" to={`/lecturer/courses/${courseId}/sessions/${s.id}/live`}>Open live console</Link>
-          </div>
-        </div>
-      ))}
+      {todays.map((s) => <TodaySession key={s.id} courseId={courseId} session={s} />)}
 
       {data && data.sessions.length === 0 && !adding && (
         <p className="empty">No Sessions yet. Add one for each meeting of the Course.</p>
@@ -146,8 +138,9 @@ function SessionsSection({ courseId }: { courseId: string }) {
 /** Open Comments at a glance: how many, the latest few, and the all-comments screen. */
 function CommentsSection({ courseId }: { courseId: string }) {
   const comments = useComments(courseId);
-  const open = comments.data?.filter((c) => c.status === "new" || c.status === "pinned") ?? [];
+  const open = comments.data?.filter((c) => isOpen(c.status)) ?? [];
   const pinned = open.filter((c) => c.status === "pinned").length;
+  const perTopic = openByTopic(open);
   return (
     <section className="sec" data-s="cm">
       <div className="sec-head">
@@ -163,11 +156,20 @@ function CommentsSection({ courseId }: { courseId: string }) {
           <span className="num">{comments.data.length}</span> in all.
         </p>
       )}
+      {perTopic.length > 0 && (
+        <p className="row" aria-label="Open Comments per Topic">
+          {perTopic.map((t) => (
+            <span key={t.topicId} className="chip c-mute">
+              {t.name} <b className="num">{t.open}</b>
+            </span>
+          ))}
+        </p>
+      )}
       <ul className="list" aria-label="Latest open Comments">
         {open.slice(0, 3).map((c) => (
           <li key={c.id}>
             <span className="grow">{c.text}</span>
-            <span className="muted small">{c.author?.name ?? "Anonymous"} · {c.topicName} · {formatTime(c.createdAt)}</span>
+            <span className="muted small">{c.author?.name ?? "Anonymous"} · {c.topicName} · {clockTime(c.createdAt)}</span>
           </li>
         ))}
       </ul>
@@ -255,7 +257,8 @@ function AssignmentsSection({ courseId }: { courseId: string }) {
   );
 }
 
-function SessionRow({ courseId, session }: { courseId: string; session: Session }) {
+/** Edit and delete (confirmed) for one Session, shared by Today's block and the Session rows. */
+function useSessionActions(courseId: string, session: Session) {
   const client = useQueryClient();
   const [editing, setEditing] = useState(false);
   const remove = useMutation({
@@ -267,19 +270,11 @@ function SessionRow({ courseId, session }: { courseId: string; session: Session 
       ),
     onSuccess: () => client.invalidateQueries({ queryKey: ["sessions"] }),
   });
-
-  if (editing) {
-    return (
-      <li>
-        <SessionForm courseId={courseId} sessionId={session.id} initial={session} onDone={() => setEditing(false)} />
-      </li>
-    );
-  }
-  return (
-    <li>
-      <span className="grow">
-        <b>{formatDate(session.date)}</b> <span className="muted num">{session.start}–{session.end}</span>
-      </span>
+  const form = (
+    <SessionForm courseId={courseId} sessionId={session.id} initial={session} onDone={() => setEditing(false)} />
+  );
+  const buttons = (
+    <>
       <button className="ib" aria-label="Edit Session" title="Edit" onClick={() => setEditing(true)}>
         <EditIcon />
       </button>
@@ -293,6 +288,39 @@ function SessionRow({ courseId, session }: { courseId: string; session: Session 
       >
         <TrashIcon />
       </button>
+    </>
+  );
+  return { editing, form, buttons, error: remove.error };
+}
+
+function TodaySession({ courseId, session }: { courseId: string; session: Session }) {
+  const { editing, form, buttons, error } = useSessionActions(courseId, session);
+  if (editing) return <div className="today">{form}</div>;
+  return (
+    <div className="today">
+      <span className="muted small">Today</span>
+      <span className="when num">{session.start}–{session.end}</span>
+      <div className="row">
+        <Link className="btn" to={`/lecturer/courses/${courseId}/sessions/${session.id}/live`}>Open live console</Link>
+        <span className="grow muted small num">{headcountText(session.headcount)}</span>
+        {buttons}
+      </div>
+      {error && <p className="error">{error.message}</p>}
+    </div>
+  );
+}
+
+function SessionRow({ courseId, session }: { courseId: string; session: Session }) {
+  const { editing, form, buttons, error } = useSessionActions(courseId, session);
+  if (editing) return <li>{form}</li>;
+  return (
+    <li>
+      <span className="grow">
+        <b>{formatDate(session.date)}</b> <span className="muted num">{session.start}–{session.end}</span>
+      </span>
+      {session.headcount !== null && <span className="muted small num">{headcountText(session.headcount)}</span>}
+      {buttons}
+      {error && <p className="error">{error.message}</p>}
     </li>
   );
 }

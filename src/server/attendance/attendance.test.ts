@@ -357,6 +357,18 @@ describe("Manual marks", () => {
     expect(attendance().checkIns(session.id).map((r) => r.state)).toEqual(["present", "pending"]);
   });
 
+  it("clear back to the Check-in's own time, not the mark's", () => {
+    attendance().openWindow(session.id, LECTURER);
+    const checkedInAt = t.fakes.clock.now().toISOString();
+    checkIn(dana, "147.235.10.21");
+    t.fakes.clock.advance(20 * 60_000);
+    mark(dana, false);
+    t.fakes.clock.advance(5 * 60_000);
+    mark(dana, null);
+    const row = attendance().forLecturer(session.id).students.find((s) => s.rosterEntryId === dana.id)!;
+    expect(row).toMatchObject({ status: "present", mark: null, at: checkedInAt });
+  });
+
   it("clear to Present for a Check-in whose network was approved meanwhile", () => {
     attendance().openWindow(session.id, LECTURER);
     checkIn(omar, "2.54.1.1");
@@ -497,6 +509,14 @@ describe("The Attendance sheet", () => {
     attendance().openWindow(session.id, LECTURER);
     checkIn(omar, "147.235.10.22");
     expect(sheet().headcount).toEqual([2, 0, 1]);
+  });
+
+  it("gives the Course desk each held Session's headcount, and none for a Session still to come", () => {
+    attendance().mark(monday.id, dana.id, true);
+    attendance().mark(monday.id, irina.id, true);
+    const next = aSession(t, courseId, { date: "2026-12-01" });
+    expect(attendance().headcounts(courseId)).toEqual({ [monday.id]: 2, [tuesday.id]: 0, [session.id]: 0 });
+    expect(attendance().headcounts(courseId)).not.toHaveProperty(String(next.id));
   });
 
   it("reads 0% for everyone before the Course has any Sessions", () => {
