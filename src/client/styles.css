@@ -154,6 +154,15 @@ textarea { width: 100%; min-height: 96px; resize: vertical; }
 /* Live console shell */
 .console { display: grid; grid-template-columns: 1fr 1.4fr 1fr; gap: 14px; align-items: start; }
 .clock { font-family: var(--font-display); font-weight: 800; font-size: 20px; font-variant-numeric: tabular-nums; }
+.btn-sm { padding: 4px 10px; font-size: 13px; }
+.btn:disabled, .btn-line:disabled { opacity: 0.55; cursor: progress; }
+.state .grow { flex: 1; min-width: 0; }
+.glance { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.glance .big { font-family: var(--font-display); font-size: 52px; line-height: 0.95; font-weight: 800; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.glance .of { font-size: 18px; font-weight: 700; }
+.state { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); flex: none; }
+.dot.on { background: var(--ok); box-shadow: 0 0 0 4px var(--ok-soft); }
 @media (max-width: 900px) { .console { grid-template-columns: 1fr; } }
 @media (max-width: 520px) {
   .page { padding: 12px; }

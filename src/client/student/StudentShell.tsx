@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, NavLink, Route, Routes, useLocation, useParams } from "react-router";
+import { checkInLine } from "../attendance";
 import { useLiveEvents } from "../live";
 import { SummaryView } from "../markdown/SummaryView";
 import { AssignmentPage } from "./AssignmentPage";
@@ -95,13 +96,7 @@ function Today({ me }: { me: Me }) {
           <p className="bd-when">
             {longDate(session.date)}, {session.start} to {session.end}
           </p>
-          <div className="bd-check" role="status">
-            <span className="bd-box" aria-hidden="true" />
-            <div>
-              <b>Not checked in yet</b>
-              <span>Scan the code on the board with your phone camera.</span>
-            </div>
-          </div>
+          {me.checkIn && <CheckInLine checkIn={me.checkIn} />}
         </>
       ) : (
         <>
@@ -121,6 +116,24 @@ function Today({ me }: { me: Me }) {
         This phone is set up for <b>{me.me.name}</b>.
       </p>
     </>
+  );
+}
+
+const MARK = { ok: "✓", wait: "?", todo: "", bad: "!" } as const;
+
+/** Today's one Check-in spot: checked in, waiting for the Lecturer, not yet, or closed. */
+function CheckInLine({ checkIn }: { checkIn: NonNullable<Me["checkIn"]> }) {
+  const line = checkInLine(checkIn);
+  return (
+    <div className="bd-check" data-tone={line.tone} role="status">
+      <span className="bd-box" aria-hidden="true">
+        {MARK[line.tone]}
+      </span>
+      <div>
+        <b className={line.tone === "ok" ? "hl" : undefined}>{line.title}</b>
+        <span>{line.detail}</span>
+      </div>
+    </div>
   );
 }
 
