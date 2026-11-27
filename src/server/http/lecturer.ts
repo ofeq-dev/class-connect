@@ -166,6 +166,18 @@ export function lecturerRoutes(deps: AppDeps) {
     .post("/courses/:courseId/sessions/:sessionId/summary/versions/:versionId/publish", requireLecturer, (c) =>
       c.json(deps.summaries.publish(ownSession(c).id, idParam(c, "versionId"))),
     )
+    .put(
+      "/courses/:courseId/sessions/:sessionId/summary/translations/:language",
+      requireLecturer,
+      json((b) => ({ markdown: str(b.markdown) })),
+      (c) =>
+        c.json(
+          deps.summaries.saveTranslation(ownSession(c).id, c.req.param("language"), c.req.valid("json").markdown),
+        ),
+    )
+    .post("/courses/:courseId/sessions/:sessionId/summary/translations/:language/retry", requireLecturer, (c) =>
+      c.json(deps.summaries.retryTranslation(ownSession(c).id, c.req.param("language"))),
+    )
     .get("/llm-usage", requireLecturer, (c) => c.json({ today: deps.llm.usageToday(), limit: DAILY_LIMIT }))
 
     .get("/events", requireLecturer, (c) => {

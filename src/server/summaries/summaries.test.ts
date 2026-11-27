@@ -437,4 +437,119 @@ describe("Translations", () => {
       { language: "ru", state: "done", markdown: `[ru] ${PUBLISHED}`, error: null, edited: false },
     ]);
   });
+
+  it("lets the Lecturer edit a finished translation in place, without adding versions", async () => {
+    publishText(PUBLISHED);
+    expect(() => summaries().saveTranslation(sessionId, "ar", "Too early.")).toThrow(DomainError);
+    await t.jobs.runDue();
+
+    const view = summaries().saveTranslation(sessionId, "ar", "Fixed Arabic.");
+    expect(view.translations[0]).toMatchObject({ language: "ar", markdown: "Fixed Arabic.", edited: true });
+    expect(view.versions).toHaveLength(1);
+    expect(() => summaries().saveTranslation(sessionId, "ar", "  ")).toThrow(DomainError);
+    expect(() => summaries().saveTranslation(sessionId, "fr", "Not a Course language.")).toThrow(DomainError);
+  });
+
+  it("publishing again regenerates every translation from the new version, replacing edits", async () => {
+    publishText(PUBLISHED);
+    await t.jobs.runDue();
+    summaries().saveTranslation(sessionId, "ar", "Fixed Arabic.");
+
+    publishText("Version two.");
+    expect(summaries().forLecturer(sessionId).translations.map((x) => [x.language, x.state, x.edited])).toEqual([
+      ["ar", "translating", false],
+      ["ru", "translating", false],
+    ]);
+    await t.jobs.runDue();
+    expect(summaries().forLecturer(sessionId).translations.map((x) => x.markdown)).toEqual([
+      "[ar] Version two.",
+      "[ru] Version two.",
+    ]);
+  });
+
+  it("a translation queued before publishing again writes nothing", async () => {
+    publishText(PUBLISHED);
+    publishText("Version two.");
+    await t.jobs.runDue();
+    expect(t.fakes.llm.calls.map((c) => (c.input as { markdown: string }).markdown)).toEqual([
+      "Version two.",
+      "Version two.",
+    ]);
+    expect(summaries().forLecturer(sessionId).translations.map((x) => x.markdown)).toEqual([
+      "[ar] Version two.",
+      "[ru] Version two.",
+    ]);
+  });
+
+  it("translates into the languages the Course has when publishing, none when it has none", async () => {
+    t.modules.course.updateCourse(courseId, { translationLanguages: [] });
+    expect(publishText(PUBLISHED).translations).toEqual([]);
+    t.modules.course.updateCourse(courseId, { translationLanguages: ["ru"] });
+    expect(publishText(PUBLISHED).translations.map((x) => x.language)).toEqual(["ru"]);
+  });
+
+  it("keeps the outline timestamps: a reply that changes one fails, with Retry", async () => {
+    t.fakes.llm.reply("translate", { markdown: "## Outline\n\n- `00:00:02` Welcome\n- `00:01:10` Use cases\n" });
+    publishText(PUBLISHED);
+    await t.jobs.runDue();
+    const failed = summaries().forLecturer(sessionId).translations[0]!;
+    expect(failed).toMatchObject({ language: "ar", state: "failed", markdown: null });
+    expect(failed.error).toMatch(/timestamps/);
+
+    t.fakes.llm.reply("translate", { markdown: "## مخطط\n\n- `00:00:01` ترحيب\n- `00:01:10` حالات الاستخدام\n" });
+    summaries().retryTranslation(sessionId, "ar");
+    expect(() => summaries().retryTranslation(sessionId, "ar")).toThrow(DomainError);
+    await t.jobs.runDue();
+    expect(summaries().forLecturer(sessionId).translations[0]).toMatchObject({ state: "done" });
+  });
+
+  it("notifies the Students when a translation is done, so their phones refetch", async () => {
+    publishText(PUBLISHED);
+    t.fakes.events.clear();
+    await t.jobs.runDue();
+    expect(summaryNotices()).toEqual([
+      { courseId, audience: "all", notice: { type: "summary.changed", id: sessionId } },
+      { courseId, audience: "all", notice: { type: "summary.changed", id: sessionId } },
+    ]);
+  });
+
+  describe("forStudent", () => {
+    beforeEach(async () => {
+      publishText(PUBLISHED);
+      await t.jobs.runDue();
+    });
+
+    it("returns the requested language when its translation exists", () => {
+      expect(summaries().forStudent(device, sessionId, "ru")).toMatchObject({
+        markdown: `[ru] ${PUBLISHED}`,
+        language: "ru",
+        languages: ["ar", "ru"],
+      });
+    });
+
+    it("matches a regional browser language to its base, e.g. ar-EG to ar", () => {
+      expect(summaries().forStudent(device, sessionId, "ar-EG")?.language).toBe("ar");
+    });
+
+    it("falls back to the source language otherwise, or while a translation is still running", () => {
+      for (const lang of [undefined, "", "fr", "he-IL"]) {
+        expect(summaries().forStudent(device, sessionId, lang)).toMatchObject({ markdown: PUBLISHED, language: null });
+      }
+      publishText("Version two.");
+      expect(summaries().forStudent(device, sessionId, "ru")).toMatchObject({
+        markdown: "Version two.",
+        language: null,
+        languages: [],
+      });
+    });
+
+    it("shows the Lecturer's edit of a translation", () => {
+      summaries().saveTranslation(sessionId, "ru", "Edited Russian.");
+      expect(summaries().forStudent(device, sessionId, "ru")?.markdown).toBe("Edited Russian.");
+    });
+
+    it("gives a phone without a Claim on the Course nothing, in any language", () => {
+      expect(summaries().forStudent("never-claimed", sessionId, "ru")).toBeNull();
+    });
+  });
 });
