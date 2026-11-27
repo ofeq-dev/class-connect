@@ -20,11 +20,13 @@ Open `http://localhost:5173/lecturer` and sign in.
 | `npm start` | Runs the built server (migrations apply at startup, then it listens on `127.0.0.1`). |
 | `npm run backup -- --kind nightly\|pre-deploy` | Consistent copy of `DATABASE_PATH` into `BACKUP_DIR` (default `/mnt/d/class-connect-backups`), pruned to 14 nightly and 5 pre-deploy. Needs `npm run build` first. |
 | `npm run deploy -- <sha>` | Runs `scripts/deploy.sh <sha>` on the home server over `ssh wsl` (the manual fallback). |
+| `npm run seed:demo -- --date <YYYY-MM-DD> --start <HH:MM> --end <HH:MM> [--replace]` | Builds the demo Course in `DATABASE_PATH` through module operations, with the canned fake LLM (README, Rehearsing the demo). |
 | `npm run db:generate -- --name <name>` | Generates a migration from the module schema files. Migrations are additive only. |
 
 ## Where things go
 
 - `src/server/<module>/`: one folder per module. Feature modules (Course, Attendance, Feedback, Summaries, Homework) and infrastructure (`clock`, `live-events`, `llm`, `jobs`, `files`, `db`). Each module's `index.ts` is its interface; a lint rule stops code outside a module importing anything else from it. A module's tables live in its `schema.ts`.
+- `src/server/demo/`: the rehearsal fixtures behind `LLM_ADAPTER=fake` and `seed:demo`. The fixture files themselves (invented Transcripts, seeded Submissions, one canned-reply file per LLM task, each checked against its task's schema at load) are in `fixtures/`.
 - `src/server/http/`: thin Hono routes that call module interfaces.
 - `src/server/testing/`: `makeTestApp`, the fakes and the builders (`docs/testing-strategy.md`).
 - `src/client/`: the React app. `live.ts` maps each Live events notice type to the queries it refetches; add an entry when the server gains a notice type (the type check enforces it).

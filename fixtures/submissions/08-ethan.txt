@@ -1,0 +1,12 @@
+Actors: Rider (primary), Campus Security (receives alerts), Payment Provider (external system).
+
+Use case: Unlock a bike. Rider.
+1. Rider scans the bike's code. 2. System checks the account. 3. System unlocks the bike. 4. Rider rides away.
+Extension: 2a. No payment method on file: the system asks the Rider to add one and continues at 2.
+
+Use case: End a trip. Rider.
+1. Rider locks the bike at a station. 2. System records the end time. 3. System charges the Payment Provider. 4. System emails a receipt.
+
+Use case: Report a stolen bike. Campus Security.
+1. The system notices a bike outside campus for over an hour. 2. System alerts Campus Security with its last location. 3. Security marks it found or lost.
+Sorry this is late, I was ill on Thursday.

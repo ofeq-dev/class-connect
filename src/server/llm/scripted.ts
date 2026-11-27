@@ -24,7 +24,8 @@ export interface ScriptedDeps {
 /**
  * The scripted adapter, used by tests and by `LLM_ADAPTER=fake`. Scripted replies go through the
  * task's own `parse`, so a test can't hand a module a shape the real gateway would reject.
- * It still counts each call in `llm_usage`. (Canned fixtures for rehearsal come with the seed.)
+ * It still counts each call in `llm_usage`. Rehearsal's canned replies are scripted onto it by
+ * `createRehearsalGateway` (demo module).
  */
 export function createScriptedGateway({ db, clock, delayMs = 0 }: ScriptedDeps): ScriptedGateway {
   const scripts = new Map<string, Script>();

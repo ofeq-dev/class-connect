@@ -27,7 +27,10 @@ import {
 } from "./schema";
 import { compareFingerprints, cosine, fingerprint, SIMILARITY_THRESHOLD, similarityScore } from "./similarity";
 
-export { LEVELS, type Level, type ReviewSubmissionInput } from "./review-task";
+export { LEVELS, reviewSubmission, type Level, type ReviewSubmissionInput } from "./review-task";
+/** The LLM tasks, for the fake adapter's rehearsal fixtures (validated with the same schemas). */
+export { classSummary, type ClassSummaryInput } from "./class-summary-task";
+export { draftCriteria, type DraftCriteriaInput } from "./draft-criteria-task";
 
 export const MIN_CRITERIA = 3;
 export const MAX_CRITERIA = 5;

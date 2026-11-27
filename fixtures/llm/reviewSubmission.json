@@ -1,0 +1,253 @@
+{
+  "criteriaCount": 4,
+  "replies": [
+    {
+      "submission": "01-dana.txt",
+      "reply": {
+        "criteria": [
+          {
+            "criterion": 1,
+            "level": "Secure",
+            "evidence": "Rider (primary)",
+            "feedback": "Clear actors: roles outside the system, with primary and supporting ones told apart."
+          },
+          {
+            "criterion": 2,
+            "level": "Secure",
+            "evidence": "Use case 1: Rent a bike. Primary actor: Rider.",
+            "feedback": "Every use case is named after its primary actor's goal, at the right level."
+          },
+          {
+            "criterion": 3,
+            "level": "Partly",
+            "evidence": "1. The Rider taps their student card on the dock.",
+            "feedback": "Good numbered steps; give every use case a main flow, not just the first one."
+          },
+          {
+            "criterion": 4,
+            "level": "Secure",
+            "evidence": "1a. The card is not registered: the system offers to register and the use case ends.",
+            "feedback": "Alternative flows are numbered after their step and say how the flow continues. Well done."
+          }
+        ]
+      }
+    },
+    {
+      "submission": "02-irina.txt",
+      "reply": {
+        "criteria": [
+          {
+            "criterion": 1,
+            "level": "Partly",
+            "evidence": "the Student who rents bikes",
+            "feedback": "Your main actors are right; also name the outside systems you depend on, such as the payment service, as supporting actors."
+          },
+          {
+            "criterion": 2,
+            "level": "Secure",
+            "evidence": "Use case: Rent a bike (Student)",
+            "feedback": "Every use case is named after its primary actor's goal, at the right level."
+          },
+          {
+            "criterion": 3,
+            "level": "Partly",
+            "evidence": "1. Student scans the QR code on a bike with the app",
+            "feedback": "Good numbered steps; give every use case a main flow, not just the first one."
+          },
+          {
+            "criterion": 4,
+            "level": "Secure",
+            "evidence": "2a. Student already has a bike out, so the system refuses and shows the open rental.",
+            "feedback": "Alternative flows are numbered after their step and say how the flow continues. Well done."
+          }
+        ]
+      }
+    },
+    {
+      "submission": "03-yusuf.txt",
+      "reply": {
+        "criteria": [
+          {
+            "criterion": 1,
+            "level": "Partly",
+            "evidence": "the Student who rents bikes",
+            "feedback": "Your main actors are right; also name the outside systems you depend on, such as the payment service, as supporting actors."
+          },
+          {
+            "criterion": 2,
+            "level": "Secure",
+            "evidence": "Use case: Rent a bike (Student)",
+            "feedback": "Every use case is named after its primary actor's goal, at the right level."
+          },
+          {
+            "criterion": 3,
+            "level": "Partly",
+            "evidence": "1. Student scans the QR code on a bike with the app",
+            "feedback": "Good numbered steps; give every use case a main flow, not just the first one."
+          },
+          {
+            "criterion": 4,
+            "level": "Partly",
+            "evidence": "3a. The lock does not open, so the system marks the bike faulty.",
+            "feedback": "You have some alternative flows; say where each one continues or that it ends, and cover the other use cases too."
+          }
+        ]
+      }
+    },
+    {
+      "submission": "04-sam.txt",
+      "reply": {
+        "criteria": [
+          {
+            "criterion": 1,
+            "level": "Not yet",
+            "evidence": "Actors: user, admin, database.",
+            "feedback": "The database and the screens are part of the system, so they aren't actors. Name the roles outside it, such as Rider."
+          },
+          {
+            "criterion": 2,
+            "level": "Partly",
+            "evidence": "Renting - the user goes to the Rent screen",
+            "feedback": "Most names are goals; make every one a verb phrase at the level of one sitting, like Return a bike."
+          },
+          {
+            "criterion": 3,
+            "level": "Not yet",
+            "evidence": "chooses a bike and presses Rent",
+            "feedback": "Write the main flow as numbered steps, each an actor action or a system response, without buttons or screens."
+          },
+          {
+            "criterion": 4,
+            "level": "Not yet",
+            "evidence": "",
+            "feedback": "Add alternative flows: for each step, what can go wrong that the system must handle, numbered like 2a."
+          }
+        ]
+      }
+    },
+    {
+      "submission": "05-noa.txt",
+      "reply": {
+        "criteria": [
+          {
+            "criterion": 1,
+            "level": "Partly",
+            "evidence": "Actors: Rider, Station Operator, Payment Service (external).",
+            "feedback": "Your main actors are right; also name the outside systems you depend on, such as the payment service, as supporting actors."
+          },
+          {
+            "criterion": 2,
+            "level": "Secure",
+            "evidence": "Rebalance stations - primary actor Station Operator.",
+            "feedback": "Every use case is named after its primary actor's goal, at the right level."
+          },
+          {
+            "criterion": 3,
+            "level": "Secure",
+            "evidence": "1. The Rider selects a station in the app.",
+            "feedback": "Short, numbered main flows at one level, with no user interface details."
+          },
+          {
+            "criterion": 4,
+            "level": "Partly",
+            "evidence": "4a. The Rider does not arrive in ten minutes: the hold is released.",
+            "feedback": "You have some alternative flows; say where each one continues or that it ends, and cover the other use cases too."
+          }
+        ]
+      }
+    },
+    {
+      "submission": "06-layla.txt",
+      "reply": {
+        "criteria": [
+          {
+            "criterion": 1,
+            "level": "Secure",
+            "evidence": "The docks and the app are inside the system, so they are not actors.",
+            "feedback": "Clear actors: roles outside the system, with primary and supporting ones told apart."
+          },
+          {
+            "criterion": 2,
+            "level": "Secure",
+            "evidence": "UC1 Borrow a bike (Rider)",
+            "feedback": "Every use case is named after its primary actor's goal, at the right level."
+          },
+          {
+            "criterion": 3,
+            "level": "Secure",
+            "evidence": "1. Rider holds their card to a dock.",
+            "feedback": "Short, numbered main flows at one level, with no user interface details."
+          },
+          {
+            "criterion": 4,
+            "level": "Secure",
+            "evidence": "2b Card unreadable: Rider enters their ID number instead, continue at 2.",
+            "feedback": "Alternative flows are numbered after their step and say how the flow continues. Well done."
+          }
+        ]
+      }
+    },
+    {
+      "submission": "07-dmitry.txt",
+      "reply": {
+        "criteria": [
+          {
+            "criterion": 1,
+            "level": "Partly",
+            "evidence": "Actor: student",
+            "feedback": "Your main actors are right; also name the outside systems you depend on, such as the payment service, as supporting actors."
+          },
+          {
+            "criterion": 2,
+            "level": "Partly",
+            "evidence": "Use case 1: Take bike",
+            "feedback": "Most names are goals; make every one a verb phrase at the level of one sitting, like Return a bike."
+          },
+          {
+            "criterion": 3,
+            "level": "Partly",
+            "evidence": "The student wants a bike. He goes to the station.",
+            "feedback": "Good numbered steps; give every use case a main flow, not just the first one."
+          },
+          {
+            "criterion": 4,
+            "level": "Not yet",
+            "evidence": "",
+            "feedback": "Add alternative flows: for each step, what can go wrong that the system must handle, numbered like 2a."
+          }
+        ]
+      }
+    },
+    {
+      "submission": "08-ethan.txt",
+      "reply": {
+        "criteria": [
+          {
+            "criterion": 1,
+            "level": "Secure",
+            "evidence": "Actors: Rider (primary), Campus Security (receives alerts), Payment Provider (external system).",
+            "feedback": "Clear actors: roles outside the system, with primary and supporting ones told apart."
+          },
+          {
+            "criterion": 2,
+            "level": "Partly",
+            "evidence": "Use case: Unlock a bike. Rider.",
+            "feedback": "Most names are goals; make every one a verb phrase at the level of one sitting, like Return a bike."
+          },
+          {
+            "criterion": 3,
+            "level": "Secure",
+            "evidence": "1. Rider scans the bike's code.",
+            "feedback": "Short, numbered main flows at one level, with no user interface details."
+          },
+          {
+            "criterion": 4,
+            "level": "Partly",
+            "evidence": "2a. No payment method on file: the system asks the Rider to add one and continues at 2.",
+            "feedback": "You have some alternative flows; say where each one continues or that it ends, and cover the other use cases too."
+          }
+        ]
+      }
+    }
+  ]
+}

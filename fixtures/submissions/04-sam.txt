@@ -1,0 +1,9 @@
+Bike system use cases
+
+Login - the user logs in with username and password and clicks the green Login button. If the password is wrong a red message appears.
+
+Bike management - the admin can add bikes, delete bikes and edit bikes in the database. The database stores all the bikes and the users.
+
+Renting - the user goes to the Rent screen, chooses a station from the dropdown, chooses a bike and presses Rent. Then the bike is unlocked. Then they ride. Then they come back and press Return on the screen and pay.
+
+Actors: user, admin, database.

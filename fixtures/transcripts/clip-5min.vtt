@@ -1,0 +1,159 @@
+WEBVTT
+
+NOTE Invented for Class Connect rehearsal. No real lecture or real people's words.
+
+1
+00:00:02.000 --> 00:00:09.000
+Lecturer: Okay, let's get going. Today we move from use cases to sequence diagrams.
+
+2
+00:00:10.000 --> 00:00:17.000
+Lecturer: Last week you wrote a main flow as numbered steps. A sequence diagram draws the same steps as messages.
+
+3
+00:00:18.000 --> 00:00:25.000
+Lecturer: Across the top we put the participants: the actor, and the objects of the system that take part.
+
+4
+00:00:26.000 --> 00:00:33.000
+Lecturer: Okay, let's get going. Today we move from use cases to sequence diagrams.
+
+5
+00:00:34.000 --> 00:00:40.000
+Lecturer: Last week you wrote a main flow as numbered steps. A sequence diagram draws the same steps as messages.
+
+6
+00:00:40.000 --> 00:00:47.000
+Lecturer: Each participant gets a lifeline, a dashed line going down the page. Time runs downwards.
+
+7
+00:00:48.000 --> 00:00:55.000
+Lecturer: An arrow from one lifeline to another is a message. Label it with what is being asked, like borrowBook.
+
+8
+00:00:56.000 --> 00:01:03.000
+Lecturer: A solid arrow head is a synchronous call: the sender waits for the answer.
+
+9
+00:01:04.000 --> 00:01:11.000
+Lecturer: The dashed arrow back is the reply. You don't have to draw every reply, only the ones that matter.
+
+10
+00:01:12.000 --> 00:01:19.000
+Lecturer: Each participant gets a lifeline, a dashed line going down the page. Time runs downwards.
+
+11
+00:01:20.000 --> 00:01:27.000
+Lecturer: An arrow from one lifeline to another is a message. Label it with what is being asked, like borrowBook.
+
+12
+00:01:28.000 --> 00:01:35.000
+Lecturer: A solid arrow head is a synchronous call: the sender waits for the answer.
+
+13
+00:01:36.000 --> 00:01:43.000
+Lecturer: The dashed arrow back is the reply. You don't have to draw every reply, only the ones that matter.
+
+14
+00:01:44.000 --> 00:01:50.000
+Lecturer: Each participant gets a lifeline, a dashed line going down the page. Time runs downwards.
+
+15
+00:01:50.000 --> 00:01:57.000
+Lecturer: Let's take the library example. The Member asks the Kiosk to borrow a book.
+
+16
+00:01:58.000 --> 00:02:05.000
+Lecturer: The Kiosk asks the Catalogue whether the copy is available.
+
+17
+00:02:06.000 --> 00:02:13.000
+Lecturer: The Catalogue answers yes, so the Kiosk asks the Loans service to create a loan.
+
+18
+00:02:14.000 --> 00:02:21.000
+Lecturer: Notice the order of the arrows is exactly the order of the steps in the main flow.
+
+19
+00:02:22.000 --> 00:02:29.000
+Lecturer: Let's take the library example. The Member asks the Kiosk to borrow a book.
+
+20
+00:02:30.000 --> 00:02:37.000
+Lecturer: The Kiosk asks the Catalogue whether the copy is available.
+
+21
+00:02:38.000 --> 00:02:45.000
+Lecturer: The Catalogue answers yes, so the Kiosk asks the Loans service to create a loan.
+
+22
+00:02:46.000 --> 00:02:53.000
+Lecturer: Notice the order of the arrows is exactly the order of the steps in the main flow.
+
+23
+00:02:54.000 --> 00:03:00.000
+Lecturer: Let's take the library example. The Member asks the Kiosk to borrow a book.
+
+24
+00:03:00.000 --> 00:03:07.000
+Lecturer: What about the alternative flow, when the copy is already lent out?
+
+25
+00:03:08.000 --> 00:03:15.000
+Lecturer: We draw a box called an alt fragment, with a condition in square brackets on each part.
+
+26
+00:03:16.000 --> 00:03:23.000
+Lecturer: One part says available, the other says not available, and the Kiosk shows a message.
+
+27
+00:03:24.000 --> 00:03:31.000
+Lecturer: Loops work the same way, with a loop fragment, for example scanning several books.
+
+28
+00:03:32.000 --> 00:03:39.000
+Lecturer: What about the alternative flow, when the copy is already lent out?
+
+29
+00:03:40.000 --> 00:03:47.000
+Lecturer: We draw a box called an alt fragment, with a condition in square brackets on each part.
+
+30
+00:03:48.000 --> 00:03:55.000
+Lecturer: One part says available, the other says not available, and the Kiosk shows a message.
+
+31
+00:03:56.000 --> 00:04:03.000
+Lecturer: Loops work the same way, with a loop fragment, for example scanning several books.
+
+32
+00:04:04.000 --> 00:04:10.000
+Lecturer: What about the alternative flow, when the copy is already lent out?
+
+33
+00:04:10.000 --> 00:04:17.000
+Lecturer: Common mistake: drawing the database as an actor. Actors are outside the system.
+
+34
+00:04:18.000 --> 00:04:25.000
+Lecturer: Another one: arrows with no labels. If I can't read the message, the diagram tells me nothing.
+
+35
+00:04:26.000 --> 00:04:33.000
+Lecturer: For Thursday, draw the sequence diagram for your Assignment 2 main flow. Keep it to one page.
+
+36
+00:04:34.000 --> 00:04:41.000
+Lecturer: Questions? Good. Let's take five minutes and then try one together.
+
+37
+00:04:42.000 --> 00:04:49.000
+Lecturer: Common mistake: drawing the database as an actor. Actors are outside the system.
+
+38
+00:04:50.000 --> 00:04:57.000
+Lecturer: Another one: arrows with no labels. If I can't read the message, the diagram tells me nothing.
+
+39
+00:04:58.000 --> 00:05:00.000
+Lecturer: For Thursday, draw the sequence diagram for your Assignment 2 main flow. Keep it to one page.

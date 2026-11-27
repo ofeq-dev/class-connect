@@ -1,0 +1,723 @@
+WEBVTT
+
+NOTE Invented for Class Connect rehearsal. No real lecture or real people's words.
+
+1
+00:00:00.000 --> 00:00:29.000
+Lecturer: Good morning everyone, let's start. Can the people at the back hear me?
+
+2
+00:00:30.000 --> 00:00:59.000
+Lecturer: A few announcements first. Assignment 1 marks are out; feedback is in the system.
+
+3
+00:01:00.000 --> 00:01:29.000
+Lecturer: Office hours move to Wednesday this week, same room.
+
+4
+00:01:30.000 --> 00:01:59.000
+Lecturer: Today is all about use cases: what they are, how to find them, and how to write them well.
+
+5
+00:02:00.000 --> 00:02:29.000
+Lecturer: By the end you should be able to write the use cases for Assignment 2 on your own.
+
+6
+00:02:30.000 --> 00:02:59.000
+Lecturer: Good morning everyone, let's start. Can the people at the back hear me?
+
+7
+00:03:00.000 --> 00:03:29.000
+Lecturer: A few announcements first. Assignment 1 marks are out; feedback is in the system.
+
+8
+00:03:30.000 --> 00:03:59.000
+Lecturer: Office hours move to Wednesday this week, same room.
+
+9
+00:04:00.000 --> 00:04:29.000
+Lecturer: Today is all about use cases: what they are, how to find them, and how to write them well.
+
+10
+00:04:30.000 --> 00:04:59.000
+Lecturer: By the end you should be able to write the use cases for Assignment 2 on your own.
+
+11
+00:05:00.000 --> 00:05:29.000
+Lecturer: Good morning everyone, let's start. Can the people at the back hear me?
+
+12
+00:05:30.000 --> 00:05:59.000
+Lecturer: A few announcements first. Assignment 1 marks are out; feedback is in the system.
+
+13
+00:06:00.000 --> 00:06:29.000
+Lecturer: Office hours move to Wednesday this week, same room.
+
+14
+00:06:30.000 --> 00:06:59.000
+Lecturer: Today is all about use cases: what they are, how to find them, and how to write them well.
+
+15
+00:07:00.000 --> 00:07:29.000
+Lecturer: Quick recap of last week. We talked about eliciting requirements: interviews, observation, questionnaires.
+
+16
+00:07:30.000 --> 00:07:59.000
+Lecturer: We said a requirement must be testable. 'The system is fast' is not testable; 'search answers within two seconds' is.
+
+17
+00:08:00.000 --> 00:08:29.000
+Lecturer: We split requirements into functional ones, what the system does, and non-functional ones, how well it does it.
+
+18
+00:08:30.000 --> 00:08:59.000
+Lecturer: Use cases are one way to capture the functional requirements from the user's point of view.
+
+19
+00:09:00.000 --> 00:09:29.000
+Lecturer: Someone asked about user stories. They are related, and we'll compare them at the end.
+
+20
+00:09:30.000 --> 00:09:59.000
+Lecturer: Quick recap of last week. We talked about eliciting requirements: interviews, observation, questionnaires.
+
+21
+00:10:00.000 --> 00:10:29.000
+Lecturer: We said a requirement must be testable. 'The system is fast' is not testable; 'search answers within two seconds' is.
+
+22
+00:10:30.000 --> 00:10:59.000
+Lecturer: We split requirements into functional ones, what the system does, and non-functional ones, how well it does it.
+
+23
+00:11:00.000 --> 00:11:29.000
+Lecturer: Use cases are one way to capture the functional requirements from the user's point of view.
+
+24
+00:11:30.000 --> 00:11:59.000
+Lecturer: Someone asked about user stories. They are related, and we'll compare them at the end.
+
+25
+00:12:00.000 --> 00:12:29.000
+Lecturer: Quick recap of last week. We talked about eliciting requirements: interviews, observation, questionnaires.
+
+26
+00:12:30.000 --> 00:12:59.000
+Lecturer: We said a requirement must be testable. 'The system is fast' is not testable; 'search answers within two seconds' is.
+
+27
+00:13:00.000 --> 00:13:29.000
+Lecturer: We split requirements into functional ones, what the system does, and non-functional ones, how well it does it.
+
+28
+00:13:30.000 --> 00:13:59.000
+Lecturer: Use cases are one way to capture the functional requirements from the user's point of view.
+
+29
+00:14:00.000 --> 00:14:29.000
+Lecturer: Someone asked about user stories. They are related, and we'll compare them at the end.
+
+30
+00:14:30.000 --> 00:14:59.000
+Lecturer: Quick recap of last week. We talked about eliciting requirements: interviews, observation, questionnaires.
+
+31
+00:15:00.000 --> 00:15:29.000
+Lecturer: We said a requirement must be testable. 'The system is fast' is not testable; 'search answers within two seconds' is.
+
+32
+00:15:30.000 --> 00:15:59.000
+Lecturer: We split requirements into functional ones, what the system does, and non-functional ones, how well it does it.
+
+33
+00:16:00.000 --> 00:16:29.000
+Lecturer: Use cases are one way to capture the functional requirements from the user's point of view.
+
+34
+00:16:30.000 --> 00:16:59.000
+Lecturer: Someone asked about user stories. They are related, and we'll compare them at the end.
+
+35
+00:17:00.000 --> 00:17:29.000
+Lecturer: Quick recap of last week. We talked about eliciting requirements: interviews, observation, questionnaires.
+
+36
+00:17:30.000 --> 00:17:59.000
+Lecturer: We said a requirement must be testable. 'The system is fast' is not testable; 'search answers within two seconds' is.
+
+37
+00:18:00.000 --> 00:18:29.000
+Lecturer: Let's start with actors. An actor is a role that interacts with the system from outside.
+
+38
+00:18:30.000 --> 00:18:59.000
+Lecturer: A role, not a person. The same person can be a Member in the morning and a Librarian in the afternoon.
+
+39
+00:19:00.000 --> 00:19:29.000
+Lecturer: Actors can also be other systems, like the payment provider or the university's student records.
+
+40
+00:19:30.000 --> 00:19:59.000
+Lecturer: The primary actor is the one whose goal the use case serves. Supporting actors help along the way.
+
+41
+00:20:00.000 --> 00:20:29.000
+Lecturer: A good test: is it outside the system boundary, and does it want something from the system?
+
+42
+00:20:30.000 --> 00:20:59.000
+Lecturer: The database is not an actor. It's part of your system. This is the mistake I see most.
+
+43
+00:21:00.000 --> 00:21:29.000
+Lecturer: Let's start with actors. An actor is a role that interacts with the system from outside.
+
+44
+00:21:30.000 --> 00:21:59.000
+Lecturer: A role, not a person. The same person can be a Member in the morning and a Librarian in the afternoon.
+
+45
+00:22:00.000 --> 00:22:29.000
+Lecturer: Actors can also be other systems, like the payment provider or the university's student records.
+
+46
+00:22:30.000 --> 00:22:59.000
+Lecturer: The primary actor is the one whose goal the use case serves. Supporting actors help along the way.
+
+47
+00:23:00.000 --> 00:23:29.000
+Lecturer: A good test: is it outside the system boundary, and does it want something from the system?
+
+48
+00:23:30.000 --> 00:23:59.000
+Lecturer: The database is not an actor. It's part of your system. This is the mistake I see most.
+
+49
+00:24:00.000 --> 00:24:29.000
+Lecturer: Let's start with actors. An actor is a role that interacts with the system from outside.
+
+50
+00:24:30.000 --> 00:24:59.000
+Lecturer: A role, not a person. The same person can be a Member in the morning and a Librarian in the afternoon.
+
+51
+00:25:00.000 --> 00:25:29.000
+Lecturer: Actors can also be other systems, like the payment provider or the university's student records.
+
+52
+00:25:30.000 --> 00:25:59.000
+Lecturer: The primary actor is the one whose goal the use case serves. Supporting actors help along the way.
+
+53
+00:26:00.000 --> 00:26:29.000
+Lecturer: A good test: is it outside the system boundary, and does it want something from the system?
+
+54
+00:26:30.000 --> 00:26:59.000
+Lecturer: The database is not an actor. It's part of your system. This is the mistake I see most.
+
+55
+00:27:00.000 --> 00:27:29.000
+Lecturer: Let's start with actors. An actor is a role that interacts with the system from outside.
+
+56
+00:27:30.000 --> 00:27:59.000
+Lecturer: A role, not a person. The same person can be a Member in the morning and a Librarian in the afternoon.
+
+57
+00:28:00.000 --> 00:28:29.000
+Lecturer: Actors can also be other systems, like the payment provider or the university's student records.
+
+58
+00:28:30.000 --> 00:28:59.000
+Lecturer: The primary actor is the one whose goal the use case serves. Supporting actors help along the way.
+
+59
+00:29:00.000 --> 00:29:29.000
+Lecturer: A good test: is it outside the system boundary, and does it want something from the system?
+
+60
+00:29:30.000 --> 00:29:59.000
+Lecturer: The database is not an actor. It's part of your system. This is the mistake I see most.
+
+61
+00:30:00.000 --> 00:30:29.000
+Lecturer: Let's start with actors. An actor is a role that interacts with the system from outside.
+
+62
+00:30:30.000 --> 00:30:59.000
+Lecturer: A role, not a person. The same person can be a Member in the morning and a Librarian in the afternoon.
+
+63
+00:31:00.000 --> 00:31:29.000
+Lecturer: Actors can also be other systems, like the payment provider or the university's student records.
+
+64
+00:31:30.000 --> 00:31:59.000
+Lecturer: The primary actor is the one whose goal the use case serves. Supporting actors help along the way.
+
+65
+00:32:00.000 --> 00:32:29.000
+Lecturer: A good test: is it outside the system boundary, and does it want something from the system?
+
+66
+00:32:30.000 --> 00:32:59.000
+Lecturer: The database is not an actor. It's part of your system. This is the mistake I see most.
+
+67
+00:33:00.000 --> 00:33:29.000
+Lecturer: Let's start with actors. An actor is a role that interacts with the system from outside.
+
+68
+00:33:30.000 --> 00:33:59.000
+Lecturer: A role, not a person. The same person can be a Member in the morning and a Librarian in the afternoon.
+
+69
+00:34:00.000 --> 00:34:29.000
+Lecturer: Actors can also be other systems, like the payment provider or the university's student records.
+
+70
+00:34:30.000 --> 00:34:59.000
+Lecturer: The primary actor is the one whose goal the use case serves. Supporting actors help along the way.
+
+71
+00:35:00.000 --> 00:35:29.000
+Lecturer: Now goals. Every use case is named after the goal of its primary actor, as a verb phrase.
+
+72
+00:35:30.000 --> 00:35:59.000
+Lecturer: Borrow a book. Reserve a title. Pay a fine. Not 'Book management' and not 'Login'.
+
+73
+00:36:00.000 --> 00:36:29.000
+Lecturer: Logging in is rarely a goal on its own. Nobody wakes up wanting to log in.
+
+74
+00:36:30.000 --> 00:36:59.000
+Lecturer: Ask: if the actor did only this and went home, would they be satisfied? That's the right level.
+
+75
+00:37:00.000 --> 00:37:29.000
+Lecturer: Too high, like 'Run the library', and you can't write steps. Too low, like 'Click OK', and you drown in detail.
+
+76
+00:37:30.000 --> 00:37:59.000
+Lecturer: Now goals. Every use case is named after the goal of its primary actor, as a verb phrase.
+
+77
+00:38:00.000 --> 00:38:29.000
+Lecturer: Borrow a book. Reserve a title. Pay a fine. Not 'Book management' and not 'Login'.
+
+78
+00:38:30.000 --> 00:38:59.000
+Lecturer: Logging in is rarely a goal on its own. Nobody wakes up wanting to log in.
+
+79
+00:39:00.000 --> 00:39:29.000
+Lecturer: Ask: if the actor did only this and went home, would they be satisfied? That's the right level.
+
+80
+00:39:30.000 --> 00:39:59.000
+Lecturer: Too high, like 'Run the library', and you can't write steps. Too low, like 'Click OK', and you drown in detail.
+
+81
+00:40:00.000 --> 00:40:29.000
+Lecturer: Now goals. Every use case is named after the goal of its primary actor, as a verb phrase.
+
+82
+00:40:30.000 --> 00:40:59.000
+Lecturer: Borrow a book. Reserve a title. Pay a fine. Not 'Book management' and not 'Login'.
+
+83
+00:41:00.000 --> 00:41:29.000
+Lecturer: Logging in is rarely a goal on its own. Nobody wakes up wanting to log in.
+
+84
+00:41:30.000 --> 00:41:59.000
+Lecturer: Ask: if the actor did only this and went home, would they be satisfied? That's the right level.
+
+85
+00:42:00.000 --> 00:42:29.000
+Lecturer: Too high, like 'Run the library', and you can't write steps. Too low, like 'Click OK', and you drown in detail.
+
+86
+00:42:30.000 --> 00:42:59.000
+Lecturer: Now goals. Every use case is named after the goal of its primary actor, as a verb phrase.
+
+87
+00:43:00.000 --> 00:43:29.000
+Lecturer: Borrow a book. Reserve a title. Pay a fine. Not 'Book management' and not 'Login'.
+
+88
+00:43:30.000 --> 00:43:59.000
+Lecturer: Logging in is rarely a goal on its own. Nobody wakes up wanting to log in.
+
+89
+00:44:00.000 --> 00:44:29.000
+Lecturer: Ask: if the actor did only this and went home, would they be satisfied? That's the right level.
+
+90
+00:44:30.000 --> 00:44:59.000
+Lecturer: Too high, like 'Run the library', and you can't write steps. Too low, like 'Click OK', and you drown in detail.
+
+91
+00:45:00.000 --> 00:45:29.000
+Lecturer: Now goals. Every use case is named after the goal of its primary actor, as a verb phrase.
+
+92
+00:45:30.000 --> 00:45:59.000
+Lecturer: Borrow a book. Reserve a title. Pay a fine. Not 'Book management' and not 'Login'.
+
+93
+00:46:00.000 --> 00:46:29.000
+Lecturer: Logging in is rarely a goal on its own. Nobody wakes up wanting to log in.
+
+94
+00:46:30.000 --> 00:46:59.000
+Lecturer: Ask: if the actor did only this and went home, would they be satisfied? That's the right level.
+
+95
+00:47:00.000 --> 00:47:29.000
+Lecturer: Too high, like 'Run the library', and you can't write steps. Too low, like 'Click OK', and you drown in detail.
+
+96
+00:47:30.000 --> 00:47:59.000
+Lecturer: Now goals. Every use case is named after the goal of its primary actor, as a verb phrase.
+
+97
+00:48:00.000 --> 00:48:29.000
+Lecturer: Borrow a book. Reserve a title. Pay a fine. Not 'Book management' and not 'Login'.
+
+98
+00:48:30.000 --> 00:48:59.000
+Lecturer: Logging in is rarely a goal on its own. Nobody wakes up wanting to log in.
+
+99
+00:49:00.000 --> 00:49:29.000
+Lecturer: Ask: if the actor did only this and went home, would they be satisfied? That's the right level.
+
+100
+00:49:30.000 --> 00:49:59.000
+Lecturer: Too high, like 'Run the library', and you can't write steps. Too low, like 'Click OK', and you drown in detail.
+
+101
+00:50:00.000 --> 00:50:29.000
+Lecturer: Now goals. Every use case is named after the goal of its primary actor, as a verb phrase.
+
+102
+00:50:30.000 --> 00:50:59.000
+Lecturer: Borrow a book. Reserve a title. Pay a fine. Not 'Book management' and not 'Login'.
+
+103
+00:51:00.000 --> 00:51:29.000
+Lecturer: Logging in is rarely a goal on its own. Nobody wakes up wanting to log in.
+
+104
+00:51:30.000 --> 00:51:59.000
+Lecturer: Ask: if the actor did only this and went home, would they be satisfied? That's the right level.
+
+105
+00:52:00.000 --> 00:52:29.000
+Lecturer: The heart of a use case is the main flow, also called the main success scenario.
+
+106
+00:52:30.000 --> 00:52:59.000
+Lecturer: Write it as numbered steps, each one an actor doing something or the system responding.
+
+107
+00:53:00.000 --> 00:53:29.000
+Lecturer: Keep each step at one level: 'The member scans their card', not 'the member moves their hand'.
+
+108
+00:53:30.000 --> 00:53:59.000
+Lecturer: No user interface details. Don't write 'clicks the blue button'; write 'confirms the loan'.
+
+109
+00:54:00.000 --> 00:54:29.000
+Lecturer: Three to nine steps is usually right. If you have twenty, you probably have two use cases.
+
+110
+00:54:30.000 --> 00:54:59.000
+Lecturer: The main flow assumes everything goes well. What goes wrong comes next.
+
+111
+00:55:00.000 --> 00:55:29.000
+Lecturer: The heart of a use case is the main flow, also called the main success scenario.
+
+112
+00:55:30.000 --> 00:55:59.000
+Lecturer: Write it as numbered steps, each one an actor doing something or the system responding.
+
+113
+00:56:00.000 --> 00:56:29.000
+Lecturer: Keep each step at one level: 'The member scans their card', not 'the member moves their hand'.
+
+114
+00:56:30.000 --> 00:56:59.000
+Lecturer: No user interface details. Don't write 'clicks the blue button'; write 'confirms the loan'.
+
+115
+00:57:00.000 --> 00:57:29.000
+Lecturer: Three to nine steps is usually right. If you have twenty, you probably have two use cases.
+
+116
+00:57:30.000 --> 00:57:59.000
+Lecturer: The main flow assumes everything goes well. What goes wrong comes next.
+
+117
+00:58:00.000 --> 00:58:29.000
+Lecturer: The heart of a use case is the main flow, also called the main success scenario.
+
+118
+00:58:30.000 --> 00:58:59.000
+Lecturer: Write it as numbered steps, each one an actor doing something or the system responding.
+
+119
+00:59:00.000 --> 00:59:29.000
+Lecturer: Keep each step at one level: 'The member scans their card', not 'the member moves their hand'.
+
+120
+00:59:30.000 --> 00:59:59.000
+Lecturer: No user interface details. Don't write 'clicks the blue button'; write 'confirms the loan'.
+
+121
+01:00:00.000 --> 01:00:29.000
+Lecturer: Three to nine steps is usually right. If you have twenty, you probably have two use cases.
+
+122
+01:00:30.000 --> 01:00:59.000
+Lecturer: The main flow assumes everything goes well. What goes wrong comes next.
+
+123
+01:01:00.000 --> 01:01:29.000
+Lecturer: The heart of a use case is the main flow, also called the main success scenario.
+
+124
+01:01:30.000 --> 01:01:59.000
+Lecturer: Write it as numbered steps, each one an actor doing something or the system responding.
+
+125
+01:02:00.000 --> 01:02:29.000
+Lecturer: Keep each step at one level: 'The member scans their card', not 'the member moves their hand'.
+
+126
+01:02:30.000 --> 01:02:59.000
+Lecturer: No user interface details. Don't write 'clicks the blue button'; write 'confirms the loan'.
+
+127
+01:03:00.000 --> 01:03:29.000
+Lecturer: Three to nine steps is usually right. If you have twenty, you probably have two use cases.
+
+128
+01:03:30.000 --> 01:03:59.000
+Lecturer: The main flow assumes everything goes well. What goes wrong comes next.
+
+129
+01:04:00.000 --> 01:04:29.000
+Lecturer: The heart of a use case is the main flow, also called the main success scenario.
+
+130
+01:04:30.000 --> 01:04:59.000
+Lecturer: Write it as numbered steps, each one an actor doing something or the system responding.
+
+131
+01:05:00.000 --> 01:05:29.000
+Lecturer: Keep each step at one level: 'The member scans their card', not 'the member moves their hand'.
+
+132
+01:05:30.000 --> 01:05:59.000
+Lecturer: No user interface details. Don't write 'clicks the blue button'; write 'confirms the loan'.
+
+133
+01:06:00.000 --> 01:06:29.000
+Lecturer: Alternative flows, or extensions, describe what happens when a step doesn't go as planned.
+
+134
+01:06:30.000 --> 01:06:59.000
+Lecturer: Number them after the step they branch from: 3a, the card is expired; 3b, the member owes fines.
+
+135
+01:07:00.000 --> 01:07:29.000
+Lecturer: Each one says the condition, then the steps, then where the flow continues or that it ends.
+
+136
+01:07:30.000 --> 01:07:59.000
+Lecturer: This is where you show you understand the problem. Most marks are lost here, by leaving them out.
+
+137
+01:08:00.000 --> 01:08:29.000
+Lecturer: Brainstorm what can fail at every step, then keep the ones the system must handle.
+
+138
+01:08:30.000 --> 01:08:59.000
+Lecturer: Alternative flows, or extensions, describe what happens when a step doesn't go as planned.
+
+139
+01:09:00.000 --> 01:09:29.000
+Lecturer: Number them after the step they branch from: 3a, the card is expired; 3b, the member owes fines.
+
+140
+01:09:30.000 --> 01:09:59.000
+Lecturer: Each one says the condition, then the steps, then where the flow continues or that it ends.
+
+141
+01:10:00.000 --> 01:10:29.000
+Lecturer: This is where you show you understand the problem. Most marks are lost here, by leaving them out.
+
+142
+01:10:30.000 --> 01:10:59.000
+Lecturer: Brainstorm what can fail at every step, then keep the ones the system must handle.
+
+143
+01:11:00.000 --> 01:11:29.000
+Lecturer: Alternative flows, or extensions, describe what happens when a step doesn't go as planned.
+
+144
+01:11:30.000 --> 01:11:59.000
+Lecturer: Number them after the step they branch from: 3a, the card is expired; 3b, the member owes fines.
+
+145
+01:12:00.000 --> 01:12:29.000
+Lecturer: Each one says the condition, then the steps, then where the flow continues or that it ends.
+
+146
+01:12:30.000 --> 01:12:59.000
+Lecturer: This is where you show you understand the problem. Most marks are lost here, by leaving them out.
+
+147
+01:13:00.000 --> 01:13:29.000
+Lecturer: Brainstorm what can fail at every step, then keep the ones the system must handle.
+
+148
+01:13:30.000 --> 01:13:59.000
+Lecturer: Alternative flows, or extensions, describe what happens when a step doesn't go as planned.
+
+149
+01:14:00.000 --> 01:14:29.000
+Lecturer: Number them after the step they branch from: 3a, the card is expired; 3b, the member owes fines.
+
+150
+01:14:30.000 --> 01:14:59.000
+Lecturer: Each one says the condition, then the steps, then where the flow continues or that it ends.
+
+151
+01:15:00.000 --> 01:15:29.000
+Lecturer: Let's do the library example together on the board. Primary actor: Member. Goal: borrow a book.
+
+152
+01:15:30.000 --> 01:15:59.000
+Lecturer: Step one, the member scans their library card at the kiosk. Step two, the system shows their account.
+
+153
+01:16:00.000 --> 01:16:29.000
+Lecturer: Step three, the member scans the book. Step four, the system records the loan and shows the due date.
+
+154
+01:16:30.000 --> 01:16:59.000
+Lecturer: Extensions: 1a, the card is not recognised; 3a, the book is reserved for someone else.
+
+155
+01:17:00.000 --> 01:17:29.000
+Lecturer: Notice how short it is. Short and precise beats long and vague every time.
+
+156
+01:17:30.000 --> 01:17:59.000
+Lecturer: Let's do the library example together on the board. Primary actor: Member. Goal: borrow a book.
+
+157
+01:18:00.000 --> 01:18:29.000
+Lecturer: Step one, the member scans their library card at the kiosk. Step two, the system shows their account.
+
+158
+01:18:30.000 --> 01:18:59.000
+Lecturer: Step three, the member scans the book. Step four, the system records the loan and shows the due date.
+
+159
+01:19:00.000 --> 01:19:29.000
+Lecturer: Extensions: 1a, the card is not recognised; 3a, the book is reserved for someone else.
+
+160
+01:19:30.000 --> 01:19:59.000
+Lecturer: Notice how short it is. Short and precise beats long and vague every time.
+
+161
+01:20:00.000 --> 01:20:29.000
+Lecturer: Let's do the library example together on the board. Primary actor: Member. Goal: borrow a book.
+
+162
+01:20:30.000 --> 01:20:59.000
+Lecturer: Step one, the member scans their library card at the kiosk. Step two, the system shows their account.
+
+163
+01:21:00.000 --> 01:21:29.000
+Lecturer: Step three, the member scans the book. Step four, the system records the loan and shows the due date.
+
+164
+01:21:30.000 --> 01:21:59.000
+Lecturer: Extensions: 1a, the card is not recognised; 3a, the book is reserved for someone else.
+
+165
+01:22:00.000 --> 01:22:29.000
+Lecturer: Notice how short it is. Short and precise beats long and vague every time.
+
+166
+01:22:30.000 --> 01:22:59.000
+Lecturer: Let's do the library example together on the board. Primary actor: Member. Goal: borrow a book.
+
+167
+01:23:00.000 --> 01:23:29.000
+Lecturer: Step one, the member scans their library card at the kiosk. Step two, the system shows their account.
+
+168
+01:23:30.000 --> 01:23:59.000
+Lecturer: Step three, the member scans the book. Step four, the system records the loan and shows the due date.
+
+169
+01:24:00.000 --> 01:24:29.000
+Lecturer: Extensions: 1a, the card is not recognised; 3a, the book is reserved for someone else.
+
+170
+01:24:30.000 --> 01:24:59.000
+Lecturer: Notice how short it is. Short and precise beats long and vague every time.
+
+171
+01:25:00.000 --> 01:25:29.000
+Lecturer: Assignment 2 is now open. You write three use cases for the system in the brief.
+
+172
+01:25:30.000 --> 01:25:59.000
+Lecturer: You'll be assessed on four Criteria: actors, goals, main flow and alternative flows.
+
+173
+01:26:00.000 --> 01:26:29.000
+Lecturer: Hand it in as text or a PDF by the due date in the system. Late work is accepted but marked as late.
+
+174
+01:26:30.000 --> 01:26:59.000
+Lecturer: After the review, you'll be able to ask for help on a Criterion, or offer it if you're secure.
+
+175
+01:27:00.000 --> 01:27:29.000
+Lecturer: That's it for today. Next week: sequence diagrams. Thanks, and see you then.
+
+176
+01:27:30.000 --> 01:27:59.000
+Lecturer: Assignment 2 is now open. You write three use cases for the system in the brief.
+
+177
+01:28:00.000 --> 01:28:29.000
+Lecturer: You'll be assessed on four Criteria: actors, goals, main flow and alternative flows.
+
+178
+01:28:30.000 --> 01:28:59.000
+Lecturer: Hand it in as text or a PDF by the due date in the system. Late work is accepted but marked as late.
+
+179
+01:29:00.000 --> 01:29:29.000
+Lecturer: After the review, you'll be able to ask for help on a Criterion, or offer it if you're secure.
+
+180
+01:29:30.000 --> 01:29:59.000
+Lecturer: That's it for today. Next week: sequence diagrams. Thanks, and see you then.

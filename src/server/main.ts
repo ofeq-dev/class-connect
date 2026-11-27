@@ -10,7 +10,8 @@ import { createApp } from "./http";
 import { createDiskFileStore } from "./files";
 import { createJobs, createNextEventTimer, type NextEventTimer } from "./jobs";
 import { createLiveEvents } from "./live-events";
-import { createOpenRouterGateway, createScriptedGateway } from "./llm";
+import { createOpenRouterGateway } from "./llm";
+import { createRehearsalGateway, loadRehearsalFixtures } from "./demo";
 import { createFeedbackModule } from "./feedback";
 import { createHomeworkModule } from "./homework";
 import { createSummariesModule } from "./summaries";
@@ -64,7 +65,13 @@ const jobs = createJobs({
 });
 const llm =
   config.llm.adapter === "fake"
-    ? createScriptedGateway({ db: database.db, clock: systemClock, delayMs: config.llm.fakeDelayMs })
+    ? // Canned replies from the checked-in fixtures, so the demo can be rehearsed without spending requests.
+      createRehearsalGateway({
+        db: database.db,
+        clock: systemClock,
+        delayMs: config.llm.fakeDelayMs,
+        fixtures: await loadRehearsalFixtures(),
+      })
     : createOpenRouterGateway({
         db: database.db,
         clock: systemClock,
