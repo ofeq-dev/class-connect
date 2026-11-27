@@ -1,4 +1,4 @@
-import { and, asc, eq, lte } from "drizzle-orm";
+import { and, asc, eq, inArray, lte } from "drizzle-orm";
 import type { Clock } from "../clock";
 import type { Db, Tx } from "../db";
 import { job as jobTable } from "./schema";
@@ -25,11 +25,12 @@ export interface Job {
   kind: JobKind;
   payload: unknown;
   runAt: Date;
+  /** Attempts so far, counting the current run once claimed; MAX_ATTEMPTS means this is the last. */
+  attempts: number;
 }
 
 export interface JobState extends Job {
   status: JobStatus;
-  attempts: number;
   progress: { done: number; total: number } | null;
   error: string | null;
 }
@@ -44,9 +45,14 @@ export interface Jobs {
   retry(job: Job | number): void;
   /** Writes the job's result and marks it done, in one transaction. */
   complete(job: Job, write: (tx: Tx) => void): void;
-  /** Ends the job failed at once, with no automatic retry (e.g. an LlmError already retried). */
-  fail(job: Job, error: string): void;
+  /**
+   * Ends the job failed at once, with no automatic retry (e.g. an LlmError already retried).
+   * With `write`, the write and the failure commit together.
+   */
+  fail(job: Job, error: string, write?: (tx: Tx) => void): void;
   read(jobId: number): JobState;
+  /** How many of these jobs are in each status, counted from the job rows. */
+  tally(jobIds: number[]): JobTally;
 }
 
 /** The worker side, used by the app's startup and by tests. */
@@ -62,6 +68,14 @@ export interface JobWorker extends Jobs {
   stop(): void;
   /** Resolves when the current run (if any) finishes. */
   idle(): Promise<void>;
+}
+
+export interface JobTally {
+  queued: number;
+  running: number;
+  done: number;
+  failed: number;
+  total: number;
 }
 
 export const MAX_ATTEMPTS = 3;
@@ -104,7 +118,7 @@ export function createJobs({ db, clock, setTimer = realTimer, onError }: JobsDep
         : null,
     error: row.error,
   });
-  const toJob = ({ id, kind, payload, runAt }: JobState): Job => ({ id, kind, payload, runAt });
+  const toJob = ({ id, kind, payload, runAt, attempts }: JobState): Job => ({ id, kind, payload, runAt, attempts });
   const idOf = (job: Job | number) => (typeof job === "number" ? job : job.id);
 
   function read(jobId: number): JobState {
@@ -249,14 +263,31 @@ export function createJobs({ db, clock, setTimer = realTimer, onError }: JobsDep
       });
     },
 
-    fail(job, error) {
-      db.update(jobTable)
-        .set({ status: "failed", error })
-        .where(and(eq(jobTable.id, job.id), eq(jobTable.status, "running")))
-        .run();
+    fail(job, error, write) {
+      db.transaction((tx) => {
+        write?.(tx);
+        tx.update(jobTable)
+          .set({ status: "failed", error })
+          .where(and(eq(jobTable.id, job.id), eq(jobTable.status, "running")))
+          .run();
+      });
     },
 
     read,
+
+    tally(jobIds) {
+      const tally: JobTally = { queued: 0, running: 0, done: 0, failed: 0, total: 0 };
+      if (jobIds.length === 0) return tally;
+      for (const row of db
+        .select({ status: jobTable.status })
+        .from(jobTable)
+        .where(inArray(jobTable.id, jobIds))
+        .all()) {
+        tally[row.status as JobStatus]++;
+        tally.total++;
+      }
+      return tally;
+    },
 
     recover() {
       db.transaction((tx) => {

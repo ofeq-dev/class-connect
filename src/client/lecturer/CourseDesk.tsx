@@ -201,7 +201,11 @@ function AssignmentsSection({ courseId }: { courseId: string }) {
             <Link className="grow" to={`/lecturer/courses/${courseId}/assignments/${a.id}`}>
               <b>{a.title}</b> <span className="muted num">due {formatInstant(a.dueAt)}</span>
             </Link>
-            <span className="muted small num">{a.submissionCount} handed in</span>
+            <span className="muted small num">
+              {a.state === "reviewing" && a.reviewRun
+                ? `review run ${a.reviewRun.done} of ${a.reviewRun.total}`
+                : `${a.submissionCount} handed in`}
+            </span>
             <span className={`chip ${a.state === "open" ? "c-ok" : "c-mute"}`}>{ASSIGNMENT_STATE_LABEL[a.state]}</span>
           </li>
         ))}
