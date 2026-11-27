@@ -20,6 +20,10 @@ export const noticeQueryKeys: { [T in NoticeType]: (id: number) => QueryKey[] } 
   ],
   // The console's count, and the Student's own Check-in line (window opened or closed).
   "attendance.changed": (sessionId) => [["attendance", sessionId], ["student", "me"], ["student", "entry"]],
+  // Topic lists (the Student's Comment tab too) and the Comments that show Topic names.
+  "topic.changed": () => [["topics"], ["comments"], ["student", "topics"]],
+  // Lecturer scope only: the console's column, the Course desk section, the all-comments screen.
+  "comment.changed": () => [["comments"]],
   "assignment.changed": (id) => [["assignment", id], ["assignments"], ["student", "assignment", id], ["student", "assignments"]],
 };
 

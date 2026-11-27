@@ -5,6 +5,7 @@ import { Hono } from "hono";
 import type { AttendanceModule } from "../attendance";
 import type { CourseModule } from "../course";
 import { DomainError, NotFoundError } from "../errors";
+import type { FeedbackModule } from "../feedback";
 import type { HomeworkModule } from "../homework";
 import type { LiveEvents } from "../live-events";
 import type { LlmGateway } from "../llm";
@@ -15,6 +16,7 @@ import { studentRoutes } from "./student";
 export interface AppDeps {
   course: CourseModule;
   attendance: AttendanceModule;
+  feedback: FeedbackModule;
   summaries: SummariesModule;
   homework: HomeworkModule;
   llm: Pick<LlmGateway, "usageToday">;

@@ -4,6 +4,7 @@ import { DEFAULT_TIME_ZONE } from "../clock";
 import { createCourseModule } from "../course";
 import { openDatabase } from "../db";
 import { createApp } from "../http";
+import { createFeedbackModule } from "../feedback";
 import { createJobs } from "../jobs";
 import { createScriptedGateway } from "../llm";
 import { createHomeworkModule } from "../homework";
@@ -32,6 +33,7 @@ export function makeTestApp(options: TestAppOptions = {}) {
   const course = createCourseModule({ db: database.db, clock, events, timeZone: DEFAULT_TIME_ZONE });
   const lecturer = course.ensureLecturer("Test Lecturer");
   const attendance = createAttendanceModule({ db: database.db, clock, events, course, timeZone: DEFAULT_TIME_ZONE });
+  const feedback = createFeedbackModule({ db: database.db, clock, events, course, attendance, timeZone: DEFAULT_TIME_ZONE });
   // The real SQLite-backed worker, with no timer: tests call runDue() after moving the Clock.
   const jobs = createJobs({ db: database.db, clock });
   const llm = createScriptedGateway({ db: database.db, clock });
@@ -42,6 +44,7 @@ export function makeTestApp(options: TestAppOptions = {}) {
   const app = createApp({
     course,
     attendance,
+    feedback,
     summaries,
     homework,
     llm,
@@ -54,7 +57,7 @@ export function makeTestApp(options: TestAppOptions = {}) {
 
   return {
     app,
-    modules: { course, attendance, summaries, homework },
+    modules: { course, attendance, feedback, summaries, homework },
     fakes: { clock, events, llm, files },
     jobs,
     lecturer,
