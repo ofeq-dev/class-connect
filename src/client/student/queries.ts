@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { api, ok } from "../api";
 
 /** Who this phone is, its Course and today's Session; `{ claimed: false }` for a new phone. */
@@ -36,11 +36,20 @@ export function useStudentSummaries() {
   });
 }
 
-/** One published Session summary; refetched when the Lecturer publishes another version. */
-export function useStudentSummary(sessionId: number) {
+/**
+ * One published Session summary, in `lang` when that translation is ready, else the source
+ * language ("" asks for the source). Refetched when the Lecturer publishes or a translation lands.
+ */
+export function useStudentSummary(sessionId: number, lang: string) {
   return useQuery({
-    queryKey: ["student", "summary", sessionId],
+    queryKey: ["student", "summary", sessionId, lang],
     queryFn: async () =>
-      ok(await api.api.student.summaries[":sessionId"].$get({ param: { sessionId: String(sessionId) } })),
+      ok(
+        await api.api.student.summaries[":sessionId"].$get({
+          param: { sessionId: String(sessionId) },
+          query: { lang },
+        }),
+      ),
+    placeholderData: keepPreviousData,
   });
 }
