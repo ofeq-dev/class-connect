@@ -150,13 +150,8 @@ export interface RehearsalGatewayDeps {
   delayMs?: number;
 }
 
-/**
- * The fake LLM for `LLM_ADAPTER=fake`: the scripted adapter answering every task from the
- * canned fixtures, with the spec's fallback for input it has no canned reply for. It still
- * counts each call in `llm_usage`; `embed` stays the scripted adapter's text-derived vectors.
- */
-export function createRehearsalGateway({ db, clock, fixtures, delayMs = 0 }: RehearsalGatewayDeps): ScriptedGateway {
-  const gateway = createScriptedGateway({ db, clock, delayMs });
+/** Scripts every task's reply onto a scripted gateway: the canned fixture, or the fallback for other input. */
+export function scriptRehearsalReplies(gateway: ScriptedGateway, fixtures: RehearsalFixtures): void {
   gateway.reply(
     summarise.name,
     (input: SummariseInput) => fixtures.summaries.get(sha256(input.transcript)) ?? genericSummary(input),
@@ -172,5 +167,15 @@ export function createRehearsalGateway({ db, clock, fixtures, delayMs = 0 }: Reh
   );
   gateway.reply(classSummary.name, fixtures.classSummary);
   gateway.reply(draftCriteria.name, fixtures.draftCriteria);
+}
+
+/**
+ * The fake LLM for `LLM_ADAPTER=fake`: the scripted adapter answering every task from the
+ * canned fixtures, with the spec's fallback for input it has no canned reply for. It still
+ * counts each call in `llm_usage`; `embed` stays the scripted adapter's text-derived vectors.
+ */
+export function createRehearsalGateway({ db, clock, fixtures, delayMs = 0 }: RehearsalGatewayDeps): ScriptedGateway {
+  const gateway = createScriptedGateway({ db, clock, delayMs });
+  scriptRehearsalReplies(gateway, fixtures);
   return gateway;
 }

@@ -16,7 +16,8 @@
     "check": "tsc --noEmit && eslint . && vitest run",
     "test": "vitest",
     "db:generate": "drizzle-kit generate",
-    "hash-password": "tsx scripts/hash-password.ts"
+    "hash-password": "tsx scripts/hash-password.ts",
+    "seed:demo": "tsx --env-file-if-exists=.env scripts/seed-demo.ts"
   },
   "dependencies": {
     "@hono/node-server": "^2.1.11",
