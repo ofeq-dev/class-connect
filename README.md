@@ -8,6 +8,16 @@ Simple, phone-first teaching tools for a live Course: QR code Check-in with a do
 
 Vocabulary: [`GLOSSARY.md`](GLOSSARY.md). Decisions: [`docs/adr/`](docs/adr/).
 
+## Setting up the home server
+
+The app runs on the home server behind the Cloudflare Tunnel at `cc.ofeq.dev` ([ADR 0003](docs/adr/0003-home-server-behind-cloudflare-tunnel.md)); every merge to `master` deploys there. To install it, or rebuild it later, run the wizard from a laptop checkout with `ssh wsl` and `gh` working:
+
+```sh
+deploy/setup-home-server.sh
+```
+
+It walks through each step: directories, the sudoers rule for restarts, `/etc/class-connect.env`, the systemd units, the GitHub runner and the tunnel route. It finishes with the acceptance checks from #23: a deploy, a rollback drill and a backup. It is safe to rerun. The values you enter are kept outside the repo in `~/.local/state/class-connect/server.env`. Backups cover the database only, not the uploaded files under `FILES_DIR`.
+
 ## Rehearsing the demo
 
 The full plan is [Rehearsing the live demo](docs/testing-strategy.md#rehearsing-the-live-demo). In short, on the home server, from `/srv/class-connect/current`:
