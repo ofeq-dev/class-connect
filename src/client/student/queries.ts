@@ -45,6 +45,8 @@ export function useStudentAssignment(assignmentId: string) {
   });
 }
 
+export type StudentAssignmentView = NonNullable<ReturnType<typeof useStudentAssignment>["data"]>;
+
 /** "Mon 7 Dec, 23:59" for an instant, in the phone's time zone. */
 export function dueLabel(iso: string): string {
   return new Date(iso).toLocaleString("en-GB", {
