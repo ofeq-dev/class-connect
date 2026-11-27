@@ -18,6 +18,7 @@ export const noticeQueryKeys: { [T in NoticeType]: (id: number) => QueryKey[] } 
     ["student", "summaries"],
     ["student", "summary", sessionId],
   ],
+  "assignment.changed": (id) => [["assignment", id], ["assignments"], ["student", "assignment", id], ["student", "assignments"]],
 };
 
 export function applyNotice(client: QueryClient, notice: Notice): void {

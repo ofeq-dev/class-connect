@@ -22,6 +22,13 @@ const optStr = (v: unknown) => (typeof v === "string" ? v : undefined);
 const json = <T>(shape: (b: Body) => T) =>
   validator("json", (value) => shape(value && typeof value === "object" ? (value as Body) : {}));
 
+const assignmentBody = (b: Body) => ({
+  title: str(b.title),
+  instructions: str(b.instructions),
+  dueAt: str(b.dueAt),
+  criteria: Array.isArray(b.criteria) ? b.criteria.map(str) : [],
+});
+
 const sessionTimes = (b: Body) => ({ date: str(b.date), start: str(b.start), end: str(b.end) });
 
 function idParam(c: Context, name: string): number {
@@ -52,6 +59,14 @@ export function lecturerRoutes(deps: AppDeps) {
     const session = deps.course.readSession(idParam(c, "sessionId"));
     if (session.courseId !== course.id) throw new NotFoundError("Session");
     return session;
+  };
+
+  /** Resolves :assignmentId to an Assignment of the Lecturer's :courseId, else 404. */
+  const ownAssignment = (c: Context<{ Variables: { lecturerId: number } }>) => {
+    const course = ownCourse(c);
+    const assignment = deps.homework.lecturerView(idParam(c, "assignmentId"));
+    if (assignment.courseId !== course.id) throw new NotFoundError("Assignment");
+    return assignment;
   };
 
   return new Hono<{ Variables: { lecturerId: number } }>()
@@ -166,6 +181,29 @@ export function lecturerRoutes(deps: AppDeps) {
     .post("/courses/:courseId/sessions/:sessionId/summary/versions/:versionId/publish", requireLecturer, (c) =>
       c.json(deps.summaries.publish(ownSession(c).id, idParam(c, "versionId"))),
     )
+
+    // Assignments
+    .get("/courses/:courseId/assignments", requireLecturer, (c) =>
+      c.json(deps.homework.forCourse(ownCourse(c).id)),
+    )
+    .post("/courses/:courseId/assignments", requireLecturer, json(assignmentBody), (c) =>
+      c.json(deps.homework.setAssignment(ownCourse(c).id, c.req.valid("json")), 201),
+    )
+    .post(
+      "/courses/:courseId/assignments/draft-criteria",
+      requireLecturer,
+      json((b) => ({ title: str(b.title), instructions: str(b.instructions) })),
+      async (c) => {
+        ownCourse(c);
+        return c.json({ criteria: await deps.homework.draftCriteria(c.req.valid("json")) });
+      },
+    )
+    .get("/courses/:courseId/assignments/:assignmentId", requireLecturer, (c) => c.json(ownAssignment(c)))
+    .put("/courses/:courseId/assignments/:assignmentId", requireLecturer, json(assignmentBody), (c) => {
+      const { courseId, id } = ownAssignment(c);
+      return c.json(deps.homework.setAssignment(courseId, c.req.valid("json"), id));
+    })
+
     .get("/llm-usage", requireLecturer, (c) => c.json({ today: deps.llm.usageToday(), limit: DAILY_LIMIT }))
 
     .get("/events", requireLecturer, (c) => {

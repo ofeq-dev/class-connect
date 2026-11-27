@@ -3,9 +3,9 @@
  * notice type to the TanStack Query keys it refetches (src/client/live.ts).
  *
  * The id is the changed thing's id: a Course for course.changed and roster.changed,
- * a Session for session.changed and summary.changed.
+ * a Session for session.changed and summary.changed, an Assignment for assignment.changed.
  */
-export const NOTICE_TYPES = ["course.changed", "roster.changed", "session.changed", "summary.changed"] as const;
+export const NOTICE_TYPES = ["course.changed", "roster.changed", "session.changed", "summary.changed", "assignment.changed"] as const;
 
 export type NoticeType = (typeof NOTICE_TYPES)[number];
 

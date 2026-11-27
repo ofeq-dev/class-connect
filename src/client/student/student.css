@@ -172,6 +172,24 @@
 
 @media (prefers-reduced-motion: reduce) { .tab { transition: none; } }
 
+/* Assignments */
+.hw-list ul, .hw-criteria { list-style: none; padding: 0; margin: 6px 0 0; display: grid; gap: 8px; }
+.hw-criteria { gap: 4px; }
+.hw-criteria li::before { content: "☐ "; color: var(--muted); }
+.hw-instructions { white-space: pre-wrap; }
+.hw-late {
+  display: inline-block; margin-inline-start: 8px; padding: 0 6px; border-radius: 3px;
+  background: var(--warn); color: var(--surface); font-size: 12px; font-weight: 700;
+}
+.hw-handed { display: flex; flex-wrap: wrap; gap: 4px 0; align-items: baseline; padding: 10px 0; }
+.hw-handed b { font-family: var(--font-display); font-size: 18px; }
+.hw-handed > span:last-child { flex-basis: 100%; color: var(--muted); font-size: 14px; }
+.hw-form { display: flex; flex-direction: column; gap: 10px; }
+.hw-modes { display: flex; gap: 16px; }
+.hw-form textarea, .hw-form input[type="file"] {
+  width: 100%; border: 1.5px solid var(--line); border-radius: 6px; background: var(--card); color: var(--ink); padding: 10px 12px; font: inherit;
+}
+
 /* Session summaries on Today, and the read page. */
 .st-summaries { display: grid; gap: 8px; margin-top: 18px; }
 .st-h2 { font-family: var(--font-display); font-size: 19px; margin: 0; }

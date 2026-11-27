@@ -4,6 +4,7 @@ import { serveStatic } from "@hono/node-server/serve-static";
 import { Hono } from "hono";
 import type { CourseModule } from "../course";
 import { DomainError, NotFoundError } from "../errors";
+import type { HomeworkModule } from "../homework";
 import type { LiveEvents } from "../live-events";
 import type { LlmGateway } from "../llm";
 import type { SummariesModule } from "../summaries";
@@ -13,6 +14,7 @@ import { studentRoutes } from "./student";
 export interface AppDeps {
   course: CourseModule;
   summaries: SummariesModule;
+  homework: HomeworkModule;
   llm: Pick<LlmGateway, "usageToday">;
   events: LiveEvents;
   lecturer: { id: number; passwordHash: string };
