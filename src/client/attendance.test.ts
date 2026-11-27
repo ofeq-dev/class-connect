@@ -60,8 +60,8 @@ describe("the Student's Check-in line on Today", () => {
 
 describe("the console's one Check-in window button", () => {
   it("opens, closes, then reopens", () => {
-    expect(windowButton("not-opened")).toBe("Open check-in");
-    expect(windowButton("open")).toBe("Close check-in");
-    expect(windowButton("closed")).toBe("Reopen check-in");
+    expect(windowButton("not-opened")).toBe("Open");
+    expect(windowButton("open")).toBe("Close");
+    expect(windowButton("closed")).toBe("Reopen");
   });
 });

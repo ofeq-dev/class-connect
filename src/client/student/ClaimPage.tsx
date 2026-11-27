@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Navigate, useParams } from "react-router";
 import { api, ApiError, ok } from "../api";
 import { useQrEntry } from "./queries";
@@ -7,8 +7,9 @@ import { useQrEntry } from "./queries";
 type Step = { step: "id" } | { step: "confirm"; studentId: string; name: string } | { step: "taken" };
 
 /**
- * /s/<code>, the page the Session QR code opens. A claimed phone goes straight to the app
- * (Check-in fires there, #26); a new phone enters its student ID and confirms its name first.
+ * /s/<code>, the page the Session QR code opens. Loading it checks a claimed phone in (the server
+ * does it, no tap) and goes straight to Today, which shows the result. A new phone enters its
+ * student ID and confirms its name first; the claim checks it in the same way.
  */
 export function ClaimPage() {
   const { code = "" } = useParams();
@@ -29,9 +30,18 @@ export function ClaimPage() {
   const claim = useMutation({
     mutationFn: async (id: string) =>
       ok(await api.api.student.s[":code"].claim.$post({ param: { code }, json: { studentId: id } })),
-    onSuccess: () => client.invalidateQueries({ queryKey: ["student"] }),
+    // The claim has checked the phone in too: show it as claimed (to the app) without loading /s/<code> again.
+    onSuccess: ({ checkIn, ...me }) => {
+      client.setQueryData(["student", "entry", code], (old: typeof entry.data) => old && { ...old, me, checkIn });
+      void client.invalidateQueries({ queryKey: ["student", "me"] });
+    },
     onError: refused,
   });
+  const claimed = !!entry.data?.me;
+  useEffect(() => {
+    // Loading this page checked the phone in; Today must show it, not what it last cached.
+    if (claimed) void client.invalidateQueries({ queryKey: ["student", "me"] });
+  }, [claimed, client]);
 
   if (entry.isPending) return null;
   if (entry.error) {

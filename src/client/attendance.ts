@@ -43,7 +43,7 @@ export function checkInLine(
 ): { title: string; detail: string; tone: CheckInTone } {
   switch (status) {
     case "present":
-      return { title: `Checked in at ${at ? time(at) : ""}`.trim(), detail: "You’re marked present.", tone: "ok" };
+      return { title: `Checked in at ${at ? time(at) : ""}`.trim(), detail: "You’re on the attendance sheet for this Session.", tone: "ok" };
     case "pending":
       return {
         title: "Checked in — waiting for your Lecturer to confirm",
@@ -67,7 +67,7 @@ export function checkInLine(
   }
 }
 
-/** The console's one window button: Open, then Close, then Reopen. */
-export function windowButton(state: WindowState): string {
-  return { "not-opened": "Open check-in", open: "Close check-in", closed: "Reopen check-in" }[state];
+/** The console's one window button, beside the "Check-in open / closed" line: Open, Close, Reopen. */
+export function windowButton(state: WindowState): "Open" | "Close" | "Reopen" {
+  return ({ "not-opened": "Open", open: "Close", closed: "Reopen" } as const)[state];
 }
