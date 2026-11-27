@@ -56,9 +56,11 @@ classDiagram
       +createPoll(topic, question, options, schedule) Poll
       +openPoll(poll)
       +closePoll(poll)
+      +copyPoll(poll) Poll
       +vote(poll, rosterEntry, option)
       +results(poll, viewer) PollResults
       +nextMoment(after) Instant
+      +announce(since, until)
     }
     class Summaries {
       <<module>>
@@ -293,7 +295,7 @@ classDiagram
     topic_id
     question
     scheduled_open_at
-    scheduled_close_at
+    close_after_minutes
     opened_at
     closed_at
   }

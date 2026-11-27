@@ -128,6 +128,18 @@ describe("Check-in window", () => {
     expect(attendance().nextMoment(new Date("2026-11-30T22:00:00.000Z"))).toBeNull();
   });
 
+  it("announces a midnight close that falls in a span to everyone and the projector, changing nothing", () => {
+    attendance().openWindow(session.id, LECTURER);
+    t.fakes.events.clear();
+    attendance().announce(new Date("2026-11-30T21:00:00.000Z"), new Date("2026-11-30T21:59:59.999Z"));
+    expect(t.fakes.events.published).toEqual([]);
+    attendance().announce(new Date("2026-11-30T21:59:59.999Z"), new Date("2026-11-30T22:00:00.000Z"));
+    expect(t.fakes.events.published.map((p) => [p.audience, p.notice])).toEqual([
+      ["all", { type: "attendance.changed", id: session.id }],
+      ["projector", { type: "attendance.changed", id: session.id }],
+    ]);
+  });
+
   it("refuses a Lecturer address of the wrong family", () => {
     expect(refusal(() => attendance().openWindow(session.id, { ipv4: "2a02::1", ipv6: null }))).toBe(
       "check-in.bad-address",

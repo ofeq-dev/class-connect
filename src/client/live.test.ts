@@ -40,6 +40,15 @@ describe("notice → query keys", () => {
     expect(staleKeys()).toEqual([["course", 1], ["roster", 2], ["sessions", 1], ["session", 5]]);
   });
 
+  it("poll.changed refetches the console's Polls, the Student's Polls tab and the projector, not Comments", () => {
+    const client = clientWith(["polls", "5"], ["student", "polls"], ["projector", "course", "1"], ["comments", "inbox", "5"]);
+    applyNotice(client, { type: "poll.changed", id: 9 });
+    expect(stale(client, ["polls", "5"])).toBe(true);
+    expect(stale(client, ["student", "polls"])).toBe(true);
+    expect(stale(client, ["projector", "course", "1"])).toBe(true);
+    expect(stale(client, ["comments", "inbox", "5"])).toBe(false);
+  });
+
   it("session.changed also refreshes the Student app's view of today", () => {
     const client = clientWith(["student", "me"], ["student", "entry", "abc"]);
     applyNotice(client, { type: "session.changed", id: 5 });

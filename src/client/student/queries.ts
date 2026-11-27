@@ -100,3 +100,12 @@ export function useMyComments() {
     queryFn: async () => ok(await api.api.student.comments.$get()),
   });
 }
+
+/** The Polls tab: open Polls to vote on, then past results; poll.changed refetches it. */
+export function useStudentPolls(enabled = true) {
+  return useQuery({
+    queryKey: ["student", "polls"],
+    queryFn: async () => ok(await api.api.student.polls.$get()),
+    enabled,
+  });
+}

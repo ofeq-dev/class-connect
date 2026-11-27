@@ -30,6 +30,15 @@
   background: linear-gradient(100deg, transparent 0.05em, #ffe14d 0.15em, #ffe14d calc(100% - 0.15em), transparent calc(100% - 0.05em)) 0 85% / 100% 60% no-repeat;
 }
 .proj .p-url { font: 1.9cqw ui-monospace, monospace; color: #555; }
+.proj.poll { grid-template-columns: 1fr; }
+.proj.poll .pq { font-size: 5cqw; font-weight: 800; line-height: 1.1; }
+.proj.poll .po { display: flex; flex-direction: column; gap: 1.4cqw; font-size: 2.8cqw; }
+.proj.poll .po div {
+  position: relative; padding: 1cqw 2cqw; border: 0.3cqw solid #111; border-radius: 1cqw;
+  display: flex; justify-content: space-between; overflow: hidden;
+}
+.proj.poll .po i { position: absolute; inset: 0 auto 0 0; background: #ff9dc4; }
+.proj.poll .po span, .proj.poll .po b { position: relative; }
 .proj.blank { display: grid; place-items: center; grid-template-columns: 1fr; }
 .proj.blank span { font-size: 2cqw; font-weight: 700; color: #d6d6d6; }
 

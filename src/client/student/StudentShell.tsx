@@ -5,11 +5,13 @@ import { useLiveEvents } from "../live";
 import { SummaryView } from "../markdown/SummaryView";
 import { AssignmentPage } from "./AssignmentPage";
 import { CommentTab, MineTab } from "./CommentTabs";
+import { NewPollBanner, PollsTab, unvoted, useNewPollBanner } from "./PollsTab";
 import {
   dueLabel,
   longDate,
   useStudentAssignments,
   useStudentMe,
+  useStudentPolls,
   useStudentSummaries,
   useStudentSummary,
 } from "./queries";
@@ -29,6 +31,9 @@ export function StudentShell() {
   const claimed = me.data?.claimed === true;
   useLiveEvents(claimed ? "/api/student/events" : null);
   const { pathname } = useLocation();
+  const polls = useStudentPolls(claimed);
+  const newPoll = useNewPollBanner(polls.data, pathname === "/polls");
+  const badge = unvoted(polls.data);
 
   if (me.isPending) return null;
   if (me.error) {
@@ -48,14 +53,7 @@ export function StudentShell() {
       <main className="page-sheet">
         <Routes>
           <Route index element={<Today me={me.data} />} />
-          <Route
-            path="polls"
-            element={
-              <Empty title="Polls">
-                No open polls right now. When your Lecturer opens one, it shows here and you vote with one tap.
-              </Empty>
-            }
-          />
+          <Route path="polls" element={<PollsTab />} />
           <Route path="comment" element={<CommentTab myName={me.data.me.name} />} />
           <Route path="mine" element={<MineTab />} />
           <Route path="assignments/:assignmentId" element={<AssignmentPage />} />
@@ -67,9 +65,13 @@ export function StudentShell() {
         {TABS.map((t) => (
           <NavLink key={t.key} to={t.path} end className="tab" data-k={t.key}>
             {t.label}
+            {t.key === "polls" && badge > 0 && (
+              <span className="badge" aria-label={`${badge} waiting for your vote`}>{badge}</span>
+            )}
           </NavLink>
         ))}
       </nav>
+      {newPoll.banner && <NewPollBanner poll={newPoll.banner} dismiss={newPoll.dismiss} />}
     </div>
   );
 }
@@ -95,6 +97,7 @@ function Today({ me }: { me: Me }) {
       )}
       <Assignments />
       <div className="quick">
+        <OpenPolls />
         <Link className="qa" to="/comment">
           <b>Message the Lecturer</b>
           <span>With your name or anonymously</span>
@@ -105,6 +108,20 @@ function Today({ me }: { me: Me }) {
         This phone is set up for <b>{me.me.name}</b>.
       </p>
     </>
+  );
+}
+
+/** Today's shortcut to the open Polls, while there are any. */
+function OpenPolls() {
+  const polls = useStudentPolls();
+  const open = polls.data?.open.length ?? 0;
+  if (!open) return null;
+  const waiting = unvoted(polls.data);
+  return (
+    <Link className="qa" to="/polls">
+      <b>{open === 1 ? "1 open poll" : `${open} open polls`}</b>
+      <span>{waiting ? "Waiting for your vote" : "You’ve voted"}</span>
+    </Link>
   );
 }
 
@@ -199,17 +216,6 @@ function SummaryRead() {
           <SummaryView markdown={summary.data.markdown} />
         </>
       )}
-    </>
-  );
-}
-
-function Empty({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <>
-      <h1 className="tab-title">
-        <span className="hl">{title}</span>
-      </h1>
-      <p className="empty">{children}</p>
     </>
   );
 }

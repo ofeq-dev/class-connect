@@ -1,4 +1,4 @@
-import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 // course_id, session_id and roster_entry_id refer to Course's tables; Course owns them, so
 // there is no cross-module foreign key.
@@ -40,4 +40,59 @@ export const comment = sqliteTable(
     createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
   },
   (t) => [index("comment_topic").on(t.topicId, t.createdAt)],
+);
+
+/**
+ * A single-choice Poll. Whether it is a draft, scheduled, open or closed is worked out from these
+ * times and the Clock when read, never stored as a flag; a manual open or close wins over the
+ * schedule. A draft may be incomplete (no question, fewer than two options) but can't open.
+ */
+export const poll = sqliteTable(
+  "poll",
+  {
+    id: integer("id").primaryKey(),
+    topicId: integer("topic_id")
+      .notNull()
+      .references(() => topic.id),
+    question: text("question").notNull(),
+    /** When the Poll opens by itself ("Opens at a time"); null for Opens now or later. */
+    scheduledOpenAt: integer("scheduled_open_at", { mode: "timestamp_ms" }),
+    /** "Closes after N min", counted from whenever it opens; null for "when I close it". */
+    closeAfterMinutes: integer("close_after_minutes"),
+    /** The Lecturer's manual open and close. */
+    openedAt: integer("opened_at", { mode: "timestamp_ms" }),
+    closedAt: integer("closed_at", { mode: "timestamp_ms" }),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (t) => [index("poll_topic").on(t.topicId)],
+);
+
+export const pollOption = sqliteTable(
+  "poll_option",
+  {
+    id: integer("id").primaryKey(),
+    pollId: integer("poll_id")
+      .notNull()
+      .references(() => poll.id, { onDelete: "cascade" }),
+    label: text("label").notNull(),
+    position: integer("position").notNull(),
+  },
+  (t) => [index("poll_option_poll").on(t.pollId, t.position)],
+);
+
+/** One Vote per Poll per Roster entry; changing it replaces the row. */
+export const vote = sqliteTable(
+  "vote",
+  {
+    id: integer("id").primaryKey(),
+    pollId: integer("poll_id")
+      .notNull()
+      .references(() => poll.id, { onDelete: "cascade" }),
+    rosterEntryId: integer("roster_entry_id").notNull(),
+    optionId: integer("option_id")
+      .notNull()
+      .references(() => pollOption.id, { onDelete: "cascade" }),
+    at: integer("at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (t) => [uniqueIndex("vote_one_per_entry").on(t.pollId, t.rosterEntryId)],
 );

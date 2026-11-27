@@ -40,7 +40,7 @@ const SAY = {
 
 /**
  * What the class sees, at 16:9 and always light: the QR code, the Session and the live checked-in
- * count, or Blank. Sized in container units so the console thumbnail is the same picture, smaller.
+ * count, a Poll, or Blank. Sized in container units so the console thumbnail is the same picture, smaller.
  */
 export function ProjectorView({ view, origin }: { view: View; origin: string }) {
   if (view.mode === "blank") {
@@ -50,6 +50,7 @@ export function ProjectorView({ view, origin }: { view: View; origin: string }) 
       </div>
     );
   }
+  if (view.mode === "poll") return <PollScreen poll={view.poll} />;
   const { session, checkedIn, window } = view;
   const host = new URL(origin).host;
   return (
@@ -74,6 +75,38 @@ export function ProjectorView({ view, origin }: { view: View; origin: string }) 
           <span className="p-say">checked in</span>
         </div>
         <div className="p-url">{host}</div>
+      </div>
+    </div>
+  );
+}
+
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+
+/** A Poll: the question and options with the vote count; each option's share only once it closes. */
+function PollScreen({ poll }: { poll: Extract<View, { mode: "poll" }>["poll"] }) {
+  const closed = poll.status === "closed";
+  return (
+    <div className="proj poll">
+      <div className="col">
+        <div className="p-course">Poll · open the Polls tab on your phone</div>
+        <div className="pq" dir="auto">
+          {poll.question}
+        </div>
+        <div className="po">
+          {poll.options.map((o) => {
+            const pct = closed && poll.votes ? Math.round(((o.votes ?? 0) * 100) / poll.votes) : 0;
+            return (
+              <div key={o.id}>
+                {closed && <i style={{ width: `${pct}%` }} />}
+                <span dir="auto">{o.label}</span>
+                {closed && <b>{pct}%</b>}
+              </div>
+            );
+          })}
+        </div>
+        <div className="p-say" aria-live="polite">
+          {closed ? `${plural(poll.votes, "vote")} · closed` : `${plural(poll.votes, "vote")} so far · results when it closes`}
+        </div>
       </div>
     </div>
   );

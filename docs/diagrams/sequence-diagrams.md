@@ -146,8 +146,8 @@ sequenceDiagram
     F->>F: set closed_at
     F->>E: publish(course, all, poll.changed)
   else closed on schedule
-    T->>E: publish(course, all, poll.changed) at scheduled_close_at
-    Note over F,K: no write: the Poll reads as closed because now ≥ scheduled_close_at
+    T->>E: publish(course, all, poll.changed) at open + close_after_minutes
+    Note over F,K: no write: the Poll reads as closed because now ≥ its open time + close_after_minutes
   end
   E-->>S: poll.changed
   S->>R: GET /polls/:id/results

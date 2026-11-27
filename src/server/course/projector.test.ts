@@ -81,7 +81,16 @@ describe("Projector mode", () => {
 
   it("refuses a mode it doesn't know", () => {
     const s = aSession(t, courseId);
-    expect(() => course().updateSession(s.id, { projectorMode: "poll" as "qr" })).toThrow(DomainError);
+    expect(() => course().updateSession(s.id, { projectorMode: "spotlight" as "qr" })).toThrow(DomainError);
+  });
+
+  it("shows a Poll in Poll mode, which needs the Poll's id; another mode forgets it", () => {
+    const s = aSession(t, courseId);
+    expect(() => course().updateSession(s.id, { projectorMode: "poll" })).toThrow(DomainError);
+    const projected = course().updateSession(s.id, { projectorMode: "poll", projectedPollId: 7 });
+    expect(projected).toMatchObject({ projectorMode: "poll", projectedPollId: 7 });
+    expect(course().projection(courseId)).toEqual({ mode: "poll", session: projected, pollId: 7 });
+    expect(course().updateSession(s.id, { projectorMode: "qr" }).projectedPollId).toBeNull();
   });
 
   it("publishes projector.changed to the Projector scope and the Lecturer, and nothing to Students", () => {

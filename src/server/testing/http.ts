@@ -48,18 +48,22 @@ export async function openSse(url: string, cookie: string) {
   const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
   const queue: SseEvent[] = [];
   let buffer = "";
+  // A read outlives a timeout, so the chunk it brings is kept for the next call rather than lost.
+  let pending: ReturnType<typeof reader.read> | null = null;
 
   async function next(timeoutMs = 2000): Promise<SseEvent> {
     const deadline = Date.now() + timeoutMs;
     while (queue.length === 0) {
       const remaining = deadline - Date.now();
       if (remaining <= 0) throw new Error("timed out waiting for an SSE event");
+      pending ??= reader.read();
       const chunk = await Promise.race([
-        reader.read(),
+        pending,
         new Promise<never>((_, reject) =>
           setTimeout(() => reject(new Error("timed out waiting for an SSE event")), remaining),
         ),
       ]);
+      pending = null;
       if (chunk.done) throw new Error("SSE stream ended");
       buffer += chunk.value;
       let end: number;

@@ -5,12 +5,13 @@ import { createCourseModule } from "../course";
 import { openDatabase } from "../db";
 import { createApp } from "../http";
 import { createFeedbackModule } from "../feedback";
-import { createJobs } from "../jobs";
+import { createJobs, createNextEventTimer, type NextEventTimer } from "../jobs";
 import { createScriptedGateway } from "../llm";
 import { createHomeworkModule } from "../homework";
 import { createSummariesModule } from "../summaries";
 import { hashPassword } from "../lecturer-auth";
 import { FakeClock } from "./fake-clock";
+import { FakeTimers } from "./fake-timers";
 import { MemoryFileStore } from "./memory-file-store";
 import { RecordingEvents } from "./recording-events";
 
@@ -30,10 +31,31 @@ export function makeTestApp(options: TestAppOptions = {}) {
   const database = openDatabase(":memory:", path.resolve(process.cwd(), "drizzle"));
   const clock = new FakeClock();
   const events = new RecordingEvents();
+  const timers = new FakeTimers(clock);
+  // Modules report schedule changes to the timer, which is made once they exist.
+  let timer: NextEventTimer | null = null;
+  const scheduleChanged = () => timer?.recompute();
   const course = createCourseModule({ db: database.db, clock, events, timeZone: DEFAULT_TIME_ZONE });
   const lecturer = course.ensureLecturer("Test Lecturer");
-  const attendance = createAttendanceModule({ db: database.db, clock, events, course, timeZone: DEFAULT_TIME_ZONE });
-  const feedback = createFeedbackModule({ db: database.db, clock, events, course, attendance, timeZone: DEFAULT_TIME_ZONE });
+  const attendance = createAttendanceModule({
+    db: database.db,
+    clock,
+    events,
+    course,
+    timeZone: DEFAULT_TIME_ZONE,
+    scheduleChanged,
+  });
+  const feedback = createFeedbackModule({
+    db: database.db,
+    clock,
+    events,
+    course,
+    attendance,
+    timeZone: DEFAULT_TIME_ZONE,
+    scheduleChanged,
+  });
+  // The real next-event timer on fake timers: not started unless a test starts it.
+  timer = createNextEventTimer({ clock, sources: [attendance, feedback], setTimer: timers.setTimer });
   // The real SQLite-backed worker, with no timer: tests call runDue() after moving the Clock.
   const jobs = createJobs({ db: database.db, clock });
   const llm = createScriptedGateway({ db: database.db, clock });
@@ -58,8 +80,9 @@ export function makeTestApp(options: TestAppOptions = {}) {
   return {
     app,
     modules: { course, attendance, feedback, summaries, homework },
-    fakes: { clock, events, llm, files },
+    fakes: { clock, events, llm, files, timers },
     jobs,
+    timer,
     lecturer,
     database,
     close: () => database.close(),

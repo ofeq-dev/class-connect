@@ -33,6 +33,8 @@ export const noticeQueryKeys: { [T in NoticeType]: (id: number) => QueryKey[] } 
   "assignment.changed": (id) => [["assignment", id], ["assignments"], ["student", "assignment", id], ["student", "assignments"]],
   // Lecturer only: a review run moved on (and may have spent LLM requests).
   "job.progress": (assignmentId) => [["assignment", assignmentId], ["assignments"], ["llm-usage"]],
+  // A Poll opened, closed (Students and projector too), changed as a draft or got a Vote (Lecturer and projector).
+  "poll.changed": () => [["polls"], ["student", "polls"], ["projector"]],
   // What the Projector window shows, or its link, changed: the window and the console thumbnail.
   "projector.changed": () => [["projector"]],
 };

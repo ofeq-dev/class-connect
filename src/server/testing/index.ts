@@ -1,5 +1,6 @@
 export { aClaimedStudent, aCourse, anAssignmentWithCriteria, aRoster, aSession } from "./builders";
 export { FakeClock } from "./fake-clock";
+export { FakeTimers } from "./fake-timers";
 export { cookieHeader, listen, openSse, signInLecturer, type SseEvent } from "./http";
 export {
   makeTestApp,

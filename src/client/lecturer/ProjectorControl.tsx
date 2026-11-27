@@ -18,15 +18,18 @@ function useWindowOpen() {
 
 const MODES = [
   { mode: "qr", label: "QR + count" },
+  { mode: "poll", label: "Poll" },
   { mode: "blank", label: "Blank" },
 ] as const;
+type Mode = (typeof MODES)[number]["mode"];
 
 /**
- * The console header's projector control: QR + count / Blank for this Session, a live thumbnail of
+ * The console header's projector control: QR + count / Poll (the Poll column's open or closed Poll) / Blank for this Session, a live thumbnail of
  * what the class sees (the same picture the window draws, from the same server state), and the
  * button that opens the window. The mode is server state, so a classroom PC agrees too.
  */
-export function ProjectorControl({ courseId, sessionId }: { courseId: string; sessionId: string }) {
+export function ProjectorControl(props: { courseId: string; sessionId: string; pollId: number | null }) {
+  const { courseId, sessionId, pollId } = props;
   const client = useQueryClient();
   const projector = useProjector(courseId);
   const sessions = useSessions(courseId);
@@ -34,11 +37,11 @@ export function ProjectorControl({ courseId, sessionId }: { courseId: string; se
   const [blocked, setBlocked] = useState(false);
 
   const setMode = useMutation({
-    mutationFn: async (projectorMode: "qr" | "blank") =>
+    mutationFn: async (projectorMode: Mode) =>
       ok(
         await api.api.lecturer.courses[":courseId"].sessions[":sessionId"].$patch({
           param: { courseId, sessionId },
-          json: { projectorMode },
+          json: projectorMode === "poll" ? { projectorMode, projectedPollId: pollId ?? 0 } : { projectorMode },
         }),
       ),
     onSuccess: () => client.invalidateQueries({ queryKey: ["projector"] }),
@@ -60,7 +63,7 @@ export function ProjectorControl({ courseId, sessionId }: { courseId: string; se
     setWindowOpen(!!projectorWindow);
   }
 
-  function choose(mode: "qr" | "blank") {
+  function choose(mode: Mode) {
     setMode.mutate(mode);
     if (!projectorWindow || projectorWindow.closed) openWindow();
   }
@@ -81,7 +84,7 @@ export function ProjectorControl({ courseId, sessionId }: { courseId: string; se
               key={mode}
               type="button"
               aria-pressed={current === mode}
-              disabled={!projector.data || setMode.isPending}
+              disabled={!projector.data || setMode.isPending || (mode === "poll" && pollId === null)}
               onClick={() => choose(mode)}
             >
               {label}
