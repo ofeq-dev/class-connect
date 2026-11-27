@@ -252,7 +252,8 @@ tunnel_probe() {
   fi
   local token="tunnel-probe-$RANDOM$RANDOM" body
   remote "d=\$(mktemp -d) && echo $token > \$d/healthz && cd \$d \
-    && (timeout 20 python3 -m http.server 3000 --bind 127.0.0.1 </dev/null >/dev/null 2>&1 &) && sleep 1"
+    && ( (timeout 20 python3 -m http.server 3000 --bind 127.0.0.1; rm -rf \$d) </dev/null >/dev/null 2>&1 &) \
+    && sleep 1"
   body="$(curl -fsS --max-time 15 "$APP_URL/healthz" 2>/dev/null || true)"
   [[ "$body" == "$token" ]]
 }
@@ -649,7 +650,12 @@ else
     drill_rc=0
     remote "CC_HEALTH_URL=$APP_URL/healthz-drill-broken CC_HEALTH_TIMEOUT=10 bash -s -- $old_sha" \
       < "$HERE/scripts/deploy.sh" 2>&1 | tee "$drill_log" || drill_rc=$?
-    body="$(healthz)"
+    # deploy.sh exits right after the rollback restart, before the app is listening again.
+    for _ in $(seq 1 15); do
+      body="$(healthz)"
+      [[ "$body" == *"\"sha\":\"$MERGED_SHA\""* ]] && break
+      sleep 2
+    done
     if (( drill_rc != 0 )) && grep -q "rolled back to $MERGED_SHA" "$drill_log" \
        && [[ "$body" == *"\"sha\":\"$MERGED_SHA\""* ]]; then
       step "deploy exited $drill_rc (red), rolled back, and /healthz still reports $MERGED_SHA ✓"
