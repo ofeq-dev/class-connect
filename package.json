@@ -24,6 +24,7 @@
     "better-sqlite3": "^13.2.0",
     "dompurify": "^3.5.0",
     "drizzle-orm": "^0.45.4",
+    "exceljs": "^4.4.0",
     "hono": "^4.13.22",
     "marked": "^18.3.0",
     "qrcode-generator": "^2.0.4",
