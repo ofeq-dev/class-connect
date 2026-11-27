@@ -37,7 +37,9 @@ const TIMINGS: readonly string[] = ["before", "during", "after"];
 const status = (v: unknown) => (STATUSES.includes(str(v)) ? (str(v) as CommentStatus) : undefined);
 
 /** The all-comments screen's query string; anything unrecognised is no filter. */
-function commentFilter(q: Record<string, string>): CommentFilter {
+type CommentQuery = { topicId?: string; author?: string; status?: string; timing?: string };
+
+function commentFilter(q: CommentQuery): CommentFilter {
   const n = (v: string | undefined) => (v && Number.isInteger(Number(v)) ? Number(v) : undefined);
   return {
     topicId: n(q.topicId),
@@ -187,8 +189,11 @@ export function lecturerRoutes(deps: AppDeps) {
     })
 
     // Topics and Comments
-    .get("/courses/:courseId/topics", requireLecturer, (c) =>
-      c.json(deps.feedback.listTopics(ownCourse(c).id, { includeArchived: c.req.query("archived") === "1" })),
+    .get(
+      "/courses/:courseId/topics",
+      requireLecturer,
+      validator("query", (q: { archived?: string }) => ({ archived: q.archived })),
+      (c) => c.json(deps.feedback.listTopics(ownCourse(c).id, { includeArchived: c.req.valid("query").archived === "1" })),
     )
     .post("/courses/:courseId/topics", requireLecturer, json((b) => ({ name: str(b.name) })), (c) =>
       c.json(deps.feedback.addTopic(ownCourse(c).id, c.req.valid("json").name), 201),
@@ -199,8 +204,11 @@ export function lecturerRoutes(deps: AppDeps) {
     .post("/courses/:courseId/topics/:topicId/archive", requireLecturer, (c) =>
       c.json(deps.feedback.archiveTopic(ownCourse(c).id, idParam(c, "topicId"))),
     )
-    .get("/courses/:courseId/comments", requireLecturer, (c) =>
-      c.json(deps.feedback.listComments(ownCourse(c).id, commentFilter(c.req.query()))),
+    .get(
+      "/courses/:courseId/comments",
+      requireLecturer,
+      validator("query", (q: CommentQuery) => ({ topicId: q.topicId, author: q.author, status: q.status, timing: q.timing })),
+      (c) => c.json(deps.feedback.listComments(ownCourse(c).id, commentFilter(c.req.valid("query")))),
     )
     .post(
       "/courses/:courseId/comments/status",

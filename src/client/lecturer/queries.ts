@@ -122,3 +122,66 @@ export function formatInstant(iso: string): string {
 }
 
 export const ASSIGNMENT_STATE_LABEL = { open: "Open", due: "Due" } as const;
+
+/** The Course's Topics; with archived ones on the Topics screen. */
+export function useTopics(courseId: string, includeArchived = false) {
+  return useQuery({
+    queryKey: ["topics", Number(courseId), includeArchived],
+    queryFn: async () =>
+      ok(
+        await api.api.lecturer.courses[":courseId"].topics.$get({
+          param: { courseId },
+          query: { archived: includeArchived ? "1" : undefined },
+        }),
+      ),
+  });
+}
+
+/** The console's Comments column for one Session; comment.changed refetches it. */
+export function useInbox(courseId: string, sessionId: string) {
+  return useQuery({
+    queryKey: ["comments", "inbox", Number(sessionId)],
+    queryFn: async () =>
+      ok(
+        await api.api.lecturer.courses[":courseId"].sessions[":sessionId"].comments.$get({
+          param: { courseId, sessionId },
+        }),
+      ),
+  });
+}
+
+export interface CommentQuery {
+  topicId?: string;
+  author?: string;
+  status?: string;
+  timing?: string;
+}
+
+/** The all-comments screen and the Course desk's section. */
+export function useComments(courseId: string, filter: CommentQuery = {}) {
+  const query = {
+    topicId: filter.topicId || undefined,
+    author: filter.author || undefined,
+    status: filter.status || undefined,
+    timing: filter.timing || undefined,
+  };
+  return useQuery({
+    queryKey: ["comments", "list", Number(courseId), query],
+    queryFn: async () =>
+      ok(await api.api.lecturer.courses[":courseId"].comments.$get({ param: { courseId }, query })),
+  });
+}
+
+export type CommentStatus = "new" | "pinned" | "addressed" | "ignored";
+
+export const STATUS_LABEL: Record<CommentStatus, string> = {
+  new: "New",
+  pinned: "Pinned",
+  addressed: "Addressed",
+  ignored: "Ignored",
+};
+
+/** "10:19" for an instant, in the browser's time zone. */
+export function formatTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+}
