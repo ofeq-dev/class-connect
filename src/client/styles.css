@@ -162,3 +162,13 @@ textarea { width: 100%; min-height: 96px; resize: vertical; }
 
 /* Session summaries */
 .transcript { white-space: pre-wrap; font: 13px/1.5 ui-monospace, monospace; background: var(--card); border: 1.5px solid var(--line); border-radius: 4px; padding: 10px 12px; max-height: 60vh; overflow: auto; margin: 6px 0 0; }
+
+/* Session summaries: the editor beside its preview, and the rendered Markdown (Lecturer and phone). */
+.editor { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 8px 0; }
+@media (max-width: 800px) { .editor { grid-template-columns: 1fr; } }
+.editor textarea { font: 13px/1.5 ui-monospace, monospace; min-height: 360px; }
+.preview { background: var(--card); border: 1.5px solid var(--line); border-radius: 4px; padding: 4px 14px; max-height: 70vh; overflow: auto; font-weight: 400; color: var(--ink); }
+.summary-md { line-height: 1.55; overflow-wrap: anywhere; }
+.summary-md h1, .summary-md h2, .summary-md h3 { font-family: var(--font-display); margin: 1em 0 0.4em; }
+.summary-md ul, .summary-md ol { padding-inline-start: 1.4em; }
+.summary-md code, .summary-md .ts { font: 0.9em ui-monospace, monospace; background: var(--soft); border-radius: 3px; padding: 0 3px; }
