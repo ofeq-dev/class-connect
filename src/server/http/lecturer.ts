@@ -4,7 +4,8 @@ import { createMiddleware } from "hono/factory";
 import { validator } from "hono/validator";
 import type { ProjectorMode, SessionChanges } from "../course";
 import { NotFoundError } from "../errors";
-import type { CommentFilter, CommentStatus, PollInput, Timing } from "../feedback";
+import { COMMENT_STATUSES, TIMINGS, type CommentStatus, type Timing } from "../../shared/feedback";
+import type { CommentFilter, PollInput } from "../feedback";
 import { verifyPassword } from "../lecturer-auth";
 import { streamLiveEvents } from "../live-events";
 import type { Level } from "../homework";
@@ -82,9 +83,8 @@ function attachment(fileName: string) {
   return `attachment; filename="${ascii}"; filename*=UTF-8''${encoded}`;
 }
 
-const STATUSES: readonly string[] = ["new", "pinned", "addressed", "ignored"];
-const TIMINGS: readonly string[] = ["before", "during", "after"];
-const status = (v: unknown) => (STATUSES.includes(str(v)) ? (str(v) as CommentStatus) : undefined);
+const status = (v: unknown) =>
+  (COMMENT_STATUSES as readonly string[]).includes(str(v)) ? (str(v) as CommentStatus) : undefined;
 
 /** The all-comments screen's query string; anything unrecognised is no filter. */
 type CommentQuery = { topicId?: string; author?: string; status?: string; timing?: string };
@@ -95,7 +95,7 @@ function commentFilter(q: CommentQuery): CommentFilter {
     topicId: n(q.topicId),
     author: q.author === "anonymous" ? "anonymous" : n(q.author),
     status: status(q.status),
-    timing: TIMINGS.includes(q.timing ?? "") ? (q.timing as Timing) : undefined,
+    timing: (TIMINGS as readonly string[]).includes(q.timing ?? "") ? (q.timing as Timing) : undefined,
   };
 }
 

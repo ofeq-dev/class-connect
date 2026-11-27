@@ -1,3 +1,4 @@
+import type { CommentStatus } from "../../shared/feedback";
 import { useQuery } from "@tanstack/react-query";
 import { api, ok } from "../api";
 import { diagnosticsQuery, useDiagnostics } from "./diagnostics";
@@ -185,7 +186,7 @@ export function useComments(courseId: string, filter: CommentQuery = {}) {
   });
 }
 
-export type CommentStatus = "new" | "pinned" | "addressed" | "ignored";
+export type { CommentStatus } from "../../shared/feedback";
 
 export const STATUS_LABEL: Record<CommentStatus, string> = {
   new: "New",

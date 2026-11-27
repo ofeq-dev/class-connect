@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router";
+import { isOpen, openByTopic } from "../../shared/feedback";
 import { api, ok } from "../api";
 import { EditIcon, TrashIcon } from "./icons";
 import { AttendanceSheetItem } from "./AttendanceSheetItem";
@@ -142,8 +143,9 @@ function SessionsSection({ courseId }: { courseId: string }) {
 /** Open Comments at a glance: how many, the latest few, and the all-comments screen. */
 function CommentsSection({ courseId }: { courseId: string }) {
   const comments = useComments(courseId);
-  const open = comments.data?.filter((c) => c.status === "new" || c.status === "pinned") ?? [];
+  const open = comments.data?.filter((c) => isOpen(c.status)) ?? [];
   const pinned = open.filter((c) => c.status === "pinned").length;
+  const perTopic = openByTopic(open);
   return (
     <section className="sec" data-s="cm">
       <div className="sec-head">
@@ -157,6 +159,15 @@ function CommentsSection({ courseId }: { courseId: string }) {
         <p>
           <b className="num">{open.length}</b> open{pinned > 0 && <>, <b className="num">{pinned}</b> pinned</>}, of{" "}
           <span className="num">{comments.data.length}</span> in all.
+        </p>
+      )}
+      {perTopic.length > 0 && (
+        <p className="row" aria-label="Open Comments per Topic">
+          {perTopic.map((t) => (
+            <span key={t.topicId} className="chip c-mute">
+              {t.name} <b className="num">{t.open}</b>
+            </span>
+          ))}
         </p>
       )}
       <ul className="list" aria-label="Latest open Comments">

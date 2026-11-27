@@ -1,4 +1,5 @@
 import { eq, inArray } from "drizzle-orm";
+import { isOpen as isOpenStatus, type CommentStatus, type Timing } from "../../shared/feedback";
 import { reactionLabel } from "../../shared/reactions";
 import { localInstant, type Clock } from "../clock";
 import type { AttendanceModule } from "../attendance";
@@ -31,8 +32,7 @@ export interface Topic {
   archived: boolean;
 }
 
-export type CommentStatus = "new" | "pinned" | "addressed" | "ignored";
-export type Timing = "before" | "during" | "after";
+export type { CommentStatus, Timing } from "../../shared/feedback";
 
 /** A Comment as its author sees it on the Mine tab. */
 export interface MyComment {
@@ -479,7 +479,7 @@ export function createFeedbackModule({
       const scope = new Set(inScope.map((x) => x.id));
       const all = lecturerComments(courseId);
       const here = all.filter((c) => scope.has(c.topicId));
-      const isOpen = (c: LecturerComment) => c.status === "new" || c.status === "pinned";
+      const isOpen = (c: LecturerComment) => isOpenStatus(c.status);
       return {
         topics: inScope.map((x) => ({ id: x.id, name: x.name, open: here.filter((c) => c.topicId === x.id && isOpen(c)).length })),
         // Pinned carries over from any Topic until it is Addressed (or moved back).

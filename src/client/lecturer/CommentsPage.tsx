@@ -1,3 +1,4 @@
+import { isOpen } from "../../shared/feedback";
 import { useState } from "react";
 import { Link, useParams } from "react-router";
 import { CommentMeta, useSetStatus, type LecturerComment } from "./CommentsColumn";
@@ -89,7 +90,7 @@ export function CommentsPage() {
                 </div>
               </div>
               <span className="icons">
-                {c.status === "new" || c.status === "pinned" ? (
+                {isOpen(c.status) ? (
                   <>
                     <button
                       className={`ib ${c.status === "pinned" ? "on" : ""}`}
