@@ -4,6 +4,7 @@ import { createMiddleware } from "hono/factory";
 import { validator } from "hono/validator";
 import type { ProjectorMode, SessionChanges } from "../course";
 import { NotFoundError } from "../errors";
+import type { CommentFilter, CommentStatus, Timing } from "../feedback";
 import { verifyPassword } from "../lecturer-auth";
 import { streamLiveEvents } from "../live-events";
 import type { Level } from "../homework";
@@ -48,6 +49,23 @@ const reviewBody = (b: Body) => ({
 });
 
 const sessionTimes = (b: Body) => ({ date: str(b.date), start: str(b.start), end: str(b.end) });
+
+const STATUSES: readonly string[] = ["new", "pinned", "addressed", "ignored"];
+const TIMINGS: readonly string[] = ["before", "during", "after"];
+const status = (v: unknown) => (STATUSES.includes(str(v)) ? (str(v) as CommentStatus) : undefined);
+
+/** The all-comments screen's query string; anything unrecognised is no filter. */
+type CommentQuery = { topicId?: string; author?: string; status?: string; timing?: string };
+
+function commentFilter(q: CommentQuery): CommentFilter {
+  const n = (v: string | undefined) => (v && Number.isInteger(Number(v)) ? Number(v) : undefined);
+  return {
+    topicId: n(q.topicId),
+    author: q.author === "anonymous" ? "anonymous" : n(q.author),
+    status: status(q.status),
+    timing: TIMINGS.includes(q.timing ?? "") ? (q.timing as Timing) : undefined,
+  };
+}
 
 function idParam(c: Context, name: string): number {
   const id = Number(c.req.param(name));
@@ -227,6 +245,46 @@ export function lecturerRoutes(deps: AppDeps) {
         deps.attendance.mark(sessionId, idParam(c, "rosterEntryId"), c.req.valid("json").present);
         return c.json(glance(c, sessionId));
       },
+    )
+
+    // Topics and Comments
+    .get(
+      "/courses/:courseId/topics",
+      requireLecturer,
+      validator("query", (q: { archived?: string }) => ({ archived: q.archived })),
+      (c) => c.json(deps.feedback.listTopics(ownCourse(c).id, { includeArchived: c.req.valid("query").archived === "1" })),
+    )
+    .post("/courses/:courseId/topics", requireLecturer, json((b) => ({ name: str(b.name) })), (c) =>
+      c.json(deps.feedback.addTopic(ownCourse(c).id, c.req.valid("json").name), 201),
+    )
+    .patch("/courses/:courseId/topics/:topicId", requireLecturer, json((b) => ({ name: str(b.name) })), (c) =>
+      c.json(deps.feedback.renameTopic(ownCourse(c).id, idParam(c, "topicId"), c.req.valid("json").name)),
+    )
+    .post("/courses/:courseId/topics/:topicId/archive", requireLecturer, (c) =>
+      c.json(deps.feedback.archiveTopic(ownCourse(c).id, idParam(c, "topicId"))),
+    )
+    .get(
+      "/courses/:courseId/comments",
+      requireLecturer,
+      validator("query", (q: CommentQuery) => ({ topicId: q.topicId, author: q.author, status: q.status, timing: q.timing })),
+      (c) => c.json(deps.feedback.listComments(ownCourse(c).id, commentFilter(c.req.valid("query")))),
+    )
+    .post(
+      "/courses/:courseId/comments/status",
+      requireLecturer,
+      json((b) => ({
+        ids: Array.isArray(b.ids) ? b.ids.filter((id): id is number => Number.isInteger(id)) : [],
+        status: status(b.status),
+      })),
+      (c) => {
+        const { ids, status: next } = c.req.valid("json");
+        if (!next) return c.json({ error: "comment.bad-status", message: "Choose a status." }, 400);
+        deps.feedback.setStatus(ownCourse(c).id, ids, next);
+        return c.json({ ok: true });
+      },
+    )
+    .get("/courses/:courseId/sessions/:sessionId/comments", requireLecturer, (c) =>
+      c.json(deps.feedback.inbox(ownSession(c).id)),
     )
 
     // Session summaries

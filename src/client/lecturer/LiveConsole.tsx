@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router";
 import { api, ok } from "../api";
 import { AttendanceColumn } from "./AttendanceColumn";
+import { CommentsColumn } from "./CommentsColumn";
 import { DiagnosticsItem } from "./DiagnosticsItem";
 import { Menu } from "./Menu";
 import { ProjectorControl } from "./ProjectorControl";
@@ -17,7 +18,7 @@ function useClock() {
   return now.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
 }
 
-/** The live console: header, then Attendance | Comments | Poll (Comments and Poll arrive with #30 and #31). */
+/** The live console: header, then Attendance | Comments | Poll (the Poll arrives with #31). */
 export function LiveConsole() {
   const { courseId = "", sessionId = "" } = useParams();
   useCourseLive(courseId);
@@ -43,15 +44,13 @@ export function LiveConsole() {
         <ProjectorControl courseId={courseId} sessionId={sessionId} />
         <Menu label="Console menu">
           <Link to={`/lecturer/courses/${courseId}/roster`}>Roster</Link>
+          <Link to={`/lecturer/courses/${courseId}/topics`}>Topics</Link>
           <DiagnosticsItem />
         </Menu>
       </header>
       <div className="console">
         <AttendanceColumn courseId={courseId} sessionId={sessionId} />
-        <section className="sec" data-s="cm">
-          <div className="sec-head"><h2><span className="hl">Comments</span></h2></div>
-          <p className="empty">Comments arrive later.</p>
-        </section>
+        <CommentsColumn courseId={courseId} sessionId={sessionId} />
         <section className="sec" data-s="poll">
           <div className="sec-head"><h2><span className="hl">Poll</span></h2></div>
           <p className="empty">Polls arrive later.</p>

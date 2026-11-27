@@ -9,6 +9,12 @@ export const TrashIcon = () => (
 export const ResetIcon = () => (
   <svg {...props} aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.3-5.6L4 8.7" /><path d="M4 4v4.7h4.7" /></svg>
 );
+export const PinIcon = () => (
+  <svg {...props} aria-hidden="true"><path d="M9 4h6l-1 6 3 3v2H7v-2l3-3z" /><path d="M12 15v6" /></svg>
+);
+export const BackIcon = () => (
+  <svg {...props} aria-hidden="true"><path d="M9 14L4 9l5-5" /><path d="M4 9h10a6 6 0 0 1 0 12h-3" /></svg>
+);
 export const CheckIcon = () => (
   <svg {...props} aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
 );
@@ -18,3 +24,4 @@ export const CrossIcon = () => (
 export const ChevronIcon = () => (
   <svg {...props} aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg>
 );
+export const IgnoreIcon = CrossIcon;

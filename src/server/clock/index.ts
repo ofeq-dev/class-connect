@@ -50,3 +50,14 @@ export function nextLocalMidnight(instant: Date, timeZone: string): Date {
   guess = wallMidnight - zoneOffset(new Date(guess), timeZone);
   return new Date(guess);
 }
+
+/** The instant a wall-clock date (YYYY-MM-DD) and time (HH:MM) name in a time zone. */
+export function localInstant(date: string, time: string, timeZone: string): Date {
+  const [y, m, d] = date.split("-").map(Number) as [number, number, number];
+  const [hh, mm] = time.split(":").map(Number) as [number, number];
+  const wall = Date.UTC(y, m - 1, d, hh, mm);
+  // Correct twice so a time near a DST change still lands on the right instant.
+  let guess = wall - zoneOffset(new Date(wall), timeZone);
+  guess = wall - zoneOffset(new Date(guess), timeZone);
+  return new Date(guess);
+}

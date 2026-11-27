@@ -11,6 +11,7 @@ import { createDiskFileStore } from "./files";
 import { createJobs } from "./jobs";
 import { createLiveEvents } from "./live-events";
 import { createOpenRouterGateway, createScriptedGateway } from "./llm";
+import { createFeedbackModule } from "./feedback";
 import { createHomeworkModule } from "./homework";
 import { createSummariesModule } from "./summaries";
 
@@ -42,6 +43,14 @@ const attendance = createAttendanceModule({
   course,
   timeZone: config.timeZone,
 });
+const feedback = createFeedbackModule({
+  db: database.db,
+  clock: systemClock,
+  events,
+  course,
+  attendance,
+  timeZone: config.timeZone,
+});
 const jobs = createJobs({
   db: database.db,
   clock: systemClock,
@@ -65,6 +74,7 @@ const sha = commitSha();
 const app = createApp({
   course,
   attendance,
+  feedback,
   summaries,
   homework,
   llm,
