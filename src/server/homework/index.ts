@@ -7,18 +7,22 @@ import type { FileStore } from "../files";
 import { MAX_ATTEMPTS, type Job, type Jobs, type JobStatus } from "../jobs";
 import type { LiveEvents } from "../live-events";
 import type { LlmGateway } from "../llm";
+import { classSummary as classSummaryTask } from "./class-summary-task";
 import { draftCriteria as draftCriteriaTask } from "./draft-criteria-task";
 import { pdfText } from "./pdf";
 import { LEVELS, reviewSubmission, type Level } from "./review-task";
 import {
   assignment as assignmentTable,
+  classSummary as classSummaryTable,
   criterion,
   review as reviewTable,
   reviewJob,
   reviewLevel,
   reviewRun,
+  similarityPair,
   submission as submissionTable,
 } from "./schema";
+import { compareFingerprints, cosine, fingerprint, SIMILARITY_THRESHOLD, similarityScore } from "./similarity";
 
 export { LEVELS, type Level, type ReviewSubmissionInput } from "./review-task";
 
@@ -81,6 +85,31 @@ export interface ReviewRunView {
   done: number;
   total: number;
   failed: number;
+  /** The latest review.compare job's status, null until the drafts settle. */
+  compare: JobStatus | null;
+  /** The latest review.classSummary job's status, null until compare finishes. */
+  classSummary: JobStatus | null;
+  /** The comparison's or the class summary's error when it failed. */
+  error: string | null;
+}
+
+/** For the Lecturer only. */
+export interface SimilarPair {
+  a: { submissionId: number; studentName: string };
+  b: { submissionId: number; studentName: string };
+  score: number;
+  fingerprintOverlap: number;
+  /** Null when the embedding call failed on its last attempt; the score is then the fingerprints'. */
+  embeddingSimilarity: number | null;
+  /** The overlapping passages side by side. */
+  passages: { a: string; b: string }[];
+}
+
+/** Anonymised: counts per Criterion and common mistakes, from the Reviews written when it ran. */
+export interface ClassSummary {
+  reviewCount: number;
+  counts: { criterionId: number; label: string; notYet: number; partly: number; secure: number }[];
+  commonMistakes: string[];
 }
 
 export interface LecturerSubmission {
@@ -100,6 +129,9 @@ export interface LecturerAssignment extends Assignment {
   submissions: LecturerSubmission[];
   /** The latest review run, or null before the first. */
   reviewRun: ReviewRunView | null;
+  /** Above the similarity threshold, highest score first. Never shown to Students. */
+  similarPairs: SimilarPair[];
+  classSummary: ClassSummary | null;
 }
 
 export interface AssignmentRow {
@@ -291,7 +323,7 @@ export function createHomeworkModule({ db, clock, course, llm, files, events, jo
       .all()
       .map((r) => r.jobId);
 
-  function runProgress(runId: number): ReviewRunView & { unsettled: number } {
+  function runProgress(runId: number): { done: number; total: number; failed: number; unsettled: number } {
     const tally = jobs.tally(runJobIds(runId));
     return {
       done: tally.done + tally.failed,
@@ -402,13 +434,54 @@ export function createHomeworkModule({ db, clock, course, llm, files, events, jo
     let reviewRunView: ReviewRunView | null = null;
     if (run) {
       const { done, total, failed } = runProgress(run.id);
-      reviewRunView = { done, total, failed };
+      const compare = run.compareJobId ? jobs.read(run.compareJobId) : null;
+      const summary = run.classSummaryJobId ? jobs.read(run.classSummaryJobId) : null;
+      const error = compare?.status === "failed" ? compare.error : summary?.status === "failed" ? summary.error : null;
+      reviewRunView = {
+        done,
+        total,
+        failed,
+        compare: compare?.status ?? null,
+        classSummary: summary?.status ?? null,
+        error,
+      };
     }
+    const names = new Map(submissions.map((s) => [s.id, s.studentName]));
+    const similarPairs = db
+      .select()
+      .from(similarityPair)
+      .where(eq(similarityPair.assignmentId, assignmentId))
+      .orderBy(desc(similarityPair.score))
+      .all()
+      .map((p) => ({
+        a: { submissionId: p.submissionAId, studentName: names.get(p.submissionAId) ?? "Unknown Student" },
+        b: { submissionId: p.submissionBId, studentName: names.get(p.submissionBId) ?? "Unknown Student" },
+        score: p.score,
+        fingerprintOverlap: p.fingerprintOverlap,
+        embeddingSimilarity: p.embeddingSimilarity,
+        passages: JSON.parse(p.passages) as SimilarPair["passages"],
+      }));
     return {
       ...assignment,
       state: runState(run) ?? stateOf(row.dueAt),
       submissions,
       reviewRun: reviewRunView,
+      similarPairs,
+      classSummary: readClassSummary(assignment),
+    };
+  }
+
+  function readClassSummary(assignment: Assignment): ClassSummary | null {
+    const row = db.select().from(classSummaryTable).where(eq(classSummaryTable.assignmentId, assignment.id)).get();
+    if (!row) return null;
+    const stored = JSON.parse(row.counts) as { reviewCount: number; perCriterion: Omit<ClassSummary["counts"][number], "label">[] };
+    const labels = new Map(assignment.criteria.map((c) => [c.id, c.label]));
+    return {
+      reviewCount: stored.reviewCount,
+      counts: stored.perCriterion
+        .filter((c) => labels.has(c.criterionId))
+        .map((c) => ({ ...c, label: labels.get(c.criterionId)! })),
+      commonMistakes: JSON.parse(row.commonMistakes) as string[],
     };
   }
 
@@ -503,6 +576,135 @@ export function createHomeworkModule({ db, clock, course, llm, files, events, jo
   }
 
   jobs.register("review.submission", handleReviewSubmission);
+
+  /**
+   * A run step (compare, class summary) that the worker retries; on its last attempt it is failed
+   * here, so the Lecturer can be told once the failure is saved.
+   */
+  function failingOnLastAttempt(handler: (job: Job) => Promise<void>) {
+    return async (job: Job) => {
+      try {
+        await handler(job);
+      } catch (error) {
+        if (job.attempts < MAX_ATTEMPTS) throw error;
+        jobs.fail(job, errorText(error));
+        const run = db.select().from(reviewRun).where(eq(reviewRun.id, (job.payload as { runId: number }).runId)).get();
+        const row = run && db.select().from(assignmentTable).where(eq(assignmentTable.id, run.assignmentId)).get();
+        if (row) lecturerChanged(row.courseId, row.id);
+      }
+    };
+  }
+
+  /** The Assignment's Submissions that have a Review: compare and the class summary run on these. */
+  function reviewedSubmissions(assignmentId: number) {
+    return db
+      .select({ id: submissionTable.id, text: submissionTable.text })
+      .from(submissionTable)
+      .innerJoin(reviewTable, eq(reviewTable.submissionId, submissionTable.id))
+      .where(eq(submissionTable.assignmentId, assignmentId))
+      .orderBy(asc(submissionTable.id))
+      .all();
+  }
+
+  function runOf(runId: number) {
+    const run = db.select().from(reviewRun).where(eq(reviewRun.id, runId)).get();
+    if (!run) throw new Error("The review run is gone.");
+    return { run, row: assignmentRow(run.assignmentId) };
+  }
+
+  async function handleCompare(job: Job) {
+    const { runId } = job.payload as { runId: number };
+    const { row } = runOf(runId);
+    const subs = reviewedSubmissions(row.id);
+    const prints = subs.map((s) => fingerprint(s.text));
+
+    // One batched embedding call. If it fails on the last attempt, the fingerprints decide alone.
+    let vectors: number[][] | null = null;
+    if (subs.length >= 2) {
+      vectors = await attempt(
+        job,
+        () => llm.embed(subs.map((s) => s.text)),
+        () => {},
+      );
+    }
+
+    const pairs: (typeof similarityPair.$inferInsert)[] = [];
+    for (let i = 0; i < subs.length; i++) {
+      for (let j = i + 1; j < subs.length; j++) {
+        const { fingerprintOverlap, passages } = compareFingerprints(prints[i]!, prints[j]!);
+        const embeddingSimilarity = vectors ? cosine(vectors[i]!, vectors[j]!) : null;
+        const score = similarityScore(fingerprintOverlap, embeddingSimilarity);
+        if (score < SIMILARITY_THRESHOLD) continue;
+        pairs.push({
+          assignmentId: row.id,
+          submissionAId: subs[i]!.id,
+          submissionBId: subs[j]!.id,
+          score,
+          fingerprintOverlap,
+          embeddingSimilarity,
+          passages: JSON.stringify(passages),
+        });
+      }
+    }
+
+    jobs.complete(job, () => {
+      db.delete(similarityPair).where(eq(similarityPair.assignmentId, row.id)).run();
+      for (const p of pairs) db.insert(similarityPair).values(p).run();
+      const next = jobs.enqueue("review.classSummary", { runId });
+      db.update(reviewRun).set({ classSummaryJobId: next.id }).where(eq(reviewRun.id, runId)).run();
+    });
+    lecturerChanged(row.courseId, row.id);
+  }
+
+  jobs.register("review.compare", failingOnLastAttempt(handleCompare));
+
+  async function handleClassSummary(job: Job) {
+    const { runId } = job.payload as { runId: number };
+    const { row } = runOf(runId);
+    const criteria = criteriaOf(row.id);
+    const reviews = reviewsOf(
+      reviewedSubmissions(row.id).map((s) => s.id),
+      criteria,
+    );
+    const levels = [...reviews.values()].map((r) => r.levels);
+    const perCriterion = criteria.map((c) => {
+      const count = { criterionId: c.id, notYet: 0, partly: 0, secure: 0 };
+      for (const review of levels) {
+        const level = review.find((l) => l.criterionId === c.id)?.level;
+        if (level === "not-yet") count.notYet++;
+        else if (level === "partly") count.partly++;
+        else if (level === "secure") count.secure++;
+      }
+      return count;
+    });
+
+    let commonMistakes: string[] = [];
+    if (levels.length > 0) {
+      const result = await llm.generate(classSummaryTask, {
+        instructions: row.instructions,
+        criteria: criteria.map((c) => c.label),
+        reviews: levels.map((r) => r.map((l) => ({ level: l.level, feedback: l.feedback }))),
+      });
+      if (!result.ok) throw new Error(result.error.message);
+      commonMistakes = result.value.commonMistakes;
+    }
+
+    const values = {
+      assignmentId: row.id,
+      counts: JSON.stringify({ reviewCount: levels.length, perCriterion }),
+      commonMistakes: JSON.stringify(commonMistakes),
+      createdAt: clock.now(),
+    };
+    jobs.complete(job, () => {
+      db.insert(classSummaryTable)
+        .values(values)
+        .onConflictDoUpdate({ target: classSummaryTable.assignmentId, set: values })
+        .run();
+    });
+    lecturerChanged(row.courseId, row.id);
+  }
+
+  jobs.register("review.classSummary", failingOnLastAttempt(handleClassSummary));
 
   /** A Submission of this Assignment, else 404. */
   function submissionOf(assignmentId: number, submissionId: number) {
