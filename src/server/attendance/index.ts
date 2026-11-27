@@ -4,10 +4,10 @@ import { and, desc, eq, gte, inArray, isNull } from "drizzle-orm";
 import { nextLocalMidnight, type Clock } from "../clock";
 import type { CourseModule } from "../course";
 import type { Db } from "../db";
-import { DomainError } from "../errors";
+import { DomainError, NotFoundError } from "../errors";
 import type { LiveEvents } from "../live-events";
 import { blockOf } from "./network";
-import { attendance, checkInWindow } from "./schema";
+import { approvedNetwork, attendance, checkInWindow } from "./schema";
 
 export type CheckInResult = "present" | "pending";
 
@@ -71,6 +71,16 @@ export interface AttendanceModule {
   isPresent(sessionId: number, rosterEntryId: number): boolean;
   forLecturer(sessionId: number): LecturerAttendance;
   forStudent(sessionId: number, rosterEntryId: number): StudentCheckIn;
+  /**
+   * Network approval: makes a block a Classroom network for this Session only. Its Pending
+   * check-ins turn Present, and so do later Check-ins from it this Session.
+   */
+  approveNetwork(sessionId: number, block: string): void;
+  /**
+   * Manual mark: present (true) or absent (false), with the window open, closed or never opened;
+   * it replaces whatever was recorded. null clears the mark back to the Student's own Check-in.
+   */
+  mark(sessionId: number, rosterEntryId: number, present: boolean | null): void;
   /** Every recorded Check-in and mark for a Session, latest action per Roster entry. */
   checkIns(sessionId: number): CheckInRecord[];
   /** The earliest scheduled change after an instant: an open window's midnight close. */
@@ -144,6 +154,20 @@ export function createAttendanceModule({ db, clock, events, course, timeZone }: 
       .get();
   }
 
+  function isApproved(sessionId: number, block: string) {
+    return !!db
+      .select({ id: approvedNetwork.id })
+      .from(approvedNetwork)
+      .where(and(eq(approvedNetwork.sessionId, sessionId), eq(approvedNetwork.block, block)))
+      .get();
+  }
+
+  function requireOpen(sessionId: number, message: string) {
+    const window = openWindowRow(sessionId);
+    if (!window) throw new DomainError("check-in.closed", message);
+    return window;
+  }
+
   return {
     openWindow(sessionId, lecturer) {
       const values = { ipv4: address(lecturer.ipv4, 4), ipv6: address(lecturer.ipv6, 6) };
@@ -166,13 +190,10 @@ export function createAttendanceModule({ db, clock, events, course, timeZone }: 
     },
 
     checkIn(sessionId, rosterEntryId, ip, deviceToken) {
-      const window = openWindowRow(sessionId);
-      if (!window) {
-        throw new DomainError("check-in.closed", "Check-in is closed — ask the Lecturer to mark you present.");
-      }
+      const window = requireOpen(sessionId, "Check-in is closed — ask the Lecturer to mark you present.");
       const mine = blockOf(ip);
       const reference = [blockOf(window.lecturerIpv4), blockOf(window.lecturerIpv6)];
-      const onNetwork = !!mine && reference.some((r) => r?.block === mine.block);
+      const onNetwork = !!mine && (reference.some((r) => r?.block === mine.block) || isApproved(sessionId, mine.block));
       const state: CheckInResult = onNetwork ? "present" : "pending";
       const existing = record(sessionId, rosterEntryId);
       // A Student already present stays present from their first Check-in; scanning again changes nothing.
@@ -180,13 +201,45 @@ export function createAttendanceModule({ db, clock, events, course, timeZone }: 
         changed(sessionId, "lecturer");
         return "present";
       }
-      const row = { state, ip, block: mine?.block ?? null, deviceTokenHash: tokenHash(deviceToken), at: clock.now() };
+      const row = { state, checkInState: state, ip, block: mine?.block ?? null, deviceTokenHash: tokenHash(deviceToken), at: clock.now() };
       if (existing) db.update(attendance).set(row).where(eq(attendance.id, existing.id)).run();
       else db.insert(attendance).values({ sessionId, rosterEntryId, ...row }).run();
       changed(sessionId, "lecturer");
       return state;
     },
 
+    approveNetwork(sessionId, block) {
+      // Once the window closes, Pending check-ins read as Absent; Manual marks fix anyone after that.
+      requireOpen(sessionId, "Check-in is closed — mark Students present by hand instead.");
+      db.transaction(() => {
+        db.insert(approvedNetwork)
+          .values({ sessionId, block, approvedAt: clock.now() })
+          .onConflictDoNothing()
+          .run();
+        const fromBlock = and(eq(attendance.sessionId, sessionId), eq(attendance.block, block));
+        // A Manual mark stays; the Check-in under it is approved too, for when the mark is cleared.
+        db.update(attendance).set({ checkInState: "present" }).where(and(fromBlock, eq(attendance.checkInState, "pending"))).run();
+        db.update(attendance).set({ state: "present" }).where(and(fromBlock, eq(attendance.state, "pending"))).run();
+      });
+      changed(sessionId, "all");
+    },
+    mark(sessionId, rosterEntryId, present) {
+      const { courseId } = course.readSession(sessionId);
+      if (!course.listRoster(courseId).some((e) => e.id === rosterEntryId)) throw new NotFoundError("Roster entry");
+      const existing = record(sessionId, rosterEntryId);
+      if (present === null) {
+        if (existing?.checkInState) {
+          db.update(attendance).set({ state: existing.checkInState }).where(eq(attendance.id, existing.id)).run();
+        } else if (existing) {
+          db.delete(attendance).where(eq(attendance.id, existing.id)).run();
+        }
+      } else {
+        const state = present ? "manual-present" : "manual-absent";
+        if (existing) db.update(attendance).set({ state, at: clock.now() }).where(eq(attendance.id, existing.id)).run();
+        else db.insert(attendance).values({ sessionId, rosterEntryId, state, at: clock.now() }).run();
+      }
+      changed(sessionId, "all");
+    },
     isPresent(sessionId, rosterEntryId) {
       const row = record(sessionId, rosterEntryId);
       return !!row && (PRESENT as readonly string[]).includes(row.state);
