@@ -5,8 +5,11 @@ import { api, ok } from "../api";
 import { EditIcon, TrashIcon } from "./icons";
 import { Menu } from "./Menu";
 import {
+  ASSIGNMENT_STATE_LABEL,
   formatDate,
+  formatInstant,
   SUMMARY_STATE_LABEL,
+  useAssignments,
   useCourse,
   useCourseLive,
   useLlmUsage,
@@ -53,6 +56,7 @@ export function CourseDesk() {
       <div className="desk">
         <SessionsSection courseId={courseId} />
         <SummariesSection courseId={courseId} />
+        <AssignmentsSection courseId={courseId} />
         <section className="sec" data-s="ros">
           <div className="sec-head">
             <h2><span className="hl">Roster</span></h2>
@@ -171,6 +175,33 @@ function SummariesSection({ courseId }: { courseId: string }) {
         })}
       </ul>
       {retry.error && <p className="error">{retry.error.message}</p>}
+    </section>
+  );
+}
+
+function AssignmentsSection({ courseId }: { courseId: string }) {
+  const assignments = useAssignments(courseId);
+  return (
+    <section className="sec" data-s="hw">
+      <div className="sec-head">
+        <h2><span className="hl">Assignments</span></h2>
+        <Link className="btn-line" to={`/lecturer/courses/${courseId}/assignments/new`}>+ Assignment</Link>
+      </div>
+      {assignments.data?.length === 0 && (
+        <p className="empty">No Assignments yet. Set one with 3–5 Criteria and Students hand in from their phones.</p>
+      )}
+      <ul className="list" aria-label="Assignments">
+        {assignments.data?.map((a) => (
+          <li key={a.id}>
+            <Link className="grow" to={`/lecturer/courses/${courseId}/assignments/${a.id}`}>
+              <b>{a.title}</b> <span className="muted num">due {formatInstant(a.dueAt)}</span>
+            </Link>
+            <span className="muted small num">{a.submissionCount} handed in</span>
+            <span className={`chip ${a.state === "open" ? "c-ok" : "c-mute"}`}>{ASSIGNMENT_STATE_LABEL[a.state]}</span>
+          </li>
+        ))}
+      </ul>
+      {assignments.error && <p className="error">{assignments.error.message}</p>}
     </section>
   );
 }

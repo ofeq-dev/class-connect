@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Route, Routes } from "react-router";
 import { api, ApiError, ok } from "../api";
+import { AssignmentPage } from "./AssignmentPage";
 import { CourseDesk } from "./CourseDesk";
 import { CourseSettingsPage } from "./CourseSettingsPage";
 import { CoursesPage } from "./CoursesPage";
@@ -26,6 +27,8 @@ export function LecturerApp() {
       <Route path="courses/:courseId/settings" element={<CourseSettingsPage />} />
       <Route path="courses/:courseId/sessions/:sessionId/live" element={<LiveConsole />} />
       <Route path="courses/:courseId/sessions/:sessionId/summary" element={<SummaryPage />} />
+      <Route path="courses/:courseId/assignments/new" element={<AssignmentPage />} />
+      <Route path="courses/:courseId/assignments/:assignmentId" element={<AssignmentPage />} />
       <Route path="*" element={<p className="page">Nothing here. <a href="/lecturer">Your Courses</a></p>} />
     </Routes>
   );

@@ -74,3 +74,37 @@ export const SUMMARY_STATE_LABEL = {
   failed: "Failed",
   draft: "Draft",
 } as const;
+
+export function useAssignments(courseId: string) {
+  return useQuery({
+    queryKey: ["assignments", Number(courseId)],
+    queryFn: async () =>
+      ok(await api.api.lecturer.courses[":courseId"].assignments.$get({ param: { courseId } })),
+  });
+}
+
+export function useAssignment(courseId: string, assignmentId: string | undefined) {
+  return useQuery({
+    queryKey: ["assignment", Number(assignmentId)],
+    enabled: !!assignmentId,
+    queryFn: async () =>
+      ok(
+        await api.api.lecturer.courses[":courseId"].assignments[":assignmentId"].$get({
+          param: { courseId, assignmentId: assignmentId! },
+        }),
+      ),
+  });
+}
+
+/** "Mon 7 Dec, 23:59" for an instant, in the browser's time zone. */
+export function formatInstant(iso: string): string {
+  return new Date(iso).toLocaleString("en-GB", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+export const ASSIGNMENT_STATE_LABEL = { open: "Open", due: "Due" } as const;
