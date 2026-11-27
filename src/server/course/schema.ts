@@ -54,9 +54,9 @@ export const session = sqliteTable(
     end: text("end").notNull(),
     /** The fixed code in the Session's QR link, https://cc.ofeq.dev/s/<code>. */
     qrCode: text("qr_code").notNull(),
-    /** What the Projector window shows for this Session ("qr" or "blank"; "poll" comes with Polls). Null until set. */
-    projectorMode: text("projector_mode", { enum: ["qr", "blank"] }),
-    /** The Poll on screen in Poll mode (no foreign key until the Polls ticket adds the table). */
+    /** What the Projector window shows for this Session ("qr", "poll" or "blank"). Null until set. */
+    projectorMode: text("projector_mode", { enum: ["qr", "poll", "blank"] }),
+    /** The Poll on screen in Poll mode. Feedback owns Polls, so there is no cross-module foreign key. */
     projectedPollId: integer("projected_poll_id"),
     /** When projectorMode was last set: the Projector window shows the Course's most recent. */
     projectorSetAt: integer("projector_set_at", { mode: "timestamp_ms" }),

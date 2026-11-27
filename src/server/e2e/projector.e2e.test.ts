@@ -92,6 +92,47 @@ describe("The Projector window link", () => {
     expect((await setMode("poll")).status).toBe(400);
   });
 
+  it("shows a projected Poll: question, options and vote count while open; totals only once closed", async () => {
+    const topicId = t.modules.feedback.listTopics(courseId)[0]!.id;
+    const poll = (await (
+      await send("POST", `${coursePath()}/polls`, { topicId, question: "Ready?", options: ["Yes", "No"], opensAt: "now" }, lecturer)
+    ).json()) as { id: number; options: { id: number }[] };
+    expect((await send("PATCH", sessionPath(), { projectorMode: "poll", projectedPollId: poll.id }, lecturer)).status).toBe(200);
+    await send("POST", `/api/student/polls/${poll.id}/vote`, { optionId: poll.options[0]!.id }, claimed("1001"));
+
+    const open = await (await get(`/api/projector/${await secret()}`)).json();
+    expect(open).toEqual({
+      courseName: "Software Engineering",
+      mode: "poll",
+      sessionId: session.id,
+      poll: {
+        id: poll.id,
+        question: "Ready?",
+        status: "open",
+        votes: 1,
+        options: [
+          { id: poll.options[0]!.id, label: "Yes", votes: null },
+          { id: poll.options[1]!.id, label: "No", votes: null },
+        ],
+      },
+    });
+    await send("POST", `${coursePath()}/polls/${poll.id}/close`, {}, lecturer);
+    const closed = (await (await get(`/api/projector/${await secret()}`)).json()) as { poll: { options: { votes: number }[] } };
+    expect(closed.poll.options.map((o) => o.votes)).toEqual([1, 0]);
+    expect(JSON.stringify(closed)).not.toMatch(/Dana|1001/);
+  });
+
+  it("refuses to project another Course's Poll", async () => {
+    const other = aCourse(t, "Algorithms").id;
+    aSession(t, other);
+    const theirs = t.modules.feedback.createPoll(other, {
+      topicId: t.modules.feedback.listTopics(other)[0]!.id,
+      question: "Q",
+      options: ["a", "b"],
+    });
+    expect((await send("PATCH", sessionPath(), { projectorMode: "poll", projectedPollId: theirs.id }, lecturer)).status).toBe(404);
+  });
+
   it("gives the console what the class sees, for its thumbnail", async () => {
     await setMode("qr");
     const body = await (await get(`${coursePath()}/projector`, lecturer)).json();

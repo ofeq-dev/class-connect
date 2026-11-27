@@ -50,6 +50,8 @@ export interface Session {
   qrCode: string;
   /** What the Projector window shows while this is the Course's projected Session; null until set. */
   projectorMode: ProjectorMode | null;
+  /** The Poll on screen in Poll mode, else null. */
+  projectedPollId: number | null;
 }
 
 export interface SessionInput {
@@ -58,19 +60,24 @@ export interface SessionInput {
   end: string;
 }
 
-/** "qr" shows the QR code, Session and checked-in count; "blank" shows nothing. Poll mode comes with Polls. */
-export const PROJECTOR_MODES = ["qr", "blank"] as const;
+/** "qr" shows the QR code, Session and checked-in count; "poll" one Poll (projectedPollId); "blank" nothing. */
+export const PROJECTOR_MODES = ["qr", "poll", "blank"] as const;
 export type ProjectorMode = (typeof PROJECTOR_MODES)[number];
 
 export interface SessionChanges extends Partial<SessionInput> {
   projectorMode?: ProjectorMode;
+  /** Required with Poll mode. Course stores it; checking the Poll is the caller's (Feedback owns Polls). */
+  projectedPollId?: number;
 }
 
 /**
  * What a Course's Projector window shows: the Session whose projector mode was set most recently,
  * in that mode; Blank (with no Session) when none has been set.
  */
-export type Projection = { mode: "qr"; session: Session } | { mode: "blank"; session: Session | null };
+export type Projection =
+  | { mode: "qr"; session: Session }
+  | { mode: "poll"; session: Session; pollId: number }
+  | { mode: "blank"; session: Session | null };
 
 export interface CourseModule {
   /** The one Lecturer (real accounts are v2). Creates the row on first start. */
@@ -192,6 +199,7 @@ export function createCourseModule({ db, clock, events, timeZone }: CourseDeps):
     end: row.end,
     qrCode: row.qrCode,
     projectorMode: row.projectorMode,
+    projectedPollId: row.projectedPollId,
   });
 
   const courseChanged = (id: number) => events.publish(null, "lecturer", { type: "course.changed", id });
@@ -431,7 +439,10 @@ export function createCourseModule({ db, clock, events, timeZone }: CourseDeps):
       const current = sessionRow(sessionId);
       const { projectorMode } = changes;
       if (projectorMode !== undefined && !(PROJECTOR_MODES as readonly string[]).includes(projectorMode)) {
-        throw new DomainError("session.bad-projector-mode", "Choose QR + count or Blank.");
+        throw new DomainError("session.bad-projector-mode", "Choose QR + count, Poll or Blank.");
+      }
+      if (projectorMode === "poll" && changes.projectedPollId === undefined) {
+        throw new DomainError("session.poll-required", "Choose the Poll to show.");
       }
       const retimed = changes.date !== undefined || changes.start !== undefined || changes.end !== undefined;
       const set: Partial<typeof session.$inferInsert> = sessionTimes({
@@ -439,7 +450,10 @@ export function createCourseModule({ db, clock, events, timeZone }: CourseDeps):
         start: changes.start ?? current.start,
         end: changes.end ?? current.end,
       });
-      if (projectorMode !== undefined) Object.assign(set, { projectorMode, projectorSetAt: clock.now() });
+      if (projectorMode !== undefined) {
+        const projectedPollId = projectorMode === "poll" ? changes.projectedPollId : null;
+        Object.assign(set, { projectorMode, projectedPollId, projectorSetAt: clock.now() });
+      }
       const row = db.update(session).set(set).where(eq(session.id, sessionId)).returning().get()!;
       if (retimed || projectorMode === undefined) sessionChanged(row);
       if (projectorMode !== undefined) projectorChanged(row.courseId);
@@ -496,7 +510,11 @@ export function createCourseModule({ db, clock, events, timeZone }: CourseDeps):
         .get();
       if (!row) return { mode: "blank", session: null };
       const projected = toSession(row);
-      return row.projectorMode === "qr" ? { mode: "qr", session: projected } : { mode: "blank", session: projected };
+      if (row.projectorMode === "qr") return { mode: "qr", session: projected };
+      if (row.projectorMode === "poll" && row.projectedPollId !== null) {
+        return { mode: "poll", session: projected, pollId: row.projectedPollId };
+      }
+      return { mode: "blank", session: projected };
     },
 
     today() {

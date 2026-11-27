@@ -204,6 +204,30 @@ export function studentRoutes(deps: AppDeps) {
       return c.json({ ok: true });
     })
 
+    // Polls: open ones to vote on, then past results
+    .get("/polls", (c) => {
+      const viewer = student(c);
+      if (!viewer) return unclaimed(c);
+      return c.json(deps.feedback.studentPolls(viewer.course.id, viewer.rosterEntry.id));
+    })
+    .post(
+      "/polls/:pollId/vote",
+      validator("json", (value) => {
+        const b = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+        return { optionId: typeof b.optionId === "number" ? b.optionId : 0 };
+      }),
+      (c) => {
+        const viewer = student(c);
+        if (!viewer) return unclaimed(c);
+        const pollId = Number(c.req.param("pollId"));
+        if (!Number.isInteger(pollId) || pollId <= 0) throw new NotFoundError("Poll");
+        // Only a Poll of this phone's own Course.
+        deps.feedback.results(viewer.course.id, pollId, { rosterEntryId: viewer.rosterEntry.id });
+        deps.feedback.vote(pollId, viewer.rosterEntry.id, c.req.valid("json").optionId);
+        return c.json(deps.feedback.results(viewer.course.id, pollId, { rosterEntryId: viewer.rosterEntry.id }));
+      },
+    )
+
     // Published Session summaries of this phone's Course, and one to read.
     .get("/summaries", (c) => c.json(deps.summaries.listForStudent(c.var.deviceToken)))
     .get("/summaries/:sessionId", langQuery, (c) => {

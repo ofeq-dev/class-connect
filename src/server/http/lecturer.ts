@@ -4,7 +4,7 @@ import { createMiddleware } from "hono/factory";
 import { validator } from "hono/validator";
 import type { ProjectorMode, SessionChanges } from "../course";
 import { NotFoundError } from "../errors";
-import type { CommentFilter, CommentStatus, Timing } from "../feedback";
+import type { CommentFilter, CommentStatus, PollInput, Timing } from "../feedback";
 import { verifyPassword } from "../lecturer-auth";
 import { streamLiveEvents } from "../live-events";
 import type { Level } from "../homework";
@@ -47,6 +47,19 @@ const reviewBody = (b: Body) => ({
     };
   }),
 });
+
+/** A Poll form: opensAt is "now", an ISO time, or absent (a draft). */
+const pollBody = (b: Body): PollInput => {
+  const opens = str(b.opensAt);
+  const at = opens && opens !== "now" ? new Date(opens) : null;
+  return {
+    topicId: Number(b.topicId),
+    question: str(b.question),
+    options: Array.isArray(b.options) ? b.options.map(str) : [],
+    opensAt: opens === "now" ? "now" : at && !Number.isNaN(at.getTime()) ? at : null,
+    closeAfterMinutes: typeof b.closeAfterMinutes === "number" ? b.closeAfterMinutes : null,
+  };
+};
 
 const sessionTimes = (b: Body) => ({ date: str(b.date), start: str(b.start), end: str(b.end) });
 
@@ -196,8 +209,15 @@ export function lecturerRoutes(deps: AppDeps) {
         end: optStr(b.end),
         // The module refuses a mode it doesn't know.
         projectorMode: optStr(b.projectorMode) as ProjectorMode | undefined,
+        projectedPollId: typeof b.projectedPollId === "number" ? b.projectedPollId : undefined,
       })),
-      (c) => c.json(deps.course.updateSession(ownSession(c).id, c.req.valid("json"))),
+      (c) => {
+        const session = ownSession(c);
+        const changes = c.req.valid("json");
+        // Only one of this Course's Polls can go on its projector.
+        if (changes.projectedPollId !== undefined) deps.feedback.results(session.courseId, changes.projectedPollId, "projector");
+        return c.json(deps.course.updateSession(session.id, changes));
+      },
     )
     .delete("/courses/:courseId/sessions/:sessionId", requireLecturer, (c) => {
       const { id } = ownSession(c);
@@ -285,6 +305,26 @@ export function lecturerRoutes(deps: AppDeps) {
     )
     .get("/courses/:courseId/sessions/:sessionId/comments", requireLecturer, (c) =>
       c.json(deps.feedback.inbox(ownSession(c).id)),
+    )
+
+    // Polls
+    .get("/courses/:courseId/sessions/:sessionId/polls", requireLecturer, (c) =>
+      c.json(deps.feedback.sessionPolls(ownSession(c).id)),
+    )
+    .post("/courses/:courseId/polls", requireLecturer, json(pollBody), (c) =>
+      c.json(deps.feedback.createPoll(ownCourse(c).id, c.req.valid("json")), 201),
+    )
+    .put("/courses/:courseId/polls/:pollId", requireLecturer, json(pollBody), (c) =>
+      c.json(deps.feedback.updatePoll(ownCourse(c).id, idParam(c, "pollId"), c.req.valid("json"))),
+    )
+    .post("/courses/:courseId/polls/:pollId/open", requireLecturer, (c) =>
+      c.json(deps.feedback.openPoll(ownCourse(c).id, idParam(c, "pollId"))),
+    )
+    .post("/courses/:courseId/polls/:pollId/close", requireLecturer, (c) =>
+      c.json(deps.feedback.closePoll(ownCourse(c).id, idParam(c, "pollId"))),
+    )
+    .post("/courses/:courseId/polls/:pollId/copy", requireLecturer, (c) =>
+      c.json(deps.feedback.copyPoll(ownCourse(c).id, idParam(c, "pollId")), 201),
     )
 
     // Session summaries

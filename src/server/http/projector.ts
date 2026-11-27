@@ -2,15 +2,18 @@ import { Hono } from "hono";
 import type { WindowState } from "../attendance";
 import type { Course } from "../course";
 import { NotFoundError } from "../errors";
+import type { ProjectorPoll } from "../feedback";
 import { streamLiveEvents } from "../live-events";
 import type { AppDeps } from "./app";
 
 /**
  * What the Projector window shows, and everything it may know: the Course name, and in QR mode the
- * Session's times, its QR code and the checked-in count. Never a name, a Pending Check-in or a Comment.
+ * Session's times, its QR code and the checked-in count; in Poll mode the Poll's question, options
+ * and vote count, with totals once it closes. Never a name, a Pending Check-in, a Comment or a voter.
  */
 export type ProjectorView =
   | { courseName: string; mode: "blank"; sessionId: number | null }
+  | { courseName: string; mode: "poll"; sessionId: number; poll: ProjectorPoll }
   | {
       courseName: string;
       mode: "qr";
@@ -20,10 +23,14 @@ export type ProjectorView =
       checkedIn: number;
     };
 
-export function projectorView(deps: Pick<AppDeps, "course" | "attendance">, course: Course): ProjectorView {
+export function projectorView(deps: Pick<AppDeps, "course" | "attendance" | "feedback">, course: Course): ProjectorView {
   const projection = deps.course.projection(course.id);
   if (projection.mode === "blank") {
     return { courseName: course.name, mode: "blank", sessionId: projection.session?.id ?? null };
+  }
+  if (projection.mode === "poll") {
+    const poll = deps.feedback.results(course.id, projection.pollId, "projector");
+    return { courseName: course.name, mode: "poll", sessionId: projection.session.id, poll };
   }
   const { id, date, start, end, qrCode } = projection.session;
   const attendance = deps.attendance.forLecturer(id);

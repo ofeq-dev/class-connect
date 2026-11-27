@@ -6,7 +6,18 @@ import type { CourseModule, Session } from "../course";
 import type { Db } from "../db";
 import { DomainError, NotFoundError } from "../errors";
 import type { LiveEvents } from "../live-events";
+import { createPollOps, type PollOps } from "./polls";
 import { comment as commentTable, topic as topicTable } from "./schema";
+
+export type {
+  LecturerPoll,
+  PollInput,
+  PollResults,
+  PollStatus,
+  PollViewer,
+  ProjectorPoll,
+  StudentPoll,
+} from "./polls";
 
 export interface Topic {
   id: number;
@@ -99,7 +110,7 @@ export interface Inbox {
   dealtWith: LecturerComment[];
 }
 
-export interface FeedbackModule {
+export interface FeedbackModule extends PollOps {
   /**
    * The Course's Topics: today's Session first, then General, the named Topics and the other
    * Sessions newest first. Archived named Topics only when asked for (the Lecturer's Topics screen).
@@ -136,6 +147,8 @@ export interface FeedbackDeps {
   course: CourseModule;
   attendance: Pick<AttendanceModule, "isPresent">;
   timeZone: string;
+  /** Told when a Poll's scheduled open or close may have moved, so the next-event timer recomputes. */
+  scheduleChanged?: () => void;
 }
 
 const MAX_TOPIC_NAME = 60;
@@ -153,7 +166,15 @@ function topicName(raw: string): string {
 const newestFirst = <T extends { createdAt: Date; id: number }>(a: T, b: T) =>
   b.createdAt.getTime() - a.createdAt.getTime() || b.id - a.id;
 
-export function createFeedbackModule({ db, clock, events, course, attendance, timeZone }: FeedbackDeps): FeedbackModule {
+export function createFeedbackModule({
+  db,
+  clock,
+  events,
+  course,
+  attendance,
+  timeZone,
+  scheduleChanged = () => {},
+}: FeedbackDeps): FeedbackModule {
   type TopicRow = typeof topicTable.$inferSelect;
 
   /** Stores General and each Session's Topic the first time they're listed. */
@@ -340,7 +361,24 @@ export function createFeedbackModule({ db, clock, events, course, attendance, ti
   const topicChanged = (courseId: number, id: number) =>
     events.publish(courseId, "all", { type: "topic.changed", id });
 
+  const polls = createPollOps({
+    db,
+    clock,
+    events,
+    course,
+    topics,
+    readTopic,
+    topicCourse: (topicId) => {
+      const row = db.select({ courseId: topicTable.courseId }).from(topicTable).where(eq(topicTable.id, topicId)).get();
+      if (!row) throw new NotFoundError("Topic");
+      return row.courseId;
+    },
+    scheduleChanged,
+  });
+
   return {
+    ...polls,
+
     listTopics(courseId, options = {}) {
       return topics(courseId).filter((x) => options.includeArchived || !x.archived);
     },

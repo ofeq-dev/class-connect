@@ -71,6 +71,13 @@
       "when": 1795739659279,
       "tag": "0009_comments_and_topics",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1795739908505,
+      "tag": "0010_polls_and_votes",
+      "breakpoints": true
     }
   ]
 }
