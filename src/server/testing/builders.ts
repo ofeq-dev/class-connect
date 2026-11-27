@@ -1,4 +1,5 @@
 import type { SessionInput } from "../course";
+import type { AssignmentInput } from "../homework";
 import type { TestApp } from "./make-test-app";
 
 /** Builders set up state through module operations, never by inserting rows. */
@@ -29,4 +30,15 @@ export function aSession(t: TestApp, courseId: number, input: Partial<SessionInp
 export function aClaimedStudent(t: TestApp, courseId: number, studentId = "1001", deviceToken = `device-${studentId}`) {
   const entry = t.modules.course.findRosterEntry(courseId, studentId) ?? aRoster(t, courseId, 1)[0]!;
   return { rosterEntry: t.modules.course.claim(courseId, entry.studentId, deviceToken), deviceToken };
+}
+
+/** "Assignment 2" with four Criteria, due a week after the fake Clock's day unless overridden. */
+export function anAssignmentWithCriteria(t: TestApp, courseId: number, input: Partial<AssignmentInput> = {}) {
+  return t.modules.homework.setAssignment(courseId, {
+    title: "Assignment 2",
+    instructions: "Write three use cases for the library system.",
+    dueAt: "2026-12-07T21:59:00.000Z",
+    criteria: ["Actors", "Goals", "Main flow", "Alternative flows"],
+    ...input,
+  });
 }

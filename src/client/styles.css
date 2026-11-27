@@ -143,7 +143,7 @@ input[type="text"], input[type="password"] {
 .more { align-self: flex-start; border: 0; background: none; padding: 2px 0; font-weight: 700; color: var(--muted); font-size: 14px; }
 .more:hover { color: var(--ink); }
 .form-row { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; }
-input[type="date"], input[type="time"], input[type="file"], textarea {
+input[type="date"], input[type="time"], input[type="datetime-local"], input[type="file"], textarea {
   border: 1.5px solid var(--line); border-radius: 4px; background: var(--card); padding: 7px 10px;
 }
 textarea { width: 100%; min-height: 96px; resize: vertical; }
@@ -162,6 +162,11 @@ textarea { width: 100%; min-height: 96px; resize: vertical; }
 
 /* Session summaries */
 .transcript { white-space: pre-wrap; font: 13px/1.5 ui-monospace, monospace; background: var(--card); border: 1.5px solid var(--line); border-radius: 4px; padding: 10px 12px; max-height: 60vh; overflow: auto; margin: 6px 0 0; }
+
+.sec-head h3 { font-size: 17px; font-weight: 800; flex: 1; }
+.table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.table th { text-align: start; color: var(--muted); font-size: 12px; font-weight: 700; padding: 4px 8px 4px 0; }
+.table td { border-top: 1px solid var(--line); padding: 8px 8px 8px 0; vertical-align: top; }
 
 /* Session summaries: the editor beside its preview, and the rendered Markdown (Lecturer and phone). */
 .editor { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 8px 0; }
