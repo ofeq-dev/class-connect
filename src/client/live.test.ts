@@ -57,6 +57,16 @@ describe("notice → query keys", () => {
     expect(stale(client, ["student", "me"])).toBe(true);
   });
 
+  it("summary.changed refreshes the phone's summary list and that summary, not others", () => {
+    const client = clientWith(["student", "summaries"]);
+    client.setQueryData(["student", "summary", 5], "cached");
+    client.setQueryData(["student", "summary", 6], "cached");
+    applyNotice(client, { type: "summary.changed", id: 5 });
+    expect(stale(client, ["student", "summaries"])).toBe(true);
+    expect(client.getQueryState(["student", "summary", 5])?.isInvalidated).toBe(true);
+    expect(client.getQueryState(["student", "summary", 6])?.isInvalidated).toBe(false);
+  });
+
   it("a reconnect makes every query stale", () => {
     const client = clientWith(["courses"], ["other"]);
     applyReconnect(client);

@@ -1,5 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { aCourse, aSession, listen, makeTestApp, openSse, signInLecturer, type TestApp } from "../testing";
+import {
+  aClaimedStudent,
+  aCourse,
+  aSession,
+  listen,
+  makeTestApp,
+  openSse,
+  signInLecturer,
+  type TestApp,
+} from "../testing";
 
 let t: TestApp;
 let server: Awaited<ReturnType<typeof listen>>;
@@ -58,5 +67,51 @@ describe("Session summaries over HTTP", () => {
     expect(res.status).toBe(400);
     const other = aCourse(t, "Other").id;
     expect((await call("GET", `/courses/${other}/sessions/${sessionId}/summary`)).status).toBe(404);
+  });
+
+  it("edits, restores and publishes, and the claimed phone hears of it and reads only the published version", async () => {
+    const courseId = aCourse(t).id;
+    const sessionId = aSession(t, courseId).id;
+    const { deviceToken } = aClaimedStudent(t, courseId);
+    const phone = `cc_device=${deviceToken}`;
+    const base = `/courses/${courseId}/sessions/${sessionId}/summary`;
+    const student = (path: string, cookie = phone) =>
+      fetch(`${server.url}/api/student${path}`, { headers: { cookie } });
+
+    const saved = await (await call("POST", `${base}/versions`, { markdown: "## Overview\n\nFirst." })).json();
+    expect(saved).toMatchObject({ state: "draft", versions: [{ number: 1, author: "lecturer" }] });
+    const v1 = saved.versions[0].id;
+    await call("POST", `${base}/versions`, { markdown: "## Overview\n\nSecond." });
+    const restored = await (await call("POST", `${base}/versions/${v1}/restore`)).json();
+    expect(restored.versions.map((v: { number: number }) => v.number)).toEqual([3, 2, 1]);
+
+    expect(await (await student("/summaries")).json()).toEqual([]);
+    expect((await student(`/summaries/${sessionId}`)).status).toBe(404);
+
+    const stream = await openSse(`${server.url}/api/student/events`, phone);
+    const published = await (await call("POST", `${base}/versions/${v1}/publish`)).json();
+    expect(published).toMatchObject({ state: "published", publishedVersionId: v1 });
+    expect(await stream.nextMessage()).toEqual({ type: "summary.changed", id: sessionId });
+    stream.close();
+
+    await call("POST", `${base}/versions`, { markdown: "Not published." });
+    expect(await (await student("/summaries")).json()).toMatchObject([{ sessionId }]);
+    expect(await (await student(`/summaries/${sessionId}`)).json()).toMatchObject({
+      sessionId,
+      markdown: "## Overview\n\nFirst.",
+    });
+    expect((await student(`/summaries/${sessionId}`, "")).status).toBe(404);
+  });
+
+  it("deletes a published summary with its Session, and the phone no longer lists it", async () => {
+    const courseId = aCourse(t).id;
+    const sessionId = aSession(t, courseId).id;
+    const { deviceToken } = aClaimedStudent(t, courseId);
+    const base = `/courses/${courseId}/sessions/${sessionId}/summary`;
+    const v = (await (await call("POST", `${base}/versions`, { markdown: "Notes." })).json()).versions[0].id;
+    await call("POST", `${base}/versions/${v}/publish`);
+    expect((await call("DELETE", `/courses/${courseId}/sessions/${sessionId}`)).status).toBe(200);
+    const list = await fetch(`${server.url}/api/student/summaries`, { headers: { cookie: `cc_device=${deviceToken}` } });
+    expect(await list.json()).toEqual([]);
   });
 });
