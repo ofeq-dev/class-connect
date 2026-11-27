@@ -55,10 +55,11 @@ const llm =
         clock: systemClock,
         apiKey: config.llm.openRouterApiKey,
         models: config.llm.models,
+        embeddingModel: config.llm.embeddingModel,
       });
 const files = createDiskFileStore(config.filesDir);
 const summaries = createSummariesModule({ db: database.db, clock: systemClock, course, llm, jobs, files, events });
-const homework = createHomeworkModule({ db: database.db, clock: systemClock, course, llm, files, events });
+const homework = createHomeworkModule({ db: database.db, clock: systemClock, course, llm, files, events, jobs });
 const sha = commitSha();
 
 const app = createApp({

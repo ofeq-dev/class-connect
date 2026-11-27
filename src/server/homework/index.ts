@@ -1,14 +1,30 @@
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import type { Clock } from "../clock";
 import type { CourseModule } from "../course";
 import type { Db } from "../db";
 import { DomainError, NotFoundError } from "../errors";
 import type { FileStore } from "../files";
+import { MAX_ATTEMPTS, type Job, type Jobs, type JobStatus } from "../jobs";
 import type { LiveEvents } from "../live-events";
 import type { LlmGateway } from "../llm";
+import { classSummary as classSummaryTask } from "./class-summary-task";
 import { draftCriteria as draftCriteriaTask } from "./draft-criteria-task";
 import { pdfText } from "./pdf";
-import { assignment as assignmentTable, criterion, submission as submissionTable } from "./schema";
+import { LEVELS, reviewSubmission, type Level } from "./review-task";
+import {
+  assignment as assignmentTable,
+  classSummary as classSummaryTable,
+  criterion,
+  review as reviewTable,
+  reviewJob,
+  reviewLevel,
+  reviewRun,
+  similarityPair,
+  submission as submissionTable,
+} from "./schema";
+import { compareFingerprints, cosine, fingerprint, SIMILARITY_THRESHOLD, similarityScore } from "./similarity";
+
+export { LEVELS, type Level, type ReviewSubmissionInput } from "./review-task";
 
 export const MIN_CRITERIA = 3;
 export const MAX_CRITERIA = 5;
@@ -37,8 +53,64 @@ export interface Assignment {
   criteria: Criterion[];
 }
 
-/** open until the due date, due after it. Review-run states come with the review run. */
+/** What a Student sees: open until the due date, due after it. */
 export type AssignmentState = "open" | "due";
+
+/** The Lecturer's states add the review run: reviewing while it works, reviewed once it settles. */
+export type LecturerAssignmentState = AssignmentState | "reviewing" | "reviewed";
+
+export interface ReviewLevel {
+  criterionId: number;
+  level: Level;
+  evidence: string;
+  feedback: string;
+}
+
+/** not-started (no run has included it), queued / running / failed (its job), drafted (a Review exists). */
+export type ReviewStatus = "not-started" | "queued" | "running" | "failed" | "drafted";
+
+export interface LecturerReview {
+  status: ReviewStatus;
+  /** The failed job's error, for the Retry row. */
+  error: string | null;
+  /** Who wrote the Review first; null without one. */
+  author: "ai" | "lecturer" | null;
+  editedAt: string | null;
+  /** One per Criterion, in the Criteria's order; empty without a Review. */
+  levels: ReviewLevel[];
+}
+
+export interface ReviewRunView {
+  /** Drafts settled (written or failed for good), of the run's Submissions; counted from job rows. */
+  done: number;
+  total: number;
+  failed: number;
+  /** The latest review.compare job's status, null until the drafts settle. */
+  compare: JobStatus | null;
+  /** The latest review.classSummary job's status, null until compare finishes. */
+  classSummary: JobStatus | null;
+  /** The comparison's or the class summary's error when it failed. */
+  error: string | null;
+}
+
+/** For the Lecturer only. */
+export interface SimilarPair {
+  a: { submissionId: number; studentName: string };
+  b: { submissionId: number; studentName: string };
+  score: number;
+  fingerprintOverlap: number;
+  /** Null when the embedding call failed on its last attempt; the score is then the fingerprints'. */
+  embeddingSimilarity: number | null;
+  /** The overlapping passages side by side. */
+  passages: { a: string; b: string }[];
+}
+
+/** Anonymised: counts per Criterion and common mistakes, from the Reviews written when it ran. */
+export interface ClassSummary {
+  reviewCount: number;
+  counts: { criterionId: number; label: string; notYet: number; partly: number; secure: number }[];
+  commonMistakes: string[];
+}
 
 export interface LecturerSubmission {
   id: number;
@@ -48,20 +120,30 @@ export interface LecturerSubmission {
   submittedAt: string;
   late: boolean;
   fileName: string | null;
+  /** The pasted or extracted text, for reviewing by hand. */
+  text: string;
+  review: LecturerReview;
 }
 
 export interface LecturerAssignment extends Assignment {
-  state: AssignmentState;
+  state: LecturerAssignmentState;
   /** Oldest first. */
   submissions: LecturerSubmission[];
+  /** The latest review run, or null before the first. */
+  reviewRun: ReviewRunView | null;
+  /** Above the similarity threshold, highest score first. Never shown to Students. */
+  similarPairs: SimilarPair[];
+  classSummary: ClassSummary | null;
 }
 
 export interface AssignmentRow {
   id: number;
   title: string;
   dueAt: string;
-  state: AssignmentState;
+  state: LecturerAssignmentState;
   submissionCount: number;
+  /** The latest review run's `n of m`, or null before the first. */
+  reviewRun: { done: number; total: number } | null;
 }
 
 /** Pasted text, or a PDF whose text is extracted in the app. */
@@ -108,6 +190,18 @@ export interface HomeworkModule {
   studentView(assignmentId: number, rosterEntryId: number): StudentAssignment;
   /** The Course's Assignments for the Student app's Today list, by due date. */
   forStudent(courseId: number, rosterEntryId: number): StudentAssignmentRow[];
+  /**
+   * After the due date: queues one `review.submission` job per Submission without a Review. The
+   * job settling the run's last draft queues `review.compare`, which queues `review.classSummary`.
+   */
+  startReviewRun(assignmentId: number): LecturerAssignment;
+  /** Queues a failed draft again with fresh attempts. */
+  retryReview(assignmentId: number, submissionId: number): LecturerAssignment;
+  /**
+   * The Lecturer's Review of a Submission: a level, evidence and feedback for every Criterion.
+   * Edits a draft, or writes one by hand (e.g. for a failed draft).
+   */
+  editReview(assignmentId: number, submissionId: number, levels: ReviewLevel[]): LecturerAssignment;
 }
 
 export interface HomeworkDeps {
@@ -117,9 +211,10 @@ export interface HomeworkDeps {
   llm: LlmGateway;
   files: FileStore;
   events: LiveEvents;
+  jobs: Jobs;
 }
 
-export function createHomeworkModule({ db, clock, course, llm, files, events }: HomeworkDeps): HomeworkModule {
+export function createHomeworkModule({ db, clock, course, llm, files, events, jobs }: HomeworkDeps): HomeworkModule {
   const changed = (courseId: number, assignmentId: number, audience: "all" | "lecturer" = "all") =>
     events.publish(courseId, audience, { type: "assignment.changed", id: assignmentId });
 
@@ -211,16 +306,122 @@ export function createHomeworkModule({ db, clock, course, llm, files, events }: 
     return { text, fileHash: null, fileName: null };
   }
 
+  // ---- Review run -------------------------------------------------------------------------
+
+  const latestRun = (assignmentId: number) =>
+    db
+      .select()
+      .from(reviewRun)
+      .where(eq(reviewRun.assignmentId, assignmentId))
+      .orderBy(desc(reviewRun.id))
+      .limit(1)
+      .get();
+
+  const runJobIds = (runId: number) =>
+    db
+      .select({ jobId: reviewJob.jobId })
+      .from(reviewJob)
+      .where(eq(reviewJob.runId, runId))
+      .all()
+      .map((r) => r.jobId);
+
+  function runProgress(runId: number): { done: number; total: number; failed: number; unsettled: number } {
+    const tally = jobs.tally(runJobIds(runId));
+    return {
+      done: tally.done + tally.failed,
+      total: tally.total,
+      failed: tally.failed,
+      unsettled: tally.queued + tally.running,
+    };
+  }
+
+  const jobStatus = (jobId: number | null): JobStatus | null => (jobId ? jobs.read(jobId).status : null);
+  const busy = (status: JobStatus | null) => status === "queued" || status === "running";
+
+  /** reviewing while any draft, the comparison or the class summary is still to run. */
+  function runState(run: typeof reviewRun.$inferSelect | undefined): "reviewing" | "reviewed" | null {
+    if (!run) return null;
+    if (runProgress(run.id).unsettled > 0) return "reviewing";
+    if (busy(jobStatus(run.compareJobId)) || busy(jobStatus(run.classSummaryJobId))) return "reviewing";
+    return "reviewed";
+  }
+
+  function lecturerStateOf(row: typeof assignmentTable.$inferSelect): LecturerAssignmentState {
+    return runState(latestRun(row.id)) ?? stateOf(row.dueAt);
+  }
+
+  /** Each Submission's Review with its levels in Criteria order. */
+  function reviewsOf(submissionIds: number[], criteria: Criterion[]) {
+    const out = new Map<number, { review: typeof reviewTable.$inferSelect; levels: ReviewLevel[] }>();
+    if (submissionIds.length === 0) return out;
+    const reviews = db.select().from(reviewTable).where(inArray(reviewTable.submissionId, submissionIds)).all();
+    if (reviews.length === 0) return out;
+    const position = new Map(criteria.map((c, i) => [c.id, i]));
+    const levels = db
+      .select()
+      .from(reviewLevel)
+      .where(inArray(reviewLevel.reviewId, reviews.map((r) => r.id)))
+      .all();
+    for (const review of reviews) {
+      out.set(review.submissionId, {
+        review,
+        levels: levels
+          .filter((l) => l.reviewId === review.id && position.has(l.criterionId))
+          .sort((a, b) => position.get(a.criterionId)! - position.get(b.criterionId)!)
+          .map((l) => ({ criterionId: l.criterionId, level: l.level as Level, evidence: l.evidence, feedback: l.feedback })),
+      });
+    }
+    return out;
+  }
+
+  /** Each Submission's newest review.submission job. */
+  function latestJobs(submissionIds: number[]) {
+    const out = new Map<number, number>();
+    if (submissionIds.length === 0) return out;
+    for (const r of db
+      .select({ submissionId: reviewJob.submissionId, jobId: reviewJob.jobId })
+      .from(reviewJob)
+      .where(inArray(reviewJob.submissionId, submissionIds))
+      .orderBy(asc(reviewJob.id))
+      .all()) {
+      out.set(r.submissionId, r.jobId);
+    }
+    return out;
+  }
+
   function lecturerView(assignmentId: number): LecturerAssignment {
     const row = assignmentRow(assignmentId);
+    const assignment = toAssignment(row);
     const roster = new Map(course.listRoster(row.courseId).map((e) => [e.id, e]));
-    const submissions = db
+    const rows = db
       .select()
       .from(submissionTable)
       .where(eq(submissionTable.assignmentId, assignmentId))
       .orderBy(asc(submissionTable.submittedAt))
-      .all()
-      .map((s) => ({
+      .all();
+    const ids = rows.map((s) => s.id);
+    const reviews = reviewsOf(ids, assignment.criteria);
+    const jobIds = latestJobs(ids);
+    const submissions = rows.map((s) => {
+      const written = reviews.get(s.id);
+      const jobId = jobIds.get(s.id);
+      const job = jobId ? jobs.read(jobId) : null;
+      const review: LecturerReview = written
+        ? {
+            status: "drafted",
+            error: null,
+            author: written.review.author as "ai" | "lecturer",
+            editedAt: written.review.editedAt?.toISOString() ?? null,
+            levels: written.levels,
+          }
+        : {
+            status: job && job.status !== "done" ? job.status : "not-started",
+            error: job?.status === "failed" ? job.error : null,
+            author: null,
+            editedAt: null,
+            levels: [],
+          };
+      return {
         id: s.id,
         rosterEntryId: s.rosterEntryId,
         studentName: roster.get(s.rosterEntryId)?.name ?? "Unknown Student",
@@ -228,8 +429,311 @@ export function createHomeworkModule({ db, clock, course, llm, files, events }: 
         submittedAt: s.submittedAt.toISOString(),
         late: s.submittedAt >= row.dueAt,
         fileName: s.fileName,
+        text: s.text,
+        review,
+      };
+    });
+    const run = latestRun(assignmentId);
+    let reviewRunView: ReviewRunView | null = null;
+    if (run) {
+      const { done, total, failed } = runProgress(run.id);
+      const compare = run.compareJobId ? jobs.read(run.compareJobId) : null;
+      const summary = run.classSummaryJobId ? jobs.read(run.classSummaryJobId) : null;
+      const error = compare?.status === "failed" ? compare.error : summary?.status === "failed" ? summary.error : null;
+      reviewRunView = {
+        done,
+        total,
+        failed,
+        compare: compare?.status ?? null,
+        classSummary: summary?.status ?? null,
+        error,
+      };
+    }
+    const names = new Map(submissions.map((s) => [s.id, s.studentName]));
+    const similarPairs = db
+      .select()
+      .from(similarityPair)
+      .where(eq(similarityPair.assignmentId, assignmentId))
+      .orderBy(desc(similarityPair.score))
+      .all()
+      .map((p) => ({
+        a: { submissionId: p.submissionAId, studentName: names.get(p.submissionAId) ?? "Unknown Student" },
+        b: { submissionId: p.submissionBId, studentName: names.get(p.submissionBId) ?? "Unknown Student" },
+        score: p.score,
+        fingerprintOverlap: p.fingerprintOverlap,
+        embeddingSimilarity: p.embeddingSimilarity,
+        passages: JSON.parse(p.passages) as SimilarPair["passages"],
       }));
-    return { ...toAssignment(row), state: stateOf(row.dueAt), submissions };
+    return {
+      ...assignment,
+      state: runState(run) ?? stateOf(row.dueAt),
+      submissions,
+      reviewRun: reviewRunView,
+      similarPairs,
+      classSummary: readClassSummary(assignment),
+    };
+  }
+
+  function readClassSummary(assignment: Assignment): ClassSummary | null {
+    const row = db.select().from(classSummaryTable).where(eq(classSummaryTable.assignmentId, assignment.id)).get();
+    if (!row) return null;
+    const stored = JSON.parse(row.counts) as { reviewCount: number; perCriterion: Omit<ClassSummary["counts"][number], "label">[] };
+    const labels = new Map(assignment.criteria.map((c) => [c.id, c.label]));
+    return {
+      reviewCount: stored.reviewCount,
+      counts: stored.perCriterion
+        .filter((c) => labels.has(c.criterionId))
+        .map((c) => ({ ...c, label: labels.get(c.criterionId)! })),
+      commonMistakes: JSON.parse(row.commonMistakes) as string[],
+    };
+  }
+
+  const lecturerChanged = (courseId: number, assignmentId: number) => changed(courseId, assignmentId, "lecturer");
+
+  function publishProgress(courseId: number, assignmentId: number, runId: number) {
+    const { done, total } = runProgress(runId);
+    events.publish(courseId, "lecturer", { type: "job.progress", id: assignmentId, progress: { done, total } });
+  }
+
+  /**
+   * Called inside the transaction that settles one of the run's drafts (written, or failed for
+   * good), while that job is still `running`. When it was the last unsettled one, queues
+   * review.compare: always when the run settles for the first time, and again after a
+   * successful Retry. Jobs share the database connection, so the enqueue commits or rolls back
+   * with the transaction.
+   */
+  function settleDraft(runId: number, succeeded: boolean) {
+    const run = db.select().from(reviewRun).where(eq(reviewRun.id, runId)).get();
+    if (!run) return;
+    const othersUnsettled = runProgress(runId).unsettled - 1;
+    if (othersUnsettled > 0) return;
+    if (!succeeded && run.compareJobId !== null) return;
+    const compare = jobs.enqueue("review.compare", { runId });
+    db.update(reviewRun).set({ compareJobId: compare.id, classSummaryJobId: null }).where(eq(reviewRun.id, runId)).run();
+  }
+
+  /** Replaces a Submission's Review levels, making the Review if there is none. */
+  function writeReview(submissionId: number, levels: ReviewLevel[], author: "ai" | "lecturer") {
+    const now = clock.now();
+    const existing = db.select().from(reviewTable).where(eq(reviewTable.submissionId, submissionId)).get();
+    const reviewId = existing
+      ? db
+          .update(reviewTable)
+          .set(author === "lecturer" ? { editedAt: now } : { author, createdAt: now, editedAt: null })
+          .where(eq(reviewTable.id, existing.id))
+          .returning({ id: reviewTable.id })
+          .get().id
+      : db.insert(reviewTable).values({ submissionId, author, createdAt: now }).returning({ id: reviewTable.id }).get().id;
+    db.delete(reviewLevel).where(eq(reviewLevel.reviewId, reviewId)).run();
+    for (const l of levels) db.insert(reviewLevel).values({ reviewId, ...l }).run();
+  }
+
+  const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e));
+
+  /**
+   * Runs a step's slow work, then its write via Jobs.complete. A failure before its last attempt
+   * is thrown so the worker queues it again; on the last attempt `onLastFailure` settles it.
+   */
+  async function attempt<T>(job: Job, work: () => Promise<T>, onLastFailure: (error: string) => void): Promise<T | null> {
+    try {
+      return await work();
+    } catch (error) {
+      if (job.attempts < MAX_ATTEMPTS) throw error;
+      onLastFailure(errorText(error));
+      return null;
+    }
+  }
+
+  async function handleReviewSubmission(job: Job) {
+    const { runId, submissionId } = job.payload as { runId: number; submissionId: number };
+    const sub = db.select().from(submissionTable).where(eq(submissionTable.id, submissionId)).get();
+    if (!sub) return jobs.fail(job, "The Submission is gone.", () => settleDraft(runId, false));
+    const row = assignmentRow(sub.assignmentId);
+    const criteria = criteriaOf(row.id);
+
+    const draft = await attempt(
+      job,
+      async () => {
+        const result = await llm.generate(reviewSubmission(criteria.length), {
+          instructions: row.instructions,
+          criteria: criteria.map((c) => c.label),
+          text: sub.text,
+        });
+        if (!result.ok) throw new Error(result.error.message);
+        return result.value;
+      },
+      (error) => jobs.fail(job, error, () => settleDraft(runId, false)),
+    );
+    if (draft) {
+      jobs.complete(job, () => {
+        writeReview(
+          submissionId,
+          draft.levels.map((l, i) => ({ criterionId: criteria[i]!.id, ...l })),
+          "ai",
+        );
+        settleDraft(runId, true);
+      });
+    }
+    publishProgress(row.courseId, row.id, runId);
+    lecturerChanged(row.courseId, row.id);
+  }
+
+  jobs.register("review.submission", handleReviewSubmission);
+
+  /**
+   * A run step (compare, class summary) that the worker retries; on its last attempt it is failed
+   * here, so the Lecturer can be told once the failure is saved.
+   */
+  function failingOnLastAttempt(handler: (job: Job) => Promise<void>) {
+    return async (job: Job) => {
+      try {
+        await handler(job);
+      } catch (error) {
+        if (job.attempts < MAX_ATTEMPTS) throw error;
+        jobs.fail(job, errorText(error));
+        const run = db.select().from(reviewRun).where(eq(reviewRun.id, (job.payload as { runId: number }).runId)).get();
+        const row = run && db.select().from(assignmentTable).where(eq(assignmentTable.id, run.assignmentId)).get();
+        if (row) lecturerChanged(row.courseId, row.id);
+      }
+    };
+  }
+
+  /** The Assignment's Submissions that have a Review: compare and the class summary run on these. */
+  function reviewedSubmissions(assignmentId: number) {
+    return db
+      .select({ id: submissionTable.id, text: submissionTable.text })
+      .from(submissionTable)
+      .innerJoin(reviewTable, eq(reviewTable.submissionId, submissionTable.id))
+      .where(eq(submissionTable.assignmentId, assignmentId))
+      .orderBy(asc(submissionTable.id))
+      .all();
+  }
+
+  function runOf(runId: number) {
+    const run = db.select().from(reviewRun).where(eq(reviewRun.id, runId)).get();
+    if (!run) throw new Error("The review run is gone.");
+    return { run, row: assignmentRow(run.assignmentId) };
+  }
+
+  async function handleCompare(job: Job) {
+    const { runId } = job.payload as { runId: number };
+    const { row } = runOf(runId);
+    const subs = reviewedSubmissions(row.id);
+    const prints = subs.map((s) => fingerprint(s.text));
+
+    // One batched embedding call. If it fails on the last attempt, the fingerprints decide alone.
+    let vectors: number[][] | null = null;
+    if (subs.length >= 2) {
+      vectors = await attempt(
+        job,
+        () => llm.embed(subs.map((s) => s.text)),
+        () => {},
+      );
+    }
+
+    const pairs: (typeof similarityPair.$inferInsert)[] = [];
+    for (let i = 0; i < subs.length; i++) {
+      for (let j = i + 1; j < subs.length; j++) {
+        const { fingerprintOverlap, passages } = compareFingerprints(prints[i]!, prints[j]!);
+        const embeddingSimilarity = vectors ? cosine(vectors[i]!, vectors[j]!) : null;
+        const score = similarityScore(fingerprintOverlap, embeddingSimilarity);
+        if (score < SIMILARITY_THRESHOLD) continue;
+        pairs.push({
+          assignmentId: row.id,
+          submissionAId: subs[i]!.id,
+          submissionBId: subs[j]!.id,
+          score,
+          fingerprintOverlap,
+          embeddingSimilarity,
+          passages: JSON.stringify(passages),
+        });
+      }
+    }
+
+    jobs.complete(job, () => {
+      db.delete(similarityPair).where(eq(similarityPair.assignmentId, row.id)).run();
+      for (const p of pairs) db.insert(similarityPair).values(p).run();
+      const next = jobs.enqueue("review.classSummary", { runId });
+      db.update(reviewRun).set({ classSummaryJobId: next.id }).where(eq(reviewRun.id, runId)).run();
+    });
+    lecturerChanged(row.courseId, row.id);
+  }
+
+  jobs.register("review.compare", failingOnLastAttempt(handleCompare));
+
+  async function handleClassSummary(job: Job) {
+    const { runId } = job.payload as { runId: number };
+    const { row } = runOf(runId);
+    const criteria = criteriaOf(row.id);
+    const reviews = reviewsOf(
+      reviewedSubmissions(row.id).map((s) => s.id),
+      criteria,
+    );
+    const levels = [...reviews.values()].map((r) => r.levels);
+    const perCriterion = criteria.map((c) => {
+      const count = { criterionId: c.id, notYet: 0, partly: 0, secure: 0 };
+      for (const review of levels) {
+        const level = review.find((l) => l.criterionId === c.id)?.level;
+        if (level === "not-yet") count.notYet++;
+        else if (level === "partly") count.partly++;
+        else if (level === "secure") count.secure++;
+      }
+      return count;
+    });
+
+    let commonMistakes: string[] = [];
+    if (levels.length > 0) {
+      const result = await llm.generate(classSummaryTask, {
+        instructions: row.instructions,
+        criteria: criteria.map((c) => c.label),
+        reviews: levels.map((r) => r.map((l) => ({ level: l.level, feedback: l.feedback }))),
+      });
+      if (!result.ok) throw new Error(result.error.message);
+      commonMistakes = result.value.commonMistakes;
+    }
+
+    const values = {
+      assignmentId: row.id,
+      counts: JSON.stringify({ reviewCount: levels.length, perCriterion }),
+      commonMistakes: JSON.stringify(commonMistakes),
+      createdAt: clock.now(),
+    };
+    jobs.complete(job, () => {
+      db.insert(classSummaryTable)
+        .values(values)
+        .onConflictDoUpdate({ target: classSummaryTable.assignmentId, set: values })
+        .run();
+    });
+    lecturerChanged(row.courseId, row.id);
+  }
+
+  jobs.register("review.classSummary", failingOnLastAttempt(handleClassSummary));
+
+  /** A Submission of this Assignment, else 404. */
+  function submissionOf(assignmentId: number, submissionId: number) {
+    const sub = db.select().from(submissionTable).where(eq(submissionTable.id, submissionId)).get();
+    if (!sub || sub.assignmentId !== assignmentId) throw new NotFoundError("Submission");
+    return sub;
+  }
+
+  function readLevels(criteria: Criterion[], levels: ReviewLevel[]): ReviewLevel[] {
+    const given = new Map<number, ReviewLevel>();
+    for (const l of levels) {
+      if (given.has(l.criterionId)) throw new DomainError("review.criterion-twice", "A Criterion appears twice.");
+      given.set(l.criterionId, l);
+    }
+    if (given.size !== criteria.length || criteria.some((c) => !given.has(c.id))) {
+      throw new DomainError("review.criteria", "Give a level and feedback for every Criterion.");
+    }
+    return criteria.map((c) => {
+      const l = given.get(c.id)!;
+      if (!LEVELS.includes(l.level)) {
+        throw new DomainError("review.level", `Pick Not yet, Partly or Secure for "${c.label}".`);
+      }
+      const feedback = (l.feedback ?? "").trim();
+      if (!feedback) throw new DomainError("review.no-feedback", `Write feedback for "${c.label}".`);
+      return { criterionId: c.id, level: l.level, evidence: (l.evidence ?? "").trim(), feedback };
+    });
   }
 
   return {
@@ -352,6 +856,74 @@ export function createHomeworkModule({ db, clock, course, llm, files, events }: 
       });
     },
 
+    startReviewRun(assignmentId) {
+      const row = assignmentRow(assignmentId);
+      if (stateOf(row.dueAt) === "open") {
+        throw new DomainError("review.not-due", "The review run starts after the due date.");
+      }
+      if (runState(latestRun(assignmentId)) === "reviewing") {
+        throw new DomainError("review.running", "A review run is already going.");
+      }
+      const reviewed = new Set(
+        db
+          .select({ submissionId: reviewTable.submissionId })
+          .from(reviewTable)
+          .innerJoin(submissionTable, eq(submissionTable.id, reviewTable.submissionId))
+          .where(eq(submissionTable.assignmentId, assignmentId))
+          .all()
+          .map((r) => r.submissionId),
+      );
+      const toReview = db
+        .select({ id: submissionTable.id })
+        .from(submissionTable)
+        .where(eq(submissionTable.assignmentId, assignmentId))
+        .orderBy(asc(submissionTable.submittedAt))
+        .all()
+        .filter((s) => !reviewed.has(s.id));
+      if (toReview.length === 0) {
+        throw new DomainError("review.nothing-to-review", "Every Submission already has a Review.");
+      }
+      const runId = db.transaction(() => {
+        const run = db.insert(reviewRun).values({ assignmentId, startedAt: clock.now() }).returning().get();
+        for (const s of toReview) {
+          const job = jobs.enqueue("review.submission", { runId: run.id, submissionId: s.id });
+          db.insert(reviewJob).values({ runId: run.id, submissionId: s.id, jobId: job.id }).run();
+        }
+        return run.id;
+      });
+      publishProgress(row.courseId, assignmentId, runId);
+      lecturerChanged(row.courseId, assignmentId);
+      return lecturerView(assignmentId);
+    },
+
+    retryReview(assignmentId, submissionId) {
+      const row = assignmentRow(assignmentId);
+      submissionOf(assignmentId, submissionId);
+      const jobId = latestJobs([submissionId]).get(submissionId);
+      const hasReview = db.select().from(reviewTable).where(eq(reviewTable.submissionId, submissionId)).get();
+      if (!jobId || hasReview || jobs.read(jobId).status !== "failed") {
+        throw new DomainError("review.nothing-to-retry", "There's no failed draft to retry for this Submission.");
+      }
+      jobs.retry(jobId);
+      const runId = db.select({ runId: reviewJob.runId }).from(reviewJob).where(eq(reviewJob.jobId, jobId)).get()!.runId;
+      publishProgress(row.courseId, assignmentId, runId);
+      lecturerChanged(row.courseId, assignmentId);
+      return lecturerView(assignmentId);
+    },
+
+    editReview(assignmentId, submissionId, levels) {
+      const row = assignmentRow(assignmentId);
+      submissionOf(assignmentId, submissionId);
+      const jobId = latestJobs([submissionId]).get(submissionId);
+      if (jobId && busy(jobs.read(jobId).status)) {
+        throw new DomainError("review.drafting", "This Submission is still being drafted. Wait for it to finish.");
+      }
+      const read = readLevels(criteriaOf(assignmentId), levels);
+      db.transaction(() => writeReview(submissionId, read, "lecturer"));
+      lecturerChanged(row.courseId, assignmentId);
+      return lecturerView(assignmentId);
+    },
+
     forCourse(courseId) {
       const rows = db
         .select()
@@ -368,13 +940,18 @@ export function createHomeworkModule({ db, clock, course, llm, files, events }: 
         .all()) {
         counts.set(s.assignmentId, (counts.get(s.assignmentId) ?? 0) + 1);
       }
-      return rows.map((r) => ({
-        id: r.id,
-        title: r.title,
-        dueAt: r.dueAt.toISOString(),
-        state: stateOf(r.dueAt),
-        submissionCount: counts.get(r.id) ?? 0,
-      }));
+      return rows.map((r) => {
+        const run = latestRun(r.id);
+        const progress = run ? runProgress(run.id) : null;
+        return {
+          id: r.id,
+          title: r.title,
+          dueAt: r.dueAt.toISOString(),
+          state: lecturerStateOf(r),
+          submissionCount: counts.get(r.id) ?? 0,
+          reviewRun: progress ? { done: progress.done, total: progress.total } : null,
+        };
+      });
     },
   };
 }

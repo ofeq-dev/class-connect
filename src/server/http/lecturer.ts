@@ -6,6 +6,7 @@ import type { ProjectorMode, SessionChanges } from "../course";
 import { NotFoundError } from "../errors";
 import { verifyPassword } from "../lecturer-auth";
 import { streamLiveEvents } from "../live-events";
+import type { Level } from "../homework";
 import { DAILY_LIMIT } from "../llm";
 import type { AppDeps } from "./app";
 import { projectorView } from "./projector";
@@ -29,6 +30,18 @@ const assignmentBody = (b: Body) => ({
   instructions: str(b.instructions),
   dueAt: str(b.dueAt),
   criteria: Array.isArray(b.criteria) ? b.criteria.map(str) : [],
+});
+
+const reviewBody = (b: Body) => ({
+  levels: (Array.isArray(b.levels) ? b.levels : []).map((l) => {
+    const o = (l && typeof l === "object" ? l : {}) as Body;
+    return {
+      criterionId: Number(o.criterionId),
+      level: str(o.level) as Level,
+      evidence: str(o.evidence),
+      feedback: str(o.feedback),
+    };
+  }),
 });
 
 const sessionTimes = (b: Body) => ({ date: str(b.date), start: str(b.start), end: str(b.end) });
@@ -253,6 +266,21 @@ export function lecturerRoutes(deps: AppDeps) {
       const { courseId, id } = ownAssignment(c);
       return c.json(deps.homework.setAssignment(courseId, c.req.valid("json"), id));
     })
+    .post("/courses/:courseId/assignments/:assignmentId/review-run", requireLecturer, (c) =>
+      c.json(deps.homework.startReviewRun(ownAssignment(c).id)),
+    )
+    .post("/courses/:courseId/assignments/:assignmentId/submissions/:submissionId/review/retry", requireLecturer, (c) =>
+      c.json(deps.homework.retryReview(ownAssignment(c).id, idParam(c, "submissionId"))),
+    )
+    .put(
+      "/courses/:courseId/assignments/:assignmentId/submissions/:submissionId/review",
+      requireLecturer,
+      json(reviewBody),
+      (c) =>
+        c.json(
+          deps.homework.editReview(ownAssignment(c).id, idParam(c, "submissionId"), c.req.valid("json").levels),
+        ),
+    )
 
     .get("/llm-usage", requireLecturer, (c) => c.json({ today: deps.llm.usageToday(), limit: DAILY_LIMIT }))
 
