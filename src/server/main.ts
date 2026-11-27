@@ -51,7 +51,7 @@ const llm =
       });
 const files = createDiskFileStore(config.filesDir);
 const summaries = createSummariesModule({ db: database.db, clock: systemClock, course, llm, jobs, files, events });
-const homework = createHomeworkModule({ db: database.db, clock: systemClock, course, llm, files, events });
+const homework = createHomeworkModule({ db: database.db, clock: systemClock, course, llm, files, events, jobs });
 const sha = commitSha();
 
 const app = createApp({

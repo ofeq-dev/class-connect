@@ -19,6 +19,8 @@ export const noticeQueryKeys: { [T in NoticeType]: (id: number) => QueryKey[] } 
     ["student", "summary", sessionId],
   ],
   "assignment.changed": (id) => [["assignment", id], ["assignments"], ["student", "assignment", id], ["student", "assignments"]],
+  // Lecturer only: a review run moved on (and may have spent LLM requests).
+  "job.progress": (assignmentId) => [["assignment", assignmentId], ["assignments"], ["llm-usage"]],
 };
 
 export function applyNotice(client: QueryClient, notice: Notice): void {
