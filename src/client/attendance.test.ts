@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checkInLine, lecturerAddresses, windowButton } from "./attendance";
+import { checkInLine, lecturerAddresses, markAfterTap, networkCard, undoMark, whoGroups, windowButton } from "./attendance";
 
 /** A fetch that answers each ipify host with a body, or fails it. */
 function fakeFetch(answers: Record<string, string | Error>): typeof fetch {
@@ -63,5 +63,55 @@ describe("the console's one Check-in window button", () => {
     expect(windowButton("not-opened")).toBe("Open");
     expect(windowButton("open")).toBe("Close");
     expect(windowButton("closed")).toBe("Reopen");
+  });
+});
+
+describe("the console's card for a network with Pending check-ins", () => {
+  const names = (...n: string[]) => n.map((name, i) => ({ rosterEntryId: i + 1, name }));
+
+  it("names the Students by first name", () => {
+    expect(networkCard(names("Ariel Ben-David", "Neta Shapiro"))).toBe(
+      "2 Students checked in from another network (Ariel, Neta)",
+    );
+    expect(networkCard(names("Omar Haddad"))).toBe("1 Student checked in from another network (Omar)");
+  });
+
+  it("keeps a long list short", () => {
+    expect(networkCard(names("Ariel A", "Neta B", "Dana C", "Omar D", "Irina E", "Noa F"))).toBe(
+      "6 Students checked in from another network (Ariel, Neta, Dana, Omar +2)",
+    );
+  });
+});
+
+describe("Who's here", () => {
+  const row = (name: string, status: "present" | "waiting" | "absent") => ({ name, status });
+
+  it("splits the Roster into waiting for approval, not here yet and present", () => {
+    const groups = whoGroups([row("Dana", "present"), row("Omar", "waiting"), row("Irina", "absent"), row("Noa", "present")]);
+    expect(groups.map((g) => [g.title, g.rows.map((r) => r.name)])).toEqual([
+      ["Waiting for approval", ["Omar"]],
+      ["Not here yet", ["Irina"]],
+      ["Present", ["Dana", "Noa"]],
+    ]);
+  });
+
+  it("leaves out an empty group", () => {
+    expect(whoGroups([row("Dana", "present")]).map((g) => g.title)).toEqual(["Present"]);
+  });
+});
+
+describe("Manual mark icons", () => {
+  it("mark present or absent, and tapping the active icon clears the mark", () => {
+    expect(markAfterTap(null, "present")).toBe(true);
+    expect(markAfterTap("absent", "present")).toBe(true);
+    expect(markAfterTap(null, "absent")).toBe(false);
+    expect(markAfterTap("present", "present")).toBeNull();
+    expect(markAfterTap("absent", "absent")).toBeNull();
+  });
+
+  it("undo puts back the mark there was before", () => {
+    expect(undoMark(null)).toBeNull();
+    expect(undoMark("present")).toBe(true);
+    expect(undoMark("absent")).toBe(false);
   });
 });

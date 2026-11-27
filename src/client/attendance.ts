@@ -1,4 +1,4 @@
-import type { StudentCheckIn, WindowState } from "../server/attendance";
+import type { PendingNetwork, StudentCheckIn, WhoRow, WindowState } from "../server/attendance";
 
 const IPV4 = /^\d{1,3}(\.\d{1,3}){3}$/;
 const LOOKUP_TIMEOUT = 4000;
@@ -70,4 +70,38 @@ export function checkInLine(
 /** The console's one window button, beside the "Check-in open / closed" line: Open, Close, Reopen. */
 export function windowButton(state: WindowState): "Open" | "Close" | "Reopen" {
   return ({ "not-opened": "Open", open: "Close", closed: "Reopen" } as const)[state];
+}
+
+const SHOWN_NAMES = 4;
+
+/** An orange card's line: "2 Students checked in from another network (Ariel, Neta)". */
+export function networkCard(students: PendingNetwork["students"]): string {
+  const first = students.map((s) => s.name.trim().split(/\s+/)[0] ?? s.name);
+  const shown = first.slice(0, SHOWN_NAMES).join(", ");
+  const more = first.length > SHOWN_NAMES ? ` +${first.length - SHOWN_NAMES}` : "";
+  const count = students.length === 1 ? "1 Student" : `${students.length} Students`;
+  return `${count} checked in from another network (${shown}${more})`;
+}
+
+const GROUPS = [
+  { status: "waiting", title: "Waiting for approval" },
+  { status: "absent", title: "Not here yet" },
+  { status: "present", title: "Present" },
+] as const;
+
+/** "Who's here" expanded: waiting for approval, not here yet, present; empty groups left out. */
+export function whoGroups<R extends Pick<WhoRow, "status">>(rows: R[]) {
+  return GROUPS.map((g) => ({ ...g, rows: rows.filter((r) => r.status === g.status) })).filter((g) => g.rows.length);
+}
+
+type Mark = WhoRow["mark"];
+
+/** What a tap on ✓ or ✕ sends: that mark, or a clear when the tapped icon is already the active one. */
+export function markAfterTap(current: Mark, icon: "present" | "absent"): boolean | null {
+  return current === icon ? null : icon === "present";
+}
+
+/** What Undo sends: the mark there was before the tap. */
+export function undoMark(before: Mark): boolean | null {
+  return before === null ? null : before === "present";
 }

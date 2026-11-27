@@ -20,7 +20,8 @@ export const checkInWindow = sqliteTable(
 );
 
 /**
- * At most one row per Session per Roster entry, overwritten so the latest action wins.
+ * At most one row per Session per Roster entry, overwritten so the latest action wins: state is
+ * what counts, a Check-in result or a Manual mark.
  * Absent is not stored: no row, or a Pending row once the window has closed.
  */
 export const attendance = sqliteTable(
@@ -30,7 +31,12 @@ export const attendance = sqliteTable(
     sessionId: integer("session_id").notNull(),
     rosterEntryId: integer("roster_entry_id").notNull(),
     state: text("state", { enum: ["present", "pending", "manual-present", "manual-absent"] }).notNull(),
-    /** The Check-in's client IP and its /24 or /64 block; null for a Manual mark. */
+    /**
+     * What the Student's own Check-in recorded, kept under a Manual mark so clearing the mark
+     * restores it; null when they never checked in.
+     */
+    checkInState: text("check_in_state", { enum: ["present", "pending"] }),
+    /** The Check-in's client IP and its /24 or /64 block; null when they never checked in. */
     ip: text("ip"),
     block: text("block"),
     /** Hash of the device token that checked in (ADR 0002); the raw token is never stored. */
@@ -38,4 +44,20 @@ export const attendance = sqliteTable(
     at: integer("at", { mode: "timestamp_ms" }).notNull(),
   },
   (t) => [uniqueIndex("attendance_session_entry").on(t.sessionId, t.rosterEntryId)],
+);
+
+/**
+ * A network block the Lecturer approved for one Session (ADR 0001, amended): Check-ins from it
+ * count as Present for that Session only. Never carried to another Session.
+ */
+export const approvedNetwork = sqliteTable(
+  "approved_network",
+  {
+    id: integer("id").primaryKey(),
+    sessionId: integer("session_id").notNull(),
+    /** "a.b.c.0/24" or "h:h:h:h::/64", as blockOf() writes it. */
+    block: text("block").notNull(),
+    approvedAt: integer("approved_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (t) => [uniqueIndex("approved_network_session_block").on(t.sessionId, t.block)],
 );

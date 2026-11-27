@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { api, ok } from "../api";
+import { diagnosticsQuery, useDiagnostics } from "./diagnostics";
 import { useLiveEvents } from "../live";
 
 /** Opens the Course-scoped Live events stream for a Course page. */
@@ -40,14 +41,19 @@ export function formatDate(date: string): string {
   });
 }
 
-/** The console's Attendance glance; attendance.changed refetches it. */
+/** The console's Attendance query key; attendance.changed refetches every variant by prefix. */
+export const attendanceKey = (sessionId: string, diagnostics: boolean) => ["attendance", Number(sessionId), diagnostics];
+
+/** The console's Attendance glance; IPs, blocks and device IDs only while Diagnostics is on. */
 export function useAttendance(courseId: string, sessionId: string) {
+  const diagnostics = useDiagnostics();
   return useQuery({
-    queryKey: ["attendance", Number(sessionId)],
+    queryKey: attendanceKey(sessionId, diagnostics),
     queryFn: async () =>
       ok(
         await api.api.lecturer.courses[":courseId"].sessions[":sessionId"].attendance.$get({
           param: { courseId, sessionId },
+          query: diagnosticsQuery(diagnostics),
         }),
       ),
   });

@@ -8,11 +8,12 @@ let courseId: number;
 let session: Session;
 let dana: RosterEntry;
 let omar: RosterEntry;
+let irina: RosterEntry;
 
 beforeEach(() => {
   t = makeTestApp();
   courseId = aCourse(t).id;
-  [dana, omar] = aRoster(t, courseId, 3) as [RosterEntry, RosterEntry, RosterEntry];
+  [dana, omar, irina] = aRoster(t, courseId, 3) as [RosterEntry, RosterEntry, RosterEntry];
   session = aSession(t, courseId);
   t.fakes.events.clear();
 });
@@ -225,5 +226,193 @@ describe("The Student's own Check-in line", () => {
     attendance().closeWindow(session.id);
     expect(line(dana)).toEqual({ status: "closed", at: null });
     expect(line(omar)).toEqual({ status: "closed", at: null });
+  });
+});
+
+describe("Network approval", () => {
+  const CARRIER = "2.54.1.0/24";
+  beforeEach(() => attendance().openWindow(session.id, LECTURER));
+
+  it("turns that network's Pending check-ins Present, and leaves other networks Pending", () => {
+    checkIn(dana, "2.54.1.10");
+    checkIn(omar, "2.54.1.77");
+    checkIn(irina, "31.154.9.9");
+    attendance().approveNetwork(session.id, CARRIER);
+    expect(attendance().isPresent(session.id, dana.id)).toBe(true);
+    expect(attendance().isPresent(session.id, omar.id)).toBe(true);
+    expect(attendance().forStudent(session.id, irina.id).status).toBe("pending");
+    expect(attendance().forLecturer(session.id)).toMatchObject({ present: 2, pending: 1 });
+  });
+
+  it("makes later Check-ins from that network Present for the rest of the Session", () => {
+    checkIn(dana, "2.54.1.10");
+    attendance().approveNetwork(session.id, CARRIER);
+    expect(checkIn(omar, "2.54.1.200")).toBe("present");
+    attendance().closeWindow(session.id);
+    attendance().openWindow(session.id, { ipv4: "82.80.1.1", ipv6: null });
+    expect(checkIn(irina, "2.54.1.3")).toBe("present");
+  });
+
+  it("doesn't carry to the Course's next Session", () => {
+    attendance().approveNetwork(session.id, CARRIER);
+    const next = aSession(t, courseId, { date: "2026-12-07" });
+    attendance().openWindow(next.id, LECTURER);
+    expect(attendance().checkIn(next.id, dana.id, "2.54.1.10", "device-1001")).toBe("pending");
+  });
+
+  it("never happens by itself, however many Check-ins come from one network", () => {
+    const many = Array.from({ length: 37 }, (_, i) => t.modules.course.addRosterEntry(courseId, String(2000 + i), `Student ${i}`));
+    for (const [i, entry] of many.entries()) {
+      expect(attendance().checkIn(session.id, entry.id, `2.54.1.${i + 10}`, `device-x${i}`)).toBe("pending");
+    }
+    expect(attendance().forLecturer(session.id)).toMatchObject({ present: 0, pending: 37 });
+  });
+
+  it("refuses once the window has closed: Pending check-ins then read as Absent", () => {
+    checkIn(dana, "2.54.1.10");
+    attendance().closeWindow(session.id);
+    expect(refusal(() => attendance().approveNetwork(session.id, CARRIER))).toBe("check-in.closed");
+    expect(attendance().isPresent(session.id, dana.id)).toBe(false);
+    expect(attendance().forStudent(session.id, dana.id).status).toBe("closed");
+  });
+
+  it("tells the Lecturer, the Students and the Projector window, naming only the Session", () => {
+    checkIn(dana, "2.54.1.10");
+    t.fakes.events.clear();
+    attendance().approveNetwork(session.id, CARRIER);
+    expect(t.fakes.events.published).toEqual([
+      { courseId, audience: "all", notice: { type: "attendance.changed", id: session.id } },
+      { courseId, audience: "projector", notice: { type: "attendance.changed", id: session.id } },
+    ]);
+  });
+});
+
+describe("Manual marks", () => {
+  const present = (entry: RosterEntry) => attendance().isPresent(session.id, entry.id);
+  const mark = (entry: RosterEntry, value: boolean | null) => attendance().mark(session.id, entry.id, value);
+
+  it("work before the window ever opens and after it closes", () => {
+    mark(dana, true);
+    expect(present(dana)).toBe(true);
+    attendance().openWindow(session.id, LECTURER);
+    attendance().closeWindow(session.id);
+    mark(omar, true);
+    expect(present(omar)).toBe(true);
+    expect(attendance().forStudent(session.id, omar.id)).toMatchObject({ status: "present" });
+    expect(attendance().forLecturer(session.id)).toMatchObject({ present: 2, total: 3 });
+  });
+
+  it("mark absent a Student who checked in, and the latest mark wins both ways", () => {
+    attendance().openWindow(session.id, LECTURER);
+    checkIn(dana, "147.235.10.21");
+    mark(dana, false);
+    expect(present(dana)).toBe(false);
+    mark(dana, true);
+    expect(present(dana)).toBe(true);
+    mark(dana, false);
+    expect(present(dana)).toBe(false);
+  });
+
+  it("give way to a later Check-in, which is the latest action", () => {
+    attendance().openWindow(session.id, LECTURER);
+    mark(dana, false);
+    expect(checkIn(dana, "147.235.10.21")).toBe("present");
+    expect(present(dana)).toBe(true);
+  });
+
+  it("stand against a later scan once marked present, keeping the mark", () => {
+    attendance().openWindow(session.id, LECTURER);
+    mark(dana, true);
+    expect(checkIn(dana, "2.54.1.1")).toBe("present");
+    expect(attendance().checkIns(session.id)).toEqual([expect.objectContaining({ state: "manual-present" })]);
+  });
+
+  it("clear back to whatever the Check-in recorded, or to nothing", () => {
+    attendance().openWindow(session.id, LECTURER);
+    checkIn(dana, "147.235.10.21");
+    checkIn(omar, "2.54.1.1");
+    mark(dana, false);
+    mark(omar, true);
+    mark(irina, true);
+    mark(dana, null);
+    mark(omar, null);
+    mark(irina, null);
+    expect(present(dana)).toBe(true);
+    expect(attendance().forStudent(session.id, omar.id).status).toBe("pending");
+    expect(attendance().forStudent(session.id, irina.id).status).toBe("open");
+    expect(attendance().checkIns(session.id).map((r) => r.state)).toEqual(["present", "pending"]);
+  });
+
+  it("clear to Present for a Check-in whose network was approved meanwhile", () => {
+    attendance().openWindow(session.id, LECTURER);
+    checkIn(omar, "2.54.1.1");
+    mark(omar, false);
+    attendance().approveNetwork(session.id, "2.54.1.0/24");
+    expect(present(omar)).toBe(false);
+    mark(omar, null);
+    expect(present(omar)).toBe(true);
+  });
+
+  it("refuse a Roster entry from another Course", () => {
+    const other = aRoster(t, aCourse(t, "Algorithms").id, 1)[0]!;
+    expect(() => attendance().mark(session.id, other.id, true)).toThrow(/not found/i);
+  });
+
+  it("tell the Lecturer, the Students and the Projector window, naming only the Session", () => {
+    mark(dana, true);
+    expect(t.fakes.events.published).toEqual([
+      { courseId, audience: "all", notice: { type: "attendance.changed", id: session.id } },
+      { courseId, audience: "projector", notice: { type: "attendance.changed", id: session.id } },
+    ]);
+  });
+});
+
+describe("The console's Who's here lists and network cards", () => {
+  beforeEach(() => attendance().openWindow(session.id, LECTURER));
+
+  it("puts every Roster entry in one list: waiting for approval, not here yet or present", () => {
+    t.fakes.clock.set("2026-11-30T08:18:00.000Z");
+    checkIn(dana, "147.235.10.21");
+    checkIn(omar, "2.54.1.1");
+    const { students } = attendance().forLecturer(session.id);
+    expect(students).toEqual([
+      { rosterEntryId: dana.id, name: "Dana Levi", studentId: "1001", status: "present", mark: null, at: "2026-11-30T08:18:00.000Z" },
+      { rosterEntryId: irina.id, name: "Irina Petrova", studentId: "1003", status: "absent", mark: null, at: null },
+      { rosterEntryId: omar.id, name: "Omar Haddad", studentId: "1002", status: "waiting", mark: null, at: "2026-11-30T08:18:00.000Z" },
+    ]);
+  });
+
+  it("shows which way a Manual mark went, and Pending as not here once the window closes", () => {
+    checkIn(omar, "2.54.1.1");
+    attendance().mark(session.id, dana.id, false);
+    attendance().mark(session.id, irina.id, true);
+    attendance().closeWindow(session.id);
+    const byName = Object.fromEntries(attendance().forLecturer(session.id).students.map((s) => [s.name, s]));
+    expect(byName["Dana Levi"]).toMatchObject({ status: "absent", mark: "absent" });
+    expect(byName["Irina Petrova"]).toMatchObject({ status: "present", mark: "present" });
+    expect(byName["Omar Haddad"]).toMatchObject({ status: "absent", mark: null });
+  });
+
+  it("groups Pending check-ins into one card per network, in Check-in order, while the window is open", () => {
+    checkIn(omar, "2.54.1.1");
+    checkIn(irina, "31.154.9.9");
+    checkIn(dana, "2.54.1.200");
+    const { networks } = attendance().forLecturer(session.id);
+    expect(networks.map((n) => n.students.map((s) => s.name))).toEqual([["Omar Haddad", "Dana Levi"], ["Irina Petrova"]]);
+    expect(new Set(networks.map((n) => n.key)).size).toBe(2);
+    attendance().closeWindow(session.id);
+    expect(attendance().forLecturer(session.id).networks).toEqual([]);
+  });
+
+  it("names no IP address, block or device ID unless Diagnostics is on", () => {
+    checkIn(dana, "147.235.10.21", "device-1001");
+    checkIn(omar, "2.54.1.1");
+    const calm = JSON.stringify(attendance().forLecturer(session.id));
+    for (const leak of ["147.235", "2.54.1", "/24", "2a5a80", '"ip"', '"block"', '"deviceId"']) expect(calm).not.toContain(leak);
+    const diag = attendance().forLecturer(session.id, { diagnostics: true });
+    expect(diag.networks[0]).toMatchObject({ block: "2.54.1.0/24" });
+    expect(diag.students.find((s) => s.rosterEntryId === dana.id)).toMatchObject({
+      diagnostics: { ip: "147.235.10.21", block: "147.235.10.0/24", deviceId: "2a5a80" },
+    });
   });
 });

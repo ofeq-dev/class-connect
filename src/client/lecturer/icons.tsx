@@ -9,3 +9,12 @@ export const TrashIcon = () => (
 export const ResetIcon = () => (
   <svg {...props} aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.3-5.6L4 8.7" /><path d="M4 4v4.7h4.7" /></svg>
 );
+export const CheckIcon = () => (
+  <svg {...props} aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
+);
+export const CrossIcon = () => (
+  <svg {...props} aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
+);
+export const ChevronIcon = () => (
+  <svg {...props} aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg>
+);

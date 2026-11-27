@@ -187,6 +187,47 @@ textarea { width: 100%; min-height: 96px; resize: vertical; }
 .summary-md ul, .summary-md ol { padding-inline-start: 1.4em; }
 .summary-md code, .summary-md .ts { font: 0.9em ui-monospace, monospace; background: var(--soft); border-radius: 3px; padding: 0 3px; }
 
+/* Attendance column: Pending network cards, Who's here, Manual marks, Undo, Diagnostics */
+.c-bad { background: var(--bad-soft); color: var(--bad); }
+.net-card {
+  background: var(--warn-soft); border: 1.5px solid var(--warn); border-left-width: 5px; border-radius: 4px;
+  padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; font-size: 14px; font-weight: 700; color: var(--ink);
+}
+.net-card .btn { align-self: flex-start; }
+.btn-warn { background: var(--warn); }
+.btn-warn:hover { filter: brightness(1.1); }
+.diag { display: block; font: 12px/1.4 ui-monospace, monospace; color: var(--muted); font-weight: 400; overflow-wrap: anywhere; }
+
+.who { display: flex; flex-direction: column; gap: 8px; border-top: 1.5px solid var(--line); padding-top: 10px; }
+.who-toggle {
+  display: flex; align-items: center; gap: 8px; width: 100%; min-height: 40px; padding: 4px 6px; margin: 0 -6px;
+  border: 0; border-radius: 4px; background: none; text-align: left; font-weight: 800; font-size: 16px;
+}
+.who-toggle:hover { background: var(--soft); }
+.who-toggle .grow { flex: 1; }
+.chev { display: inline-grid; place-items: center; transition: transform 120ms ease; }
+.chev svg { width: 16px; height: 16px; }
+.who-toggle[aria-expanded="true"] .chev { transform: rotate(90deg); }
+@media (prefers-reduced-motion: reduce) { .chev { transition: none; } }
+.who-group { display: flex; flex-direction: column; gap: 2px; }
+.who-title { font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); font-family: var(--font-body); }
+.who-name { font-weight: 700; }
+.who .list li { min-height: 40px; padding: 3px 0; }
+.ib.mark { border-color: var(--line); background: var(--card); }
+.ib.mark:hover { border-color: var(--ink); color: var(--ink); }
+.ib.on-ok, .ib.on-ok:hover { background: var(--ok); border-color: var(--ok); color: #fff; }
+.ib.on-bad, .ib.on-bad:hover { background: var(--bad); border-color: var(--bad); color: #fff; }
+
+.undo {
+  display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 4px;
+  background: var(--ink); color: #fff; font-size: 14px; font-weight: 700;
+}
+.undo .grow { flex: 1; }
+.undo .link { color: #fff; }
+
+.menu .menu-check { display: flex; align-items: center; gap: 10px; }
+.menu-check .grow { flex: 1; }
+
 /* Console header: projector control and its live thumbnail */
 .projctl { display: flex; align-items: center; gap: 12px; }
 .projctl-side { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; max-width: 260px; text-align: end; }
