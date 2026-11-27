@@ -523,8 +523,19 @@ describe("Held scans", () => {
     mark(omar, null);
     expect(held()).toEqual([]);
     expect(attendance().heldScans(session.id).map((h) => h.decision)).toEqual(["replaced", "replaced"]);
-    // Clearing the ✕ falls back to the held scan's own Check-in, like any Check-in under a mark.
-    expect(attendance().forStudent(session.id, omar.id).status).toBe("pending");
+    // Clearing the ✕ doesn't allow the held scan: Omar never checked in before it.
+    expect(attendance().forStudent(session.id, omar.id).status).toBe("open");
+  });
+
+  it("leave the Check-in under the ✕ alone, so clearing the mark restores it", () => {
+    t.fakes.clock.set("2026-11-30T09:00:00.000Z");
+    checkIn(dana, "147.235.10.21");
+    mark(dana, false);
+    t.fakes.clock.set("2026-11-30T09:15:00.000Z");
+    checkIn(dana, "2.54.1.1");
+    mark(dana, null);
+    expect(attendance().forStudent(session.id, dana.id)).toEqual({ status: "present", at: "2026-11-30T09:00:00.000Z" });
+    expect(attendance().checkIns(session.id)).toEqual([expect.objectContaining({ ip: "147.235.10.21", block: "147.235.10.0/24" })]);
   });
 
   it("show the Student a held line, with the window open or closed, until the Lecturer decides", () => {

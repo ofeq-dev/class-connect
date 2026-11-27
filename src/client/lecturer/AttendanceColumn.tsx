@@ -61,11 +61,13 @@ export function AttendanceColumn({ courseId, sessionId }: { courseId: string; se
   });
 
   const decide = useMutation({
-    mutationFn: async ({ rosterEntryId, allow }: { rosterEntryId: number; allow: boolean }) => {
-      const held = route.held[":rosterEntryId"];
-      const options = { param: { ...param, rosterEntryId: String(rosterEntryId) }, query };
-      return ok(await (allow ? held.allow.$post(options) : held["keep-absent"].$post(options)));
-    },
+    mutationFn: async ({ rosterEntryId, decision }: { rosterEntryId: number; decision: "allow" | "keep-absent" }) =>
+      ok(
+        await route.held[":rosterEntryId"][decision].$post({
+          param: { ...param, rosterEntryId: String(rosterEntryId) },
+          query,
+        }),
+      ),
     onSuccess: store,
   });
 
@@ -122,7 +124,7 @@ export function AttendanceColumn({ courseId, sessionId }: { courseId: string; se
         type="button"
         className="btn btn-sm"
         disabled={decide.isPending}
-        onClick={() => decide.mutate({ rosterEntryId: h.rosterEntryId, allow: true })}
+        onClick={() => decide.mutate({ rosterEntryId: h.rosterEntryId, decision: "allow" })}
       >
         Allow
       </button>
@@ -130,7 +132,7 @@ export function AttendanceColumn({ courseId, sessionId }: { courseId: string; se
         type="button"
         className="btn-line btn-sm"
         disabled={decide.isPending}
-        onClick={() => decide.mutate({ rosterEntryId: h.rosterEntryId, allow: false })}
+        onClick={() => decide.mutate({ rosterEntryId: h.rosterEntryId, decision: "keep-absent" })}
       >
         Keep absent
       </button>

@@ -37,9 +37,11 @@ classDiagram
       <<module>>
       +openWindow(session, ipv4, ipv6)
       +closeWindow(session)
-      +checkIn(session, rosterEntry, ip, deviceToken) Present or Pending
+      +checkIn(session, rosterEntry, ip, deviceToken) Present, Pending or Held
       +approveNetwork(session, block)
       +mark(session, rosterEntry, present)
+      +allowHeld(session, rosterEntry)
+      +keepAbsent(session, rosterEntry)
       +sheet(course) AttendanceSheet
       +exportXlsx(course) Bytes
       +isPresent(session, rosterEntry) boolean
@@ -265,7 +267,7 @@ classDiagram
   roster_entry "1" --> "*" held_scan : scans after a Manual absent
 ```
 
-`attendance` is overwritten by each Check-in and Manual mark, except that a Check-in never replaces a Manual mark: after a Manual absent it is logged in `held_scan` instead, for the Lecturer to Allow (the row turns Present at the scan's time) or Keep absent. Absent is not stored: no row, or a row still Pending once the Check-in window has closed (closed by the Lecturer or at midnight, worked out from the Clock), reads as Absent.
+`attendance` is overwritten by each Check-in and Manual mark, except that a Check-in never replaces a Manual mark: after a Manual absent it is logged in `held_scan` instead, for the Lecturer to Allow (the row turns Present at the first held scan's time) or Keep absent; the Check-in kept under the mark is left alone. Absent is not stored: no row, or a row still Pending once the Check-in window has closed (closed by the Lecturer or at midnight, worked out from the Clock), reads as Absent.
 
 ### Feedback
 

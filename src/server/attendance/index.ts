@@ -59,6 +59,9 @@ export interface HeldStudent {
   at: string;
 }
 
+/** Allow, Keep absent, or settled by a later Manual mark ✓ or a cleared mark. */
+export type HeldDecision = NonNullable<(typeof heldScan.$inferSelect)["decision"]>;
+
 /** One held scan, as the log keeps it. */
 export interface HeldScanRecord {
   rosterEntryId: number;
@@ -68,7 +71,7 @@ export interface HeldScanRecord {
   /** The first 6 characters of the stored device-token hash; the raw token is never stored. */
   deviceId: string;
   /** null until the Lecturer decides; "replaced" when a later Manual mark settled it. */
-  decision: "allowed" | "kept-absent" | "replaced" | null;
+  decision: HeldDecision | null;
   decidedAt: string | null;
 }
 
@@ -286,8 +289,8 @@ export function createAttendanceModule({
 
   type HeldRow = typeof heldScan.$inferSelect;
 
-  /** Records the Lecturer's decision on every undecided held scan of a Roster entry. */
-  function settle(sessionId: number, rosterEntryId: number, decision: NonNullable<HeldRow["decision"]>) {
+  /** Records how every undecided held scan of a Roster entry was settled. */
+  function settle(sessionId: number, rosterEntryId: number, decision: HeldDecision) {
     db.update(heldScan)
       .set({ decision, decidedAt: clock.now() })
       .where(and(eq(heldScan.sessionId, sessionId), eq(heldScan.rosterEntryId, rosterEntryId), isNull(heldScan.decision)))
@@ -298,7 +301,7 @@ export function createAttendanceModule({
   function decide(
     sessionId: number,
     rosterEntryId: number,
-    decision: "allowed" | "kept-absent",
+    decision: Exclude<HeldDecision, "replaced">,
     apply: (existing: typeof attendance.$inferSelect, first: HeldRow) => void,
   ) {
     course.readSession(sessionId);
@@ -403,17 +406,10 @@ export function createAttendanceModule({
         return "present";
       }
       const scan = { ip, block: mine?.block ?? null, deviceTokenHash: tokenHash(deviceToken) };
-      // A scan after a Manual ✕ doesn't change attendance: it is held for the Lecturer to allow.
+      // A scan after a Manual ✕ changes nothing, not even the Check-in kept under the mark: it is
+      // logged as held for the Lecturer to allow.
       if (existing?.state === "manual-absent") {
-        db.transaction(() => {
-          // The Check-in is kept under the mark (as with any mark) from the first held scan on.
-          if (!undecided(sessionId, rosterEntryId).length) {
-            db.update(attendance)
-              .set({ checkInState: state, ...scan, checkInAt: clock.now() })
-              .where(eq(attendance.id, existing.id)).run();
-          }
-          db.insert(heldScan).values({ sessionId, rosterEntryId, ...scan, at: clock.now() }).run();
-        });
+        db.insert(heldScan).values({ sessionId, rosterEntryId, ...scan, at: clock.now() }).run();
         changed(sessionId, "lecturer", false);
         return "held";
       }
@@ -440,9 +436,10 @@ export function createAttendanceModule({
       changed(sessionId, "all", true);
     },
     allowHeld(sessionId, rosterEntryId) {
-      decide(sessionId, rosterEntryId, "allowed", (existing, scan) => {
-        const values = { ip: scan.ip, block: scan.block, deviceTokenHash: scan.deviceTokenHash, checkInAt: scan.at, at: scan.at };
-        db.update(attendance).set({ state: "present", checkInState: "present", ...values }).where(eq(attendance.id, existing.id)).run();
+      decide(sessionId, rosterEntryId, "allowed", (existing, { ip, block, deviceTokenHash, at }) => {
+        db.update(attendance)
+          .set({ state: "present", checkInState: "present", ip, block, deviceTokenHash, checkInAt: at, at })
+          .where(eq(attendance.id, existing.id)).run();
       });
       changed(sessionId, "all", true);
     },

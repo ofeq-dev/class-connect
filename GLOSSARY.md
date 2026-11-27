@@ -51,7 +51,7 @@ The Lecturer setting a Student's attendance for a Session directly, present or a
 _Avoid_: Override, manual check-in
 
 **Held scan**:
-A Check-in from a Student the Lecturer has Manual marked absent for this Session. It leaves the Student Absent and waits for the Lecturer: **Allow** makes them Present from the time they scanned, **Keep absent** leaves the mark. Like a Pending check-in it is held back for the Lecturer, but for a different reason, and it can still be allowed after the Check-in window closes; until then it counts as Absent.
+A Check-in from a Student the Lecturer has Manual marked absent for this Session. It leaves the Student Absent and waits for the Lecturer: **Allow** makes them Present from the time of their first held scan, **Keep absent** leaves the mark. Like a Pending check-in it is held back for the Lecturer, but for a different reason, and it can still be allowed after the Check-in window closes; until then it counts as Absent.
 _Avoid_: Blocked check-in, override
 
 **Check-in window**:
