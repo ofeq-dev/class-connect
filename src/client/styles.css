@@ -186,3 +186,26 @@ textarea { width: 100%; min-height: 96px; resize: vertical; }
 .summary-md h1, .summary-md h2, .summary-md h3 { font-family: var(--font-display); margin: 1em 0 0.4em; }
 .summary-md ul, .summary-md ol { padding-inline-start: 1.4em; }
 .summary-md code, .summary-md .ts { font: 0.9em ui-monospace, monospace; background: var(--soft); border-radius: 3px; padding: 0 3px; }
+
+/* Console header: projector control and its live thumbnail */
+.projctl { display: flex; align-items: center; gap: 12px; }
+.projctl-side { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; max-width: 260px; text-align: end; }
+.seg { display: inline-flex; border: 1.5px solid var(--line); border-radius: 4px; overflow: hidden; }
+.seg button { border: 0; background: var(--card); padding: 5px 10px; font-size: 13px; font-weight: 700; color: var(--muted); }
+.seg button + button { border-inline-start: 1.5px solid var(--line); }
+.seg button:hover:not(:disabled) { color: var(--ink); }
+.seg button[aria-pressed="true"] { background: var(--ink); color: #fff; }
+.thumb { position: relative; width: 168px; padding: 0; border: 1.5px solid var(--ink); border-radius: 3px; background: #fff; overflow: hidden; flex: none; }
+.thumb:disabled { cursor: default; opacity: 1; }
+.thumb .off {
+  position: absolute; inset: 0; display: grid; place-items: center; padding: 6px;
+  background: rgb(32 39 46 / 0.72); color: #fff; font-size: 12px; font-weight: 700;
+}
+.thumb:hover .off { background: rgb(32 39 46 / 0.85); }
+@media (max-width: 900px) {
+  .top { flex-wrap: wrap; }
+  .projctl { order: 5; width: 100%; justify-content: flex-end; }
+}
+
+/* Course desk: the projector link */
+.linkbox { font: 13px ui-monospace, monospace; border: 1.5px solid var(--line); border-radius: 4px; background: var(--card); padding: 7px 10px; width: 100%; min-width: 0; }
