@@ -491,6 +491,13 @@ describe("Held scans", () => {
     expect(cell(omar)).toBe("absent"); // never answered
   });
 
+  it("are removed with the Course's attendance data", () => {
+    mark(dana, false);
+    checkIn(dana, "147.235.10.21");
+    attendance().deleteCourseData(courseId);
+    expect(attendance().heldScans(session.id)).toEqual([]);
+  });
+
   it("refuse Allow or Keep absent with nothing held", () => {
     expect(() => attendance().allowHeld(session.id, dana.id)).toThrow(/not found/i);
     expect(() => attendance().keepAbsent(session.id, dana.id)).toThrow(/not found/i);

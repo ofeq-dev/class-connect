@@ -43,6 +43,9 @@ export interface JobState extends Job {
   error: string | null;
 }
 
+/** Any one job, narrowed by its kind. */
+export type AnyJob = { [K in JobKind]: Job<K> }[JobKind];
+
 export type JobHandler<K extends JobKind = JobKind> = (job: Job<K>) => Promise<void>;
 
 export interface JobOptions<K extends JobKind = JobKind> {
@@ -64,6 +67,12 @@ export interface Jobs {
   /** Ends the job failed at once, with no automatic retry, and runs its kind's `onFailed`. */
   fail(job: Job, error: string): void;
   read(jobId: number): JobState;
+  /**
+   * Deletes every job that matches, whatever its status, so a queued one never runs: for data
+   * being deleted (the demo seed's --replace). A job already running finishes, writing nothing
+   * once its rows are gone.
+   */
+  discard(match: (job: AnyJob) => boolean): void;
   /** How many of these jobs are in each status, counted from the job rows. */
   tally(jobIds: number[]): JobTally;
 }
@@ -285,6 +294,18 @@ export function createJobs({ db, clock, setTimer = realTimer, onError }: JobsDep
 
     progress(job, done, total) {
       db.update(jobTable).set({ progressDone: done, progressTotal: total }).where(eq(jobTable.id, job.id)).run();
+    },
+
+    discard(match) {
+      const ids = db
+        .select()
+        .from(jobTable)
+        .all()
+        .filter((row) => match(toJob(toState(row)) as AnyJob))
+        .map((row) => row.id);
+      if (!ids.length) return;
+      db.delete(jobTable).where(inArray(jobTable.id, ids)).run();
+      schedule();
     },
 
     retry(job) {

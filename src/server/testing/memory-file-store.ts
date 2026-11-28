@@ -11,4 +11,8 @@ export class MemoryFileStore implements FileStore {
   get(hash: string): Promise<Uint8Array | null> {
     return Promise.resolve(this.files.get(hash) ?? null);
   }
+  delete(hash: string): Promise<void> {
+    this.files.delete(hash);
+    return Promise.resolve();
+  }
 }

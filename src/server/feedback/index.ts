@@ -8,7 +8,7 @@ import type { Db } from "../db";
 import { DomainError, NotFoundError } from "../errors";
 import type { LiveEvents } from "../live-events";
 import { createPollOps, type PollOps } from "./polls";
-import { comment as commentTable, topic as topicTable } from "./schema";
+import { comment as commentTable, poll as pollTable, topic as topicTable } from "./schema";
 
 export type {
   LecturerPoll,
@@ -138,6 +138,8 @@ export interface FeedbackModule extends PollOps {
   /** The Course's Comments, newest first (the all-comments screen). */
   listComments(courseId: number, filter?: CommentFilter): LecturerComment[];
   inbox(sessionId: number): Inbox;
+  /** Deletes the Course's Topics with their Comments, Polls and Votes (the demo seed's --replace). */
+  deleteCourseData(courseId: number): void;
 }
 
 export interface FeedbackDeps {
@@ -378,6 +380,23 @@ export function createFeedbackModule({
 
   return {
     ...polls,
+
+    deleteCourseData(courseId) {
+      const topicIds = db
+        .select({ id: topicTable.id })
+        .from(topicTable)
+        .where(eq(topicTable.courseId, courseId))
+        .all()
+        .map((r) => r.id);
+      if (!topicIds.length) return;
+      db.transaction((tx) => {
+        // Options and Votes go with their Poll (on delete cascade).
+        tx.delete(pollTable).where(inArray(pollTable.topicId, topicIds)).run();
+        tx.delete(commentTable).where(inArray(commentTable.topicId, topicIds)).run();
+        tx.delete(topicTable).where(inArray(topicTable.id, topicIds)).run();
+      });
+      scheduleChanged();
+    },
 
     listTopics(courseId, options = {}) {
       return topics(courseId).filter((x) => options.includeArchived || !x.archived);

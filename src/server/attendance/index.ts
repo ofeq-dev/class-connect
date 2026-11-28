@@ -173,6 +173,11 @@ export interface AttendanceModule {
   nextMoment(after: Date): Date | null;
   /** Publishes attendance.changed for every midnight close in (since, until]; changes nothing. */
   announce(since: Date, until: Date): void;
+  /**
+   * Deletes every Check-in window, Check-in, mark and Network approval of the Course's Sessions,
+   * before the Course itself is deleted (the demo seed's --replace).
+   */
+  deleteCourseData(courseId: number): void;
 }
 
 export interface AttendanceDeps {
@@ -382,6 +387,18 @@ export function createAttendanceModule({
       return Object.fromEntries(sessions.map((s, i) => [s.id, headcount[i]!]));
     },
     exportXlsx: (courseId) => sheetToXlsx(sheet(courseId)),
+
+    deleteCourseData(courseId) {
+      const sessionIds = course.listSessions(courseId).map((s) => s.id);
+      if (!sessionIds.length) return;
+      db.transaction((tx) => {
+        tx.delete(attendance).where(inArray(attendance.sessionId, sessionIds)).run();
+        tx.delete(approvedNetwork).where(inArray(approvedNetwork.sessionId, sessionIds)).run();
+        tx.delete(checkInWindow).where(inArray(checkInWindow.sessionId, sessionIds)).run();
+        tx.delete(heldScan).where(inArray(heldScan.sessionId, sessionIds)).run();
+      });
+      scheduleChanged();
+    },
 
     openWindow(sessionId, lecturer) {
       const values = { ipv4: address(lecturer.ipv4, 4), ipv6: address(lecturer.ipv6, 6) };
