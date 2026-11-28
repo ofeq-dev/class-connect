@@ -296,6 +296,17 @@ export function lecturerRoutes(deps: AppDeps) {
         return c.json(glance(c.req.valid("query"), sessionId));
       },
     )
+    // A held scan (a Check-in after a Manual ✕): Allow or Keep absent, during class or after.
+    .post("/courses/:courseId/sessions/:sessionId/attendance/held/:rosterEntryId/allow", requireLecturer, diagnosticsFlag, (c) => {
+      const sessionId = ownSession(c).id;
+      deps.attendance.allowHeld(sessionId, idParam(c, "rosterEntryId"));
+      return c.json(glance(c.req.valid("query"), sessionId));
+    })
+    .post("/courses/:courseId/sessions/:sessionId/attendance/held/:rosterEntryId/keep-absent", requireLecturer, diagnosticsFlag, (c) => {
+      const sessionId = ownSession(c).id;
+      deps.attendance.keepAbsent(sessionId, idParam(c, "rosterEntryId"));
+      return c.json(glance(c.req.valid("query"), sessionId));
+    })
 
     // Topics and Comments
     .get(

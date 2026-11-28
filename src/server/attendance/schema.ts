@@ -20,8 +20,9 @@ export const checkInWindow = sqliteTable(
 );
 
 /**
- * At most one row per Session per Roster entry, overwritten so the latest action wins: state is
- * what counts, a Check-in result or a Manual mark.
+ * At most one row per Session per Roster entry: state is what counts, a Check-in result or a
+ * Manual mark. Overwritten by each, except that a Check-in never replaces a Manual mark (after ✕
+ * it is a held scan).
  * Absent is not stored: no row, or a Pending row once the window has closed.
  */
 export const attendance = sqliteTable(
@@ -62,4 +63,27 @@ export const approvedNetwork = sqliteTable(
     approvedAt: integer("approved_at", { mode: "timestamp_ms" }).notNull(),
   },
   (t) => [uniqueIndex("approved_network_session_block").on(t.sessionId, t.block)],
+);
+
+/**
+ * A held scan: a Check-in from a Student the Lecturer has Manual marked absent for this Session.
+ * It leaves the ✕ standing until the Lecturer allows it or keeps them absent; it's logged like any
+ * Check-in. Undecided while `decision` is null, and then it can be allowed at any time, even after
+ * class. A later Manual mark ✓ or a cleared mark settles it as "replaced".
+ */
+export const heldScan = sqliteTable(
+  "held_scan",
+  {
+    id: integer("id").primaryKey(),
+    sessionId: integer("session_id").notNull(),
+    rosterEntryId: integer("roster_entry_id").notNull(),
+    ip: text("ip").notNull(),
+    block: text("block"),
+    /** Hash of the device token that scanned (ADR 0002); the raw token is never stored. */
+    deviceTokenHash: text("device_token_hash").notNull(),
+    at: integer("at", { mode: "timestamp_ms" }).notNull(),
+    decision: text("decision", { enum: ["allowed", "kept-absent", "replaced"] }),
+    decidedAt: integer("decided_at", { mode: "timestamp_ms" }),
+  },
+  (t) => [index("held_scan_session_entry").on(t.sessionId, t.rosterEntryId)],
 );

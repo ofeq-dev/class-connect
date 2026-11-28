@@ -183,7 +183,8 @@ The brief's features as stories, each pointing at its use case.
 4. The Lecturer closes the window (or leaves it; it closes at midnight).
 
 **Alternative flows**
-- *Any time.* A Student can't check in (dead phone, late, window closed): the Lecturer expands "Who's here" and taps ✓ to Manual mark them present. ✕ marks a Student absent, even one who checked in. Undo is offered; the latest action wins.
+- *Any time.* A Student can't check in (dead phone, late, window closed): the Lecturer expands "Who's here" and taps ✓ to Manual mark them present. ✕ marks a Student absent, even one who checked in. Undo is offered.
+- *Any time after a ✕.* The Student scans anyway: their Check-in is a Held scan. They stay Absent, their phone shows "Checked in — waiting for your Lecturer to confirm", and a popup on the console names them with **Allow** and **Keep absent**. Allow makes them Present from the time they scanned; Keep absent leaves the ✕, and their phone tells them to ask the Lecturer. If the Lecturer closes the popup or ignores it, the Student stays listed beside the Pending check-ins, and can still be allowed after class.
 - 4a. The Lecturer reopens the window later: earlier Check-ins are kept and the addresses are captured again.
 
 ### UC-6 Download the Attendance sheet
