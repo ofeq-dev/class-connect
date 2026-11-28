@@ -216,6 +216,19 @@ select { border: 1.5px solid var(--line); border-radius: 4px; background: var(--
 .net-card .btn { align-self: flex-start; }
 .btn-warn { background: var(--warn); }
 .btn-warn:hover { filter: brightness(1.1); }
+.held-card {
+  background: var(--bad-soft); border: 1.5px solid var(--bad); border-left-width: 5px; border-radius: 4px;
+  padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; font-size: 14px; font-weight: 700; color: var(--ink);
+}
+.held-card .list li { gap: 6px; flex-wrap: wrap; min-height: 40px; }
+.held-pop {
+  position: fixed; right: 24px; bottom: 24px; z-index: 56; width: min(340px, calc(100vw - 32px));
+  background: var(--card); border: 1.5px solid var(--ink); border-left: 5px solid var(--bad); border-radius: 6px;
+  padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; box-shadow: 0 8px 24px rgb(0 0 0 / 0.25);
+}
+.held-pop-title { font-weight: 800; font-size: 16px; }
+.held-pop-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.held-pop-actions .link { margin-left: auto; }
 .diag { display: block; font: 12px/1.4 ui-monospace, monospace; color: var(--muted); font-weight: 400; overflow-wrap: anywhere; }
 
 .who { display: flex; flex-direction: column; gap: 8px; border-top: 1.5px solid var(--line); padding-top: 10px; }

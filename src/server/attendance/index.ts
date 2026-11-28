@@ -1,18 +1,19 @@
 import { createHash } from "node:crypto";
 import { isIPv4, isIPv6 } from "node:net";
-import { and, desc, eq, gte, inArray, isNull } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNotNull, isNull } from "drizzle-orm";
 import { nextLocalMidnight, type Clock } from "../clock";
 import type { CourseModule } from "../course";
 import type { Db } from "../db";
 import { DomainError, NotFoundError } from "../errors";
 import type { LiveEvents } from "../live-events";
 import { blockOf } from "./network";
-import { approvedNetwork, attendance, checkInWindow } from "./schema";
+import { approvedNetwork, attendance, checkInWindow, heldScan } from "./schema";
 import { sheetToXlsx, type AttendanceSheet, type SheetMark } from "./sheet";
 
 export type { AttendanceSheet, SheetMark, SheetSession, SheetStudent } from "./sheet";
 
-export type CheckInResult = "present" | "pending";
+/** "held": the Student is Manual marked absent, so the scan waits for the Lecturer to allow it. */
+export type CheckInResult = "present" | "pending" | "held";
 
 /** The Lecturer's own addresses, as their browser reported them when opening the window. */
 export interface LecturerAddresses {
@@ -44,6 +45,34 @@ export interface LecturerAttendance {
   networks: PendingNetwork[];
   /** Every Roster entry, by name: the "Who's here" lists. */
   students: WhoRow[];
+  /**
+   * Students the Lecturer marked absent who have scanned since, waiting for Allow or Keep absent;
+   * window open or closed. One per Student, first scan first.
+   */
+  held: HeldStudent[];
+}
+
+/** A Student with an undecided held scan; `at` is their first held scan's time. */
+export interface HeldStudent {
+  rosterEntryId: number;
+  name: string;
+  at: string;
+}
+
+/** Allow, Keep absent, or settled by a later Manual mark ✓ or a cleared mark. */
+export type HeldDecision = NonNullable<(typeof heldScan.$inferSelect)["decision"]>;
+
+/** One held scan, as the log keeps it. */
+export interface HeldScanRecord {
+  rosterEntryId: number;
+  at: string;
+  ip: string;
+  block: string | null;
+  /** The first 6 characters of the stored device-token hash; the raw token is never stored. */
+  deviceId: string;
+  /** null until the Lecturer decides; "replaced" when a later Manual mark settled it. */
+  decision: HeldDecision | null;
+  decidedAt: string | null;
 }
 
 /** What only the Diagnostics flag shows (FR-LC-6). */
@@ -89,10 +118,11 @@ export interface CheckInRecord {
 
 /**
  * A Student's own Check-in line on Today: present (with the time), pending (waiting for the
- * Lecturer), open (not checked in yet), not-opened, or closed (ask the Lecturer).
+ * Lecturer to approve the network), held (waiting for the Lecturer to allow a scan after a Manual
+ * mark absent), open (not checked in yet), not-opened, or closed (ask the Lecturer).
  */
 export interface StudentCheckIn {
-  status: "present" | "pending" | "open" | "not-opened" | "closed";
+  status: "present" | "pending" | "held" | "open" | "not-opened" | "closed";
   at: string | null;
 }
 
@@ -120,6 +150,13 @@ export interface AttendanceModule {
    */
   mark(sessionId: number, rosterEntryId: number, present: boolean | null): void;
   /**
+   * Allow on a held scan: the Student is Present from their first held scan, as if it had
+   * counted then, with the window open or closed. Not found when nothing is held.
+   */
+  allowHeld(sessionId: number, rosterEntryId: number): void;
+  /** Keep absent on a held scan: the Manual mark ✕ stands. Not found when nothing is held. */
+  keepAbsent(sessionId: number, rosterEntryId: number): void;
+  /**
    * The Course's Attendance sheet: every Roster entry against every Session held so far (none
    * dated after today), each cell Present, Manual or Absent, with totals and headcounts.
    */
@@ -130,6 +167,8 @@ export interface AttendanceModule {
   exportXlsx(courseId: number): Promise<Uint8Array<ArrayBuffer>>;
   /** Every recorded Check-in and mark for a Session, latest action per Roster entry. */
   checkIns(sessionId: number): CheckInRecord[];
+  /** Every held scan for a Session, in scan order, with what the Lecturer decided. */
+  heldScans(sessionId: number): HeldScanRecord[];
   /** The earliest scheduled change after an instant: an open window's midnight close. */
   nextMoment(after: Date): Date | null;
   /** Publishes attendance.changed for every midnight close in (since, until]; changes nothing. */
@@ -237,6 +276,61 @@ export function createAttendanceModule({
       .get();
   }
 
+  /** A Roster entry's held scans the Lecturer hasn't decided on, first scan first. */
+  function undecided(sessionId: number, rosterEntryId?: number) {
+    return db
+      .select()
+      .from(heldScan)
+      .where(
+        and(
+          eq(heldScan.sessionId, sessionId),
+          isNull(heldScan.decision),
+          rosterEntryId === undefined ? undefined : eq(heldScan.rosterEntryId, rosterEntryId),
+        ),
+      )
+      .orderBy(heldScan.at, heldScan.id)
+      .all();
+  }
+
+  type HeldRow = typeof heldScan.$inferSelect;
+
+  /** How a Roster entry's latest decided held scan was settled, if any. */
+  function latestDecision(sessionId: number, rosterEntryId: number): HeldDecision | null {
+    const last = db
+      .select({ decision: heldScan.decision })
+      .from(heldScan)
+      .where(and(eq(heldScan.sessionId, sessionId), eq(heldScan.rosterEntryId, rosterEntryId), isNotNull(heldScan.decision)))
+      .orderBy(desc(heldScan.decidedAt), desc(heldScan.id))
+      .limit(1)
+      .get();
+    return last?.decision ?? null;
+  }
+
+  /** Records how every undecided held scan of a Roster entry was settled. */
+  function settle(sessionId: number, rosterEntryId: number, decision: HeldDecision) {
+    db.update(heldScan)
+      .set({ decision, decidedAt: clock.now() })
+      .where(and(eq(heldScan.sessionId, sessionId), eq(heldScan.rosterEntryId, rosterEntryId), isNull(heldScan.decision)))
+      .run();
+  }
+
+  /** Allow or Keep absent: applies the decision to the attendance row and logs it, in one transaction. */
+  function decide(
+    sessionId: number,
+    rosterEntryId: number,
+    decision: Exclude<HeldDecision, "replaced">,
+    apply: (existing: typeof attendance.$inferSelect, first: HeldRow) => void,
+  ) {
+    course.readSession(sessionId);
+    db.transaction(() => {
+      const scans = undecided(sessionId, rosterEntryId);
+      const existing = record(sessionId, rosterEntryId);
+      if (!scans[0] || existing?.state !== "manual-absent") throw new NotFoundError("Held scan");
+      apply(existing, scans[0]);
+      settle(sessionId, rosterEntryId, decision);
+    });
+  }
+
   function isApproved(sessionId: number, block: string) {
     return !!db
       .select({ id: approvedNetwork.id })
@@ -301,6 +395,7 @@ export function createAttendanceModule({
         tx.delete(attendance).where(inArray(attendance.sessionId, sessionIds)).run();
         tx.delete(approvedNetwork).where(inArray(approvedNetwork.sessionId, sessionIds)).run();
         tx.delete(checkInWindow).where(inArray(checkInWindow.sessionId, sessionIds)).run();
+        tx.delete(heldScan).where(inArray(heldScan.sessionId, sessionIds)).run();
       });
       scheduleChanged();
     },
@@ -339,7 +434,15 @@ export function createAttendanceModule({
         changed(sessionId, "lecturer", false);
         return "present";
       }
-      const row = { state, checkInState: state, ip, block: mine?.block ?? null, deviceTokenHash: tokenHash(deviceToken), checkInAt: clock.now(), at: clock.now() };
+      const scan = { ip, block: mine?.block ?? null, deviceTokenHash: tokenHash(deviceToken) };
+      // A scan after a Manual ✕ changes nothing, not even the Check-in kept under the mark: it is
+      // logged as held for the Lecturer to allow.
+      if (existing?.state === "manual-absent") {
+        db.insert(heldScan).values({ sessionId, rosterEntryId, ...scan, at: clock.now() }).run();
+        changed(sessionId, "lecturer", false);
+        return "held";
+      }
+      const row = { state, checkInState: state, ...scan, checkInAt: clock.now(), at: clock.now() };
       if (existing) db.update(attendance).set(row).where(eq(attendance.id, existing.id)).run();
       else db.insert(attendance).values({ sessionId, rosterEntryId, ...row }).run();
       changed(sessionId, "lecturer", state === "present");
@@ -361,9 +464,23 @@ export function createAttendanceModule({
       });
       changed(sessionId, "all", true);
     },
+    allowHeld(sessionId, rosterEntryId) {
+      decide(sessionId, rosterEntryId, "allowed", (existing, { ip, block, deviceTokenHash, at }) => {
+        db.update(attendance)
+          .set({ state: "present", checkInState: "present", ip, block, deviceTokenHash, checkInAt: at, at })
+          .where(eq(attendance.id, existing.id)).run();
+      });
+      changed(sessionId, "all", true);
+    },
+    keepAbsent(sessionId, rosterEntryId) {
+      decide(sessionId, rosterEntryId, "kept-absent", () => {});
+      changed(sessionId, "all", false);
+    },
     mark(sessionId, rosterEntryId, present) {
       const { courseId } = course.readSession(sessionId);
       if (!course.listRoster(courseId).some((e) => e.id === rosterEntryId)) throw new NotFoundError("Roster entry");
+      // Only a ✕ holds scans: a ✓ or a cleared mark settles any that are waiting.
+      if (present !== false) settle(sessionId, rosterEntryId, "replaced");
       const existing = record(sessionId, rosterEntryId);
       if (present === null) {
         if (existing?.checkInState) {
@@ -424,14 +541,21 @@ export function createAttendanceModule({
         })
         .sort((a, b) => a.name.localeCompare(b.name));
 
+      const names = new Map(roster.map((e) => [e.id, e.name]));
       const networks = new Map<string, PendingNetwork>();
       if (open) {
-        const names = new Map(roster.map((e) => [e.id, e.name]));
         for (const r of rows.values()) {
           if (r.state !== "pending" || !r.block || !names.has(r.rosterEntryId)) continue;
           const card = networks.get(r.block) ?? { key: networkKey(r.block), students: [], ...(diagnostics && { block: r.block }) };
           card.students.push({ rosterEntryId: r.rosterEntryId, name: names.get(r.rosterEntryId)! });
           networks.set(r.block, card);
+        }
+      }
+      const held = new Map<number, HeldStudent>();
+      for (const h of undecided(sessionId)) {
+        const name = names.get(h.rosterEntryId);
+        if (name !== undefined && !held.has(h.rosterEntryId)) {
+          held.set(h.rosterEntryId, { rosterEntryId: h.rosterEntryId, name, at: h.at.toISOString() });
         }
       }
       return {
@@ -441,6 +565,7 @@ export function createAttendanceModule({
         total: roster.length,
         networks: [...networks.values()],
         students,
+        held: [...held.values()],
       };
     },
     forStudent(sessionId, rosterEntryId) {
@@ -450,6 +575,12 @@ export function createAttendanceModule({
         return { status: "present", at: row.at.toISOString() };
       }
       if (row?.state === "pending" && window === "open") return { status: "pending", at: row.at.toISOString() };
+      if (row?.state === "manual-absent") {
+        const [held] = undecided(sessionId, rosterEntryId);
+        if (held) return { status: "held", at: held.at.toISOString() };
+        // Kept absent: scanning again would only raise another hold, so send them to the Lecturer.
+        if (latestDecision(sessionId, rosterEntryId) === "kept-absent") return { status: "closed", at: null };
+      }
       return { status: window, at: null };
     },
 
@@ -467,6 +598,24 @@ export function createAttendanceModule({
           ip: r.ip,
           block: r.block,
           deviceId: r.deviceTokenHash?.slice(0, 6) ?? null,
+        }));
+    },
+
+    heldScans(sessionId) {
+      return db
+        .select()
+        .from(heldScan)
+        .where(eq(heldScan.sessionId, sessionId))
+        .orderBy(heldScan.at, heldScan.id)
+        .all()
+        .map((h) => ({
+          rosterEntryId: h.rosterEntryId,
+          at: h.at.toISOString(),
+          ip: h.ip,
+          block: h.block,
+          deviceId: h.deviceTokenHash.slice(0, 6),
+          decision: h.decision,
+          decidedAt: h.decidedAt?.toISOString() ?? null,
         }));
     },
 
