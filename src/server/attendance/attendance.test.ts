@@ -549,6 +549,15 @@ describe("Held scans", () => {
     expect(attendance().forStudent(session.id, dana.id)).toEqual({ status: "closed", at: null });
   });
 
+  it("tell a Student kept absent to ask the Lecturer, not to scan again, while the window is open", () => {
+    mark(dana, false);
+    checkIn(dana, "147.235.10.21");
+    attendance().keepAbsent(session.id, dana.id);
+    expect(attendance().forStudent(session.id, dana.id)).toEqual({ status: "closed", at: null });
+    mark(dana, null);
+    expect(attendance().forStudent(session.id, dana.id)).toEqual({ status: "open", at: null });
+  });
+
   it("don't happen after a Manual mark present, or with no mark", () => {
     mark(dana, true);
     expect(checkIn(dana, "147.235.10.21")).toBe("present");

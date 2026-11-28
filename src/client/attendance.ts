@@ -101,6 +101,16 @@ export function whoGroups<R extends Pick<WhoRow, "status">>(rows: R[]) {
 /** What a dismissed popup is remembered by: the Student and their first held scan, so a new hold pops up again. */
 export const heldKey = (h: HeldStudent) => `${h.rosterEntryId}@${h.at}`;
 
+/** Dismissed popups as saved in the tab's sessionStorage; anything unreadable counts as none. */
+export function dismissedFrom(raw: string | null): Set<string> {
+  try {
+    const value: unknown = JSON.parse(raw ?? "[]");
+    return new Set(Array.isArray(value) ? value.filter((v): v is string => typeof v === "string") : []);
+  } catch {
+    return new Set();
+  }
+}
+
 /** Who the held-scan popup names: the first held Student the Lecturer hasn't dismissed, or no one. */
 export function heldPopup(held: HeldStudent[], dismissed: ReadonlySet<string>): HeldStudent | null {
   return held.find((h) => !dismissed.has(heldKey(h))) ?? null;

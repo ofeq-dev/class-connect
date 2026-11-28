@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import type { HeldStudent, LecturerAttendance, WhoRow } from "../../server/attendance";
 import { api, ok } from "../api";
-import { heldKey, heldPopup, lecturerAddresses, markAfterTap, networkCard, undoMark, whoGroups, windowButton } from "../attendance";
+import { dismissedFrom, heldKey, heldPopup, lecturerAddresses, markAfterTap, networkCard, undoMark, whoGroups, windowButton } from "../attendance";
 import { diagnosticsQuery, useDiagnostics } from "./diagnostics";
 import { CheckIcon, ChevronIcon, CrossIcon } from "./icons";
 import { attendanceKey, useAttendance } from "./queries";
@@ -34,8 +34,24 @@ export function AttendanceColumn({ courseId, sessionId }: { courseId: string; se
   const route = api.api.lecturer.courses[":courseId"].sessions[":sessionId"].attendance;
   const [whoOpen, setWhoOpen] = useState(false);
   const [undo, setUndo] = useState<Undo | null>(null);
-  /** Held Students whose popup the Lecturer closed; they stay in the held list. */
-  const [dismissed, setDismissed] = useState<ReadonlySet<string>>(new Set());
+  /** Held scans whose popup the Lecturer closed ("Later"), kept for this tab; they stay in the held list. */
+  const dismissedKey = `cc.held-dismissed.${sessionId}`;
+  const [dismissed, setDismissed] = useState<ReadonlySet<string>>(() => {
+    try {
+      return dismissedFrom(sessionStorage.getItem(dismissedKey));
+    } catch {
+      return new Set();
+    }
+  });
+  function dismiss(h: HeldStudent) {
+    const next = new Set(dismissed).add(heldKey(h));
+    setDismissed(next);
+    try {
+      sessionStorage.setItem(dismissedKey, JSON.stringify([...next]));
+    } catch {
+      // Storage blocked: the dismissal lasts until the page reloads.
+    }
+  }
 
   useEffect(() => {
     if (!undo) return;
@@ -208,7 +224,7 @@ export function AttendanceColumn({ courseId, sessionId }: { courseId: string; se
             <button
               type="button"
               className="link"
-              onClick={() => setDismissed(new Set(dismissed).add(heldKey(popup)))}
+              onClick={() => dismiss(popup)}
             >
               Later
             </button>

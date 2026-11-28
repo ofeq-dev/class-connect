@@ -63,7 +63,7 @@ export function LiveConsole() {
         </Menu>
       </header>
       <div className="console">
-        <AttendanceColumn courseId={courseId} sessionId={sessionId} />
+        <AttendanceColumn key={sessionId} courseId={courseId} sessionId={sessionId} />
         <CommentsColumn courseId={courseId} sessionId={sessionId} />
         <PollColumn courseId={courseId} sessionId={sessionId} focus={pollFocus} setFocus={setPollFocus} />
       </div>

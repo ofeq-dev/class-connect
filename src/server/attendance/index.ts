@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { isIPv4, isIPv6 } from "node:net";
-import { and, desc, eq, gte, inArray, isNull } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNotNull, isNull } from "drizzle-orm";
 import { nextLocalMidnight, type Clock } from "../clock";
 import type { CourseModule } from "../course";
 import type { Db } from "../db";
@@ -289,6 +289,18 @@ export function createAttendanceModule({
 
   type HeldRow = typeof heldScan.$inferSelect;
 
+  /** How a Roster entry's latest decided held scan was settled, if any. */
+  function latestDecision(sessionId: number, rosterEntryId: number): HeldDecision | null {
+    const last = db
+      .select({ decision: heldScan.decision })
+      .from(heldScan)
+      .where(and(eq(heldScan.sessionId, sessionId), eq(heldScan.rosterEntryId, rosterEntryId), isNotNull(heldScan.decision)))
+      .orderBy(desc(heldScan.decidedAt), desc(heldScan.id))
+      .limit(1)
+      .get();
+    return last?.decision ?? null;
+  }
+
   /** Records how every undecided held scan of a Roster entry was settled. */
   function settle(sessionId: number, rosterEntryId: number, decision: HeldDecision) {
     db.update(heldScan)
@@ -546,8 +558,12 @@ export function createAttendanceModule({
         return { status: "present", at: row.at.toISOString() };
       }
       if (row?.state === "pending" && window === "open") return { status: "pending", at: row.at.toISOString() };
-      const [held] = row?.state === "manual-absent" ? undecided(sessionId, rosterEntryId) : [];
-      if (held) return { status: "held", at: held.at.toISOString() };
+      if (row?.state === "manual-absent") {
+        const [held] = undecided(sessionId, rosterEntryId);
+        if (held) return { status: "held", at: held.at.toISOString() };
+        // Kept absent: scanning again would only raise another hold, so send them to the Lecturer.
+        if (latestDecision(sessionId, rosterEntryId) === "kept-absent") return { status: "closed", at: null };
+      }
       return { status: window, at: null };
     },
 

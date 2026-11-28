@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checkInLine, heldKey, heldPopup, lecturerAddresses, markAfterTap, networkCard, undoMark, whoGroups, windowButton } from "./attendance";
+import { checkInLine, dismissedFrom, heldKey, heldPopup, lecturerAddresses, markAfterTap, networkCard, undoMark, whoGroups, windowButton } from "./attendance";
 
 /** A fetch that answers each ipify host with a body, or fails it. */
 function fakeFetch(answers: Record<string, string | Error>): typeof fetch {
@@ -114,6 +114,14 @@ describe("the held-scan popup", () => {
   it("names the first held Student the Lecturer hasn't dismissed", () => {
     expect(heldPopup([dana, omar], new Set())).toBe(dana);
     expect(heldPopup([dana, omar], new Set([heldKey(dana)]))).toBe(omar);
+  });
+
+  it("remembers dismissals as saved in the tab, and ignores anything unreadable", () => {
+    expect(dismissedFrom(JSON.stringify([heldKey(dana)]))).toEqual(new Set([heldKey(dana)]));
+    expect(dismissedFrom(null)).toEqual(new Set());
+    expect(dismissedFrom("not json")).toEqual(new Set());
+    expect(dismissedFrom('{"a":1}')).toEqual(new Set());
+    expect(dismissedFrom('["ok", 3]')).toEqual(new Set(["ok"]));
   });
 
   it("pops up again for a Student held anew after the Lecturer dismissed an earlier hold", () => {
