@@ -3,7 +3,7 @@ import type { Clock } from "../clock";
 import type { CourseModule } from "../course";
 import type { Db } from "../db";
 import { DomainError, NotFoundError } from "../errors";
-import type { FileStore } from "../files";
+import { deleteUnusedFiles, type FileStore } from "../files";
 import type { Job, Jobs } from "../jobs";
 import type { LiveEvents } from "../live-events";
 import type { LlmGateway } from "../llm";
@@ -453,19 +453,16 @@ export function createSummariesModule({ db, clock, course, llm, jobs, files, eve
           .all();
         // Versions and translations go with their summary (on delete cascade).
         tx.delete(summary).where(inArray(summary.sessionId, sessionIds)).run();
-        return [...new Set(deleted.flatMap((r) => (r.fileHash ? [r.fileHash] : [])))];
+        return deleted.map((r) => r.fileHash);
       });
-      const stillUsed = hashes.length
-        ? new Set(
-            db
-              .select({ fileHash: transcriptTable.fileHash })
-              .from(transcriptTable)
-              .where(inArray(transcriptTable.fileHash, hashes))
-              .all()
-              .map((r) => r.fileHash),
-          )
-        : new Set();
-      for (const hash of hashes) if (!stillUsed.has(hash)) await files.delete(hash);
+      await deleteUnusedFiles(files, hashes, (left) =>
+        db
+          .select({ fileHash: transcriptTable.fileHash })
+          .from(transcriptTable)
+          .where(inArray(transcriptTable.fileHash, left))
+          .all()
+          .map((r) => r.fileHash),
+      );
     },
 
     deleteSummary(sessionId) {

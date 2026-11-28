@@ -3,7 +3,7 @@ import type { Clock } from "../clock";
 import type { CourseModule } from "../course";
 import type { Db } from "../db";
 import { DomainError, NotFoundError } from "../errors";
-import type { FileStore } from "../files";
+import { deleteUnusedFiles, type FileStore } from "../files";
 import type { Jobs, JobStatus } from "../jobs";
 import type { LiveEvents } from "../live-events";
 import type { LlmGateway } from "../llm";
@@ -821,19 +821,16 @@ export function createHomeworkModule({ db, clock, course, llm, files, events, jo
           .all();
         // Everything under an Assignment goes with it (on delete cascade).
         tx.delete(assignmentTable).where(inArray(assignmentTable.id, assignmentIds)).run();
-        return [...new Set(submitted.flatMap((r) => (r.fileHash ? [r.fileHash] : [])))];
+        return submitted.map((r) => r.fileHash);
       });
-      const stillUsed = hashes.length
-        ? new Set(
-            db
-              .select({ fileHash: submissionTable.fileHash })
-              .from(submissionTable)
-              .where(inArray(submissionTable.fileHash, hashes))
-              .all()
-              .map((r) => r.fileHash),
-          )
-        : new Set();
-      for (const hash of hashes) if (!stillUsed.has(hash)) await files.delete(hash);
+      await deleteUnusedFiles(files, hashes, (left) =>
+        db
+          .select({ fileHash: submissionTable.fileHash })
+          .from(submissionTable)
+          .where(inArray(submissionTable.fileHash, left))
+          .all()
+          .map((r) => r.fileHash),
+      );
     },
 
     async submit(assignmentId, rosterEntryId, input) {
