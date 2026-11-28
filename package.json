@@ -13,9 +13,11 @@
     "start": "node --env-file-if-exists=.env dist/server/main.js",
     "backup": "node --env-file-if-exists=.env dist/server/backup.js",
     "deploy": "sh -c 'ssh wsl bash -s -- \"$@\" < scripts/deploy.sh' deploy",
-    "check": "tsc --noEmit && eslint . && vitest run",
+    "check": "tsc --noEmit && eslint . && drizzle-kit check && vitest run",
+    "check:ci": "npm run check && npm run build",
     "test": "vitest",
     "db:generate": "drizzle-kit generate",
+    "db:rebase": "tsx scripts/db-rebase.ts",
     "hash-password": "tsx scripts/hash-password.ts",
     "seed:demo": "tsx --env-file-if-exists=.env scripts/seed-demo.ts"
   },

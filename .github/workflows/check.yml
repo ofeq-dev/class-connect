@@ -15,8 +15,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm run check
-      - run: npm run build
+      - run: npm run check:ci
 
   # Every push to master deploys (#19). The self-hosted runner on the home server makes only
   # outbound connections; scripts/deploy.sh builds the commit there, checks it again, switches
