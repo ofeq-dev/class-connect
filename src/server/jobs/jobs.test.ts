@@ -1,3 +1,4 @@
+/* eslint-disable local/no-raw-sql-in-tests -- a test-only `test_result` table proves a handler's write commits with the job; it is no module's table. */
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { openDatabase, type OpenedDatabase } from "../db";
@@ -216,6 +217,31 @@ describe("Jobs", () => {
     await jobs.runDue();
     expect(jobs.read(job.id).status).toBe("done");
     expect(results()).toEqual(["second time"]);
+  });
+
+  it("discards the jobs that match, whatever their status, so none of them runs", async () => {
+    const ran: unknown[] = [];
+    jobs.register("summary.generate", async (job) => {
+      ran.push(job.payload);
+      jobs.complete(job, () => {});
+    });
+    const done = jobs.enqueue("summary.generate", { sessionId: 1 });
+    await jobs.runDue();
+    const later = new Date(clock.now().getTime() + 60_000);
+    const queued = jobs.enqueue("summary.generate", { sessionId: 1 }, later);
+    const other = jobs.enqueue("summary.generate", { sessionId: 2 }, later);
+    const unrelated = jobs.enqueue("help.match", { assignmentId: 1 }, later);
+
+    jobs.discard((job) => job.kind === "summary.generate" && job.payload.sessionId === 1);
+
+    expect(() => jobs.read(done.id)).toThrow();
+    expect(() => jobs.read(queued.id)).toThrow();
+    expect(jobs.read(other.id).status).toBe("queued");
+    expect(jobs.read(unrelated.id).status).toBe("queued");
+    expect(jobs.nextRunAt()).toEqual(later);
+    clock.set(later);
+    await jobs.runDue();
+    expect(ran).toEqual([{ sessionId: 1 }, { sessionId: 2 }]);
   });
 
   it("saves progress", async () => {

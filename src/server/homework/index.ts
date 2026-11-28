@@ -3,7 +3,7 @@ import type { Clock } from "../clock";
 import type { CourseModule } from "../course";
 import type { Db } from "../db";
 import { DomainError, NotFoundError } from "../errors";
-import type { FileStore } from "../files";
+import { deleteUnusedFiles, type FileStore } from "../files";
 import type { Jobs, JobStatus } from "../jobs";
 import type { LiveEvents } from "../live-events";
 import type { LlmGateway } from "../llm";
@@ -302,6 +302,11 @@ export interface HomeworkModule {
   offerHelp(assignmentId: number, criterionId: number, rosterEntryId: number): StudentAssignment;
   /** Queues `help.match` now; the deadline job then does nothing. Refused before Release and after matching. */
   matchNow(assignmentId: number): LecturerAssignment;
+  /**
+   * Deletes the Course's Assignments with everything under them and their jobs, and the
+   * Submission files no other Submission uses (the demo seed's --replace).
+   */
+  deleteCourseData(courseId: number): Promise<void>;
 }
 
 export interface HomeworkDeps {
@@ -783,6 +788,50 @@ export function createHomeworkModule({ db, clock, course, llm, files, events, jo
     },
 
     lecturerView,
+
+    async deleteCourseData(courseId) {
+      const assignmentIds = db
+        .select({ id: assignmentTable.id })
+        .from(assignmentTable)
+        .where(eq(assignmentTable.courseId, courseId))
+        .all()
+        .map((r) => r.id);
+      if (!assignmentIds.length) return;
+      const assignments = new Set(assignmentIds);
+      const runs = new Set(
+        db
+          .select({ id: reviewRun.id })
+          .from(reviewRun)
+          .where(inArray(reviewRun.assignmentId, assignmentIds))
+          .all()
+          .map((r) => r.id),
+      );
+      jobs.discard((job) => {
+        if (job.kind === "help.match") return assignments.has(job.payload.assignmentId);
+        if (job.kind === "review.submission" || job.kind === "review.compare" || job.kind === "review.classSummary") {
+          return runs.has(job.payload.runId);
+        }
+        return false;
+      });
+      const hashes = db.transaction((tx) => {
+        const submitted = tx
+          .select({ fileHash: submissionTable.fileHash })
+          .from(submissionTable)
+          .where(inArray(submissionTable.assignmentId, assignmentIds))
+          .all();
+        // Everything under an Assignment goes with it (on delete cascade).
+        tx.delete(assignmentTable).where(inArray(assignmentTable.id, assignmentIds)).run();
+        return submitted.map((r) => r.fileHash);
+      });
+      await deleteUnusedFiles(files, hashes, (left) =>
+        db
+          .select({ fileHash: submissionTable.fileHash })
+          .from(submissionTable)
+          .where(inArray(submissionTable.fileHash, left))
+          .all()
+          .map((r) => r.fileHash),
+      );
+    },
 
     async submit(assignmentId, rosterEntryId, input) {
       const row = assignmentRow(assignmentId);

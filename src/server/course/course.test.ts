@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { DomainError, NotFoundError } from "../errors";
-import { aCourse, makeTestApp, type TestApp } from "../testing";
+import { aClaimedStudent, aCourse, aSession, makeTestApp, type TestApp } from "../testing";
 
 let t: TestApp;
 beforeEach(() => (t = makeTestApp()));
@@ -60,5 +60,19 @@ describe("Course", () => {
     const again = t.modules.course.ensureLecturer("Dr. Renamed");
     expect(again.id).toBe(t.lecturer.id);
     expect(again.name).toBe("Dr. Renamed");
+  });
+
+  it("deletes a Course with its Roster, Claims and Sessions, leaving other Courses alone", () => {
+    const gone = aCourse(t, "Old demo").id;
+    const kept = aCourse(t, "Databases").id;
+    const session = aSession(t, gone);
+    aClaimedStudent(t, gone, "1001", "phone");
+    aClaimedStudent(t, kept, "1001", "other-phone");
+    t.modules.course.deleteCourse(gone);
+    expect(t.modules.course.listCourses(t.lecturer.id).map((c) => c.id)).toEqual([kept]);
+    expect(() => t.modules.course.readSession(session.id)).toThrow(NotFoundError);
+    expect(t.modules.course.whoIs("phone")).toBeNull();
+    expect(t.modules.course.whoIs("other-phone")?.course.id).toBe(kept);
+    expect(() => t.modules.course.deleteCourse(gone)).toThrow(NotFoundError);
   });
 });

@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { createDiskFileStore } from ".";
+import { createDiskFileStore, deleteUnusedFiles } from ".";
 
 let dir: string;
 beforeEach(() => {
@@ -41,5 +41,30 @@ describe("File store on disk", () => {
     const store = createDiskFileStore(dir);
     expect(await store.get("0".repeat(64))).toBeNull();
     expect(await store.get("../../etc/passwd")).toBeNull();
+  });
+
+  it("deletes a stored file, and deleting what isn't stored does nothing", async () => {
+    const store = createDiskFileStore(dir);
+    const hash = await store.put(bytes("gone"));
+    const kept = await store.put(bytes("kept"));
+    await store.delete(hash);
+    await store.delete(hash);
+    await store.delete("../../etc/passwd");
+    expect(await store.get(hash)).toBeNull();
+    expect(await store.get(kept)).toEqual(bytes("kept"));
+  });
+
+  it("deletes only the files nothing else still uses", async () => {
+    const store = createDiskFileStore(dir);
+    const gone = await store.put(bytes("gone"));
+    const shared = await store.put(bytes("shared"));
+    const asked: string[][] = [];
+    await deleteUnusedFiles(store, [gone, null, shared, gone], (hashes) => {
+      asked.push(hashes);
+      return [shared];
+    });
+    expect(asked).toEqual([[gone, shared]]);
+    expect(await store.get(gone)).toBeNull();
+    expect(await store.get(shared)).toEqual(bytes("shared"));
   });
 });

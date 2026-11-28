@@ -58,6 +58,7 @@ The two key departures from the brief's examples are recorded as decisions:
 - Student Comment threads, free-text Polls with an LLM summary, Session kinds (lecture / recitation), a TA role, aligning a Course taught several times a week, and present/absent splits of Poll results (all v2).
 - AI review or prompted revision of a Session summary (v3), Telegram notifications (v2), and rich-text summary editing (v2).
 - More than one Lecturer account (v2), Student passwords, and email verification.
+- Backing up uploaded files (`FILES_DIR`: Transcripts and Submissions) alongside the database (v2; the nightly and pre-deploy backups copy the database only).
 
 ## Constraints
 

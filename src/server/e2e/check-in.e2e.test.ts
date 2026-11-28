@@ -224,3 +224,70 @@ describe("Network approval and Manual marks, from the console", () => {
     );
   });
 });
+
+describe("Held scans after a Manual absent mark, from the console", () => {
+  beforeEach(async () => {
+    await openWindow();
+  });
+
+  const glance = async () => (await get(attendancePath(), lecturer)).json();
+  const mark = (rosterEntryId: number, present: boolean | null) =>
+    post(`${attendancePath()}/marks/${rosterEntryId}`, { present }, lecturer);
+  const decide = (rosterEntryId: number, decision: "allow" | "keep-absent", cookie = lecturer) =>
+    post(`${attendancePath()}/held/${rosterEntryId}/${decision}`, {}, cookie);
+
+  it("holds the scan, leaving the Student Absent, and the console hears of it live", async () => {
+    const dana = claimed("1001");
+    const danaEntry = t.modules.course.findRosterEntry(courseId, "1001")!;
+    await mark(danaEntry.id, false);
+    const console = await openSse(`${server.url}/api/lecturer/events?course=${courseId}`, lecturer);
+    await console.next();
+
+    const res = await scan(dana, CLASSROOM);
+    expect(await res.json()).toMatchObject({ checkIn: { status: "held" } });
+    expect(await console.nextMessage()).toEqual({ type: "attendance.changed", id: session.id });
+    expect(await glance()).toMatchObject({ present: 0, held: [{ rosterEntryId: danaEntry.id, name: "Dana Levi" }] });
+    expect(await (await get("/api/student/me", dana)).json()).toMatchObject({ checkIn: { status: "held" } });
+    console.close();
+  });
+
+  it("allows a held scan after class: Present at the scan's time, and the phone hears it", async () => {
+    const dana = claimed("1001");
+    const danaEntry = t.modules.course.findRosterEntry(courseId, "1001")!;
+    await mark(danaEntry.id, false);
+    await scan(dana, CLASSROOM);
+    const scannedAt = t.modules.attendance.heldScans(session.id)[0]!.at;
+    await post(`${attendancePath()}/window/close`, {}, lecturer);
+    t.fakes.clock.advance(60 * 60_000);
+    const phone = await openSse(`${server.url}/api/student/events`, dana);
+    await phone.next();
+
+    const res = await decide(danaEntry.id, "allow");
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toMatchObject({ present: 1, held: [] });
+    expect(body.students.find((s: { rosterEntryId: number }) => s.rosterEntryId === danaEntry.id)).toMatchObject({
+      status: "present",
+      at: scannedAt,
+    });
+    expect(await phone.nextMessage()).toEqual({ type: "attendance.changed", id: session.id });
+    expect(await (await get("/api/student/me", dana)).json()).toMatchObject({ checkIn: { status: "present", at: scannedAt } });
+    phone.close();
+  });
+
+  it("keeps a Student absent, logging the decision", async () => {
+    const danaEntry = t.modules.course.findRosterEntry(courseId, "1001")!;
+    await mark(danaEntry.id, false);
+    await scan(claimed("1001"), CLASSROOM);
+    expect(await (await decide(danaEntry.id, "keep-absent")).json()).toMatchObject({ present: 0, held: [] });
+    expect(t.modules.attendance.heldScans(session.id)).toEqual([expect.objectContaining({ decision: "kept-absent" })]);
+  });
+
+  it("refuses a Student with nothing held, and a request without the Lecturer's cookie", async () => {
+    const danaEntry = t.modules.course.findRosterEntry(courseId, "1001")!;
+    expect((await decide(danaEntry.id, "allow")).status).toBe(404);
+    await mark(danaEntry.id, false);
+    await scan(claimed("1001"), CLASSROOM);
+    expect((await decide(danaEntry.id, "allow", "")).status).toBe(401);
+  });
+});

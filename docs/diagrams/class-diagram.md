@@ -32,18 +32,22 @@ classDiagram
       +readSession(idOrQrCode) Session
       +updateSession(session, changes)
       +deleteSession(session)
+      +deleteCourse(course)
     }
     class Attendance {
       <<module>>
       +openWindow(session, ipv4, ipv6)
       +closeWindow(session)
-      +checkIn(session, rosterEntry, ip, deviceToken) Present or Pending
+      +checkIn(session, rosterEntry, ip, deviceToken) Present, Pending or Held
       +approveNetwork(session, block)
       +mark(session, rosterEntry, present)
+      +allowHeld(session, rosterEntry)
+      +keepAbsent(session, rosterEntry)
       +sheet(course) AttendanceSheet
       +exportXlsx(course) Bytes
       +isPresent(session, rosterEntry) boolean
       +nextMoment(after) Instant
+      +deleteCourseData(course)
     }
     class Feedback {
       <<module>>
@@ -61,6 +65,7 @@ classDiagram
       +results(poll, viewer) PollResults
       +nextMoment(after) Instant
       +announce(since, until)
+      +deleteCourseData(course)
     }
     class Summaries {
       <<module>>
@@ -70,6 +75,7 @@ classDiagram
       +restore(version)
       +publish(summary, version)
       +forStudent(session, language) PublishedSummary
+      +deleteCourseData(course)
     }
     class Homework {
       <<module>>
@@ -86,6 +92,7 @@ classDiagram
       +matchNow(assignment)
       +lecturerView(assignment) LecturerAssignmentView
       +studentView(assignment, rosterEntry) StudentAssignmentView
+      +deleteCourseData(course)
     }
   }
 
@@ -102,6 +109,7 @@ classDiagram
       +register(kind, handler)
       +progress(job, done, total)
       +retry(job)
+      +discard(match)
     }
     class LiveEvents {
       <<interface>>
@@ -116,6 +124,7 @@ classDiagram
       <<interface>>
       +put(bytes) contentHash
       +get(contentHash) Bytes
+      +delete(contentHash)
     }
   }
 
@@ -241,6 +250,17 @@ classDiagram
     device_token_hash
     at
   }
+  class held_scan {
+    <<table>>
+    session_id
+    roster_entry_id
+    ip
+    block
+    device_token_hash
+    at
+    decision : Allowed, Kept-absent, Replaced, or none yet
+    decided_at
+  }
   class approved_network {
     <<table>>
     session_id
@@ -251,9 +271,10 @@ classDiagram
   session "1" --> "*" approved_network : this Session only
   session "1" --> "*" attendance
   roster_entry "1" --> "*" attendance : at most one per Session
+  roster_entry "1" --> "*" held_scan : scans after a Manual absent
 ```
 
-`attendance` is overwritten so the latest action wins. Absent is not stored: no row, or a row still Pending once the Check-in window has closed (closed by the Lecturer or at midnight, worked out from the Clock), reads as Absent.
+`attendance` is overwritten by each Check-in and Manual mark, except that a Check-in never replaces a Manual mark: after a Manual absent it is logged in `held_scan` instead, for the Lecturer to Allow (the row turns Present at the first held scan's time) or Keep absent; the Check-in kept under the mark is left alone. Absent is not stored: no row, or a row still Pending once the Check-in window has closed (closed by the Lecturer or at midnight, worked out from the Clock), reads as Absent.
 
 ### Feedback
 
