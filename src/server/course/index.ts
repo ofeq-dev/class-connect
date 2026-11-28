@@ -92,6 +92,11 @@ export interface CourseModule {
   /** The Course's extra languages for Session summary translations, in the Lecturer's order. */
   translationLanguages(courseId: number): string[];
   updateCourse(courseId: number, changes: { name?: string; translationLanguages?: string[] }): Course;
+  /**
+   * Deletes the Course with its Roster (and so its Claims) and Sessions. The other modules
+   * delete their own data for it first (the demo seed's --replace).
+   */
+  deleteCourse(courseId: number): void;
 
   importRoster(courseId: number, csv: string): RosterImportReport;
   addRosterEntry(courseId: number, studentId: string, name: string): RosterEntry;
@@ -295,6 +300,13 @@ export function createCourseModule({ db, clock, events, timeZone }: CourseDeps):
       const row = db.update(course).set(set).where(eq(course.id, courseId)).returning().get()!;
       courseChanged(courseId);
       return toCourse(row);
+    },
+
+    deleteCourse(courseId) {
+      courseRow(courseId);
+      // Roster entries and Sessions go with it (on delete cascade).
+      db.delete(course).where(eq(course.id, courseId)).run();
+      courseChanged(courseId);
     },
 
     importRoster(courseId, csv) {

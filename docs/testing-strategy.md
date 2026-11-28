@@ -46,7 +46,7 @@ Interface: `importRoster`, `claim`, `resetClaim`, `whoIs(token)`, and Session cr
 
 ### Attendance
 
-Interface: `openWindow(session, {ipv4, ipv6})`, `closeWindow`, `checkIn → Present | Pending`, `approveNetwork`, `mark`, `sheet`, `exportXlsx`, `isPresent`.
+Interface: `openWindow(session, {ipv4, ipv6})`, `closeWindow`, `checkIn → Present | Pending | Held`, `approveNetwork`, `mark`, `allowHeld`, `keepAbsent`, `sheet`, `exportXlsx`, `isPresent`.
 
 - **Block match** (ADR 0001):
   - An IPv4 address in the Lecturer's `/24`, or an IPv6 address in the Lecturer's `/64`, gives Present.
@@ -63,8 +63,12 @@ Interface: `openWindow(session, {ipv4, ipv6})`, `closeWindow`, `checkIn → Pres
   - No number of Pending check-ins from one block approves it; only the Lecturer does.
   - When the window closes, Pending check-ins still unapproved read as Absent.
 - **Manual marks**:
-  - A Manual mark works whether the window is open or closed. The latest action wins, both ways (a Manual absent over a Check-in, and a Check-in over a Manual absent while the window is open).
+  - A Manual mark works whether the window is open or closed, and replaces a Check-in. A later Check-in never replaces a mark: after ✓ nothing changes, and after ✕ it is a Held scan.
   - Each Check-in record logs the Roster entry, the IP, the block and the device token.
+- **Held scans**:
+  - A scan after a Manual ✕ leaves the Student Absent and the Check-in under the mark untouched, is logged, and tells only the Lecturer's stream.
+  - Allow makes the Student Present from their first held scan, window open or closed; Keep absent leaves the ✕; both are logged.
+  - An unanswered Held scan reads as Absent on the Attendance sheet. A later ✓ or a cleared mark settles it without allowing it.
 - **Attendance sheet**:
   - Rows are every Roster entry, including unclaimed Students. Columns are Sessions in date order.
   - Each cell is Present, Manual or Absent.
@@ -152,7 +156,7 @@ These are tested through their own interfaces, against the real thing where it i
 | Module | Tested through | Plan |
 |---|---|---|
 | **LLM gateway** | `generate` / `embed` with the OpenRouter adapter over a stubbed `fetch` and the fake Clock | It tries the fallback list in order. A per-task timeout counts as a failure and moves to the next model. A reply that fails the schema gets one fix-up retry, then an `LlmError`. Only one call runs at a time, and at most ~15 a minute (checked by advancing the fake Clock). Each call adds to `llm_usage`, and reaching 1000 a day returns the limit error without calling `fetch`. The scripted adapter gets a small contract test that the same task schemas apply to it. |
-| **Jobs** | The real SQLite-backed worker over an in-memory database and the fake Clock | A job runs at or after `run_at` and never before. A failed job is retried up to its attempt limit with its error recorded. Progress updates are saved. Jobs still `running` after a simulated restart go back to `queued` and run again. A job interrupted before `complete` leaves nothing written, and one that completed is never run again. Attempts count when a job is claimed, so a job interrupted 3 times ends `failed`. Review-run progress is counted from job rows. The "next event" timer wakes at the earliest scheduled moment and only publishes notices or queues jobs. |
+| **Jobs** | The real SQLite-backed worker over an in-memory database and the fake Clock | A job runs at or after `run_at` and never before. A failed job is retried up to its attempt limit with its error recorded. Progress updates are saved. Jobs still `running` after a simulated restart go back to `queued` and run again. A job interrupted before `complete` leaves nothing written, and one that completed is never run again. Attempts count when a job is claimed, so a job interrupted 3 times ends `failed`. Review-run progress is counted from job rows. Discarding jobs by kind and payload deletes them whatever their status, so a queued one never runs. The "next event" timer wakes at the earliest scheduled moment and only publishes notices or queues jobs. |
 | **Live events** | The in-process bus and the SSE writer | A notice reaches only subscribers in its Course and role scope. A subscriber that disconnects is removed. The writer sends a heartbeat at the configured interval (~25 s, shortened in tests). |
 | **Clock** | Nothing to test | The system Clock is a one-line adapter, and `FakeClock` is exercised by every other suite. |
 | **File store** | The disk adapter in a temporary folder | A file is stored under its content hash, so the same bytes stored twice are kept once. Reading a stored file returns the same bytes. Reading a missing hash returns not found. |

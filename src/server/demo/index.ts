@@ -10,4 +10,4 @@ export {
   type RehearsalGatewayDeps,
   scriptRehearsalReplies,
 } from "./rehearsal";
-export { DEMO_COURSE_NAME, seedDemo, type SeedDeps, type SeedOptions, type SeedResult, type SettableClock } from "./seed";
+export { DEMO_COURSE_NAME, deleteDemoCourses, seedDemo, type SeedDeps, type SeedOptions, type SeedResult, type SettableClock } from "./seed";
